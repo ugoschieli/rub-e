@@ -4,13 +4,13 @@
 
 mod buffer;
 mod camera;
+mod game;
 mod gfx;
 mod pipeline;
 mod shader;
 mod uniform;
 mod vertex;
-mod window;
 
+pub use crate::game::*;
 pub use crate::gfx::*;
 pub use crate::shader::*;
-pub use crate::window::*;
