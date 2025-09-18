@@ -1,5 +1,5 @@
 use env_logger;
-use etib::{Gfx, TimeState};
+use etib::{Game, Gfx, TimeState};
 use log::info;
 use std::sync::Arc;
 use winit::application::ApplicationHandler;
@@ -11,20 +11,11 @@ struct MyGame {
     window: Option<Arc<Window>>,
     gfx: Option<Gfx>,
     time: etib::TimeState,
+    is_initialized: bool,
 }
 
 impl etib::Game for MyGame {
-    fn init(&self) {}
-
-    fn render(&self) {}
-
-    fn time_state(&self) -> &TimeState {
-        &self.time
-    }
-}
-
-impl ApplicationHandler for MyGame {
-    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+    fn init(&mut self, event_loop: &ActiveEventLoop) {
         let mut attributes = Window::default_attributes();
         attributes.title = "ETIB".to_owned();
         let window = Arc::new(event_loop.create_window(attributes).unwrap());
@@ -33,13 +24,36 @@ impl ApplicationHandler for MyGame {
 
         self.window = Some(window);
         self.gfx = Some(gfx);
+        self.is_initialized = true;
+    }
+
+    fn render(&mut self) {
+        self.gfx().render();
+    }
+
+    fn gfx(&mut self) -> &mut Gfx {
+        self.gfx.as_mut().unwrap()
+    }
+
+    fn time_state(&self) -> &TimeState {
+        &self.time
+    }
+
+    fn is_initialized(&self) -> bool {
+        self.is_initialized
+    }
+}
+
+impl ApplicationHandler for MyGame {
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        self.init(event_loop);
     }
 
     fn window_event(
         &mut self,
         event_loop: &ActiveEventLoop,
         _window_id: winit::window::WindowId,
-        event: winit::event::WindowEvent,
+        event: WindowEvent,
     ) {
         match event {
             WindowEvent::CloseRequested => {
@@ -56,8 +70,8 @@ impl ApplicationHandler for MyGame {
                 }
             }
             WindowEvent::RedrawRequested => {
-                if let Some(gfx) = &mut self.gfx {
-                    gfx.render();
+                if self.is_initialized() {
+                    self.render();
                 }
 
                 self.time.tick();
@@ -76,6 +90,7 @@ fn main() -> anyhow::Result<()> {
         window: None,
         gfx: None,
         time: TimeState::default(),
+        is_initialized: false,
     };
 
     let event_loop = EventLoop::new().unwrap();

@@ -1,13 +1,21 @@
 use std::time::Instant;
 use winit::{application::ApplicationHandler, error::EventLoopError, event_loop::EventLoop};
 
+use crate::Gfx;
+
 /// The primary Trait provided by the library your primary game state struct must implement this
 pub trait Game: ApplicationHandler {
     /// The function called at the initialization of the engine
-    fn init(&self);
+    fn init(&mut self, event_loop: &winit::event_loop::ActiveEventLoop);
 
     /// The function called each frame by the engine
-    fn render(&self);
+    fn render(&mut self);
+
+    /// Getter for a mutable etib::Gfx struct
+    fn gfx(&mut self) -> &mut Gfx;
+
+    /// Must return is the graphics state is initialized
+    fn is_initialized(&self) -> bool;
 
     /// Getter for a etib::TimeState struct
     fn time_state(&self) -> &TimeState;
