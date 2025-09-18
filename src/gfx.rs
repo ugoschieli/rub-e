@@ -4,9 +4,8 @@ use winit::{dpi::PhysicalSize, window::Window};
 
 use crate::Shader;
 use crate::buffer::BufferExt;
-use crate::camera::{Camera, CameraUniform};
+use crate::camera::Camera;
 use crate::pipeline::Pipeline;
-use crate::uniform::Uniform;
 use crate::vertex;
 
 /// A wrapper around muliple wgpu structs that holds the graphics state of the app
@@ -29,9 +28,6 @@ pub struct Gfx {
     pub index_buffer: wgpu::Buffer,
     /// The camera
     pub camera: Camera,
-    pub camera_uniform: CameraUniform,
-    pub camera_buffer: wgpu::Buffer,
-    pub cam_uniform: Uniform,
     /// The Depth Buffer Texture View
     pub depth_texture_view: wgpu::TextureView,
 }
@@ -61,27 +57,16 @@ impl Gfx {
             .unwrap();
         surface.configure(&device, &surface_config);
 
-        let camera = Camera {
-            // position the camera 1 unit up and 2 units back
-            // +z is out of the screen
-            eye: (2.0, 2.0, 3.0).into(),
-            // have it look at the origin
-            target: (0.0, 0.0, 0.0).into(),
-            // which way is "up"
-            up: cgmath::Vector3::unit_y(),
-            aspect: window_size.width as f32 / window_size.height as f32,
-            fovy: 45.0,
-            znear: 0.1,
-            zfar: 100.0,
-        };
-
-        let mut camera_uniform = CameraUniform::new();
-        camera_uniform.update_view_proj(&camera);
-        let camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Camera Buffer"),
-            contents: bytemuck::cast_slice(&[camera_uniform]),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
+        let camera = Camera::new(
+            &device,
+            (2.0, 2.0, 3.0).into(),
+            (0.0, 0.0, 0.0).into(),
+            cgmath::Vector3::unit_y(),
+            window_size.width as f32 / window_size.height as f32,
+            45.0,
+            0.1,
+            100.0,
+        );
 
         let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("depth_texture"),
@@ -112,28 +97,9 @@ impl Gfx {
         let shader_str = include_str!("./shaders/shader.wgsl");
         let shader = Shader::new(shader_str, &device, None);
 
-        let cam_uniform = Uniform::new(
-            &device,
-            &wgpu::BindGroupLayoutDescriptor {
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                }],
-                label: Some("camera_bind_group_layout"),
-            },
-            vec![camera_buffer.as_entire_binding()],
-            None,
-        );
-
         let pipeline = Pipeline::new(
             &device,
-            &[&cam_uniform.layout],
+            &[&camera.uniform.layout],
             &shader,
             &surface_config,
             &vertex_buffer,
@@ -149,9 +115,6 @@ impl Gfx {
             vertex_buffer: vertex_buffer.buffer,
             index_buffer,
             camera,
-            camera_uniform,
-            camera_buffer,
-            cam_uniform,
             depth_texture_view,
         }
     }
@@ -191,7 +154,7 @@ impl Gfx {
             });
 
             render_pass.set_pipeline(&self.pipeline.pipeline);
-            render_pass.set_bind_group(0, &self.cam_uniform.bind_group, &[]);
+            render_pass.set_bind_group(0, &self.camera.uniform.bind_group, &[]);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
             render_pass.draw_indexed(0..vertex::INDICES.len() as u32, 0, 0..1);
