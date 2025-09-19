@@ -14,3 +14,4 @@ mod vertex;
 pub use crate::game::*;
 pub use crate::gfx::*;
 pub use crate::shader::*;
+pub use crate::vertex::*;

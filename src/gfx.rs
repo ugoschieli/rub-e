@@ -119,50 +119,50 @@ impl Gfx {
         }
     }
 
-    /// Needs to be called every frames
-    pub fn render(&mut self) {
+    /// Get the texture and view of the next frame that will be rendered
+    pub fn get_next_frame(&self) -> (wgpu::SurfaceTexture, wgpu::TextureView) {
         let frame = self.surface.get_current_texture().unwrap();
         let view = frame
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
 
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
-        {
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: None,
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                        store: wgpu::StoreOp::Store,
-                    },
-                    depth_slice: None,
-                })],
-                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &self.depth_texture_view,
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(1.0),
-                        store: wgpu::StoreOp::Store,
-                    }),
-                    stencil_ops: None,
+        (frame, view)
+    }
+
+    /// Get a default wgpu::RenderPassDescriptor with depth testing enabled
+    pub fn render_pass<'gfx: 'tex, 'tex>(
+        &'gfx self,
+        color_attachments: &'tex [Option<wgpu::RenderPassColorAttachment<'tex>>],
+    ) -> wgpu::RenderPassDescriptor<'tex> {
+        wgpu::RenderPassDescriptor {
+            label: None,
+            color_attachments,
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                view: &self.depth_texture_view,
+                depth_ops: Some(wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(1.0),
+                    store: wgpu::StoreOp::Store,
                 }),
-                timestamp_writes: None,
-                occlusion_query_set: None,
-            });
-
-            render_pass.set_pipeline(&self.pipeline.pipeline);
-            render_pass.set_bind_group(0, &self.camera.uniform.bind_group, &[]);
-            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-            render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-            render_pass.draw_indexed(0..vertex::INDICES.len() as u32, 0, 0..1);
-            // render_pass.draw(0..vertex::VERTICES2.len() as u32, 0..1);
+                stencil_ops: None,
+            }),
+            timestamp_writes: None,
+            occlusion_query_set: None,
         }
+    }
 
-        self.queue.submit(Some(encoder.finish()));
-        frame.present();
+    /// Helper function to create a default wgpu::RenderPassDescriptor from a wgpu::TextureView
+    pub fn color_attachments_from_view<'tex>(
+        view: &'tex wgpu::TextureView,
+    ) -> wgpu::RenderPassColorAttachment<'tex> {
+        wgpu::RenderPassColorAttachment {
+            view,
+            resolve_target: None,
+            ops: wgpu::Operations {
+                load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                store: wgpu::StoreOp::Store,
+            },
+            depth_slice: None,
+        }
     }
 
     /// Helper function to reconfigure the Surface size. Needs to be called when the window is

@@ -1,5 +1,5 @@
 use env_logger;
-use etib::{Game, Gfx, TimeState};
+use etib::Game;
 use log::info;
 use std::sync::Arc;
 use winit::application::ApplicationHandler;
@@ -7,9 +7,10 @@ use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::Window;
 
+#[derive(Default)]
 struct MyGame {
     window: Option<Arc<Window>>,
-    gfx: Option<Gfx>,
+    gfx: Option<etib::Gfx>,
     time: etib::TimeState,
     is_initialized: bool,
 }
@@ -20,7 +21,7 @@ impl etib::Game for MyGame {
         attributes.title = "ETIB".to_owned();
         let window = Arc::new(event_loop.create_window(attributes).unwrap());
 
-        let gfx = Gfx::new(window.clone());
+        let gfx = etib::Gfx::new(window.clone());
 
         self.window = Some(window);
         self.gfx = Some(gfx);
@@ -28,14 +29,33 @@ impl etib::Game for MyGame {
     }
 
     fn render(&mut self) {
-        self.gfx().render();
+        let gfx = self.gfx();
+        let (frame, view) = gfx.get_next_frame();
+
+        let mut encoder = gfx
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+        {
+            let color_attachments = [Some(etib::Gfx::color_attachments_from_view(&view))];
+            let mut render_pass = encoder.begin_render_pass(&gfx.render_pass(&color_attachments));
+
+            render_pass.set_pipeline(&gfx.pipeline.pipeline);
+            render_pass.set_bind_group(0, &gfx.camera.uniform.bind_group, &[]);
+            render_pass.set_vertex_buffer(0, gfx.vertex_buffer.slice(..));
+            render_pass.set_index_buffer(gfx.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+            render_pass.draw_indexed(0..etib::INDICES.len() as u32, 0, 0..1);
+            // render_pass.draw(0..vertex::VERTICES2.len() as u32, 0..1);
+        }
+
+        gfx.queue.submit(Some(encoder.finish()));
+        frame.present();
     }
 
-    fn gfx(&mut self) -> &mut Gfx {
+    fn gfx(&mut self) -> &mut etib::Gfx {
         self.gfx.as_mut().unwrap()
     }
 
-    fn time_state(&self) -> &TimeState {
+    fn time_state(&self) -> &etib::TimeState {
         &self.time
     }
 
@@ -86,13 +106,7 @@ fn main() -> anyhow::Result<()> {
     env_logger::init();
     info!("Initializing ETIB");
 
-    let mut game = MyGame {
-        window: None,
-        gfx: None,
-        time: TimeState::default(),
-        is_initialized: false,
-    };
-
+    let mut game = MyGame::default();
     let event_loop = EventLoop::new().unwrap();
     event_loop.set_control_flow(ControlFlow::Poll);
 
