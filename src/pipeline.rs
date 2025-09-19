@@ -1,11 +1,15 @@
 use crate::{Shader, buffer::VertexBuffer};
 
+/// The render pipeline
 pub struct Pipeline {
+    /// The raw wgpu::RenderPipeline
     pub pipeline: wgpu::RenderPipeline,
+    /// The wgpu::PipelineLayout
     pub layout: wgpu::PipelineLayout,
 }
 
 impl Pipeline {
+    /// Create a new pipeline with backface culling and depth testing
     pub fn new<T: bytemuck::Pod>(
         device: &wgpu::Device,
         bind_group_layouts: &[&wgpu::BindGroupLayout],

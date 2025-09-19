@@ -1,20 +1,33 @@
 use crate::uniform::Uniform;
 use wgpu::util::DeviceExt;
 
+/// The camera struct
 pub struct Camera {
+    /// The position of the camera
     pub eye: cgmath::Point3<f32>,
+    /// The direction where the camera looks
     pub target: cgmath::Point3<f32>,
+    /// The vector of the up direction
     pub up: cgmath::Vector3<f32>,
+    /// The aspect ratio (16:9, 4:3, ...) can be calculated with window_width / window_size
     pub aspect: f32,
+    /// The camera field of view
     pub fovy: f32,
+    /// The near clipping plane
     pub znear: f32,
+    /// The far clipping plane
     pub zfar: f32,
+    /// The camera matrix (projection * view)
     pub matrix: cgmath::Matrix4<f32>,
+    /// The buffer storing the matrix
     pub buffer: wgpu::Buffer,
+    /// The uniform associated with the matrix
     pub uniform: Uniform,
 }
 
 #[rustfmt::skip]
+/// The cgmath crate use the OpenGL matrix format multiplying the camera matrix by this one convert
+/// it to the WebGPU matrix format (same as DX12 and Vulkan)
 pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::from_cols(
     cgmath::Vector4::new(1.0, 0.0, 0.0, 0.0),
     cgmath::Vector4::new(0.0, 1.0, 0.0, 0.0),
@@ -23,6 +36,7 @@ pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::from_co
 );
 
 impl Camera {
+    /// Create a new camera object
     pub fn new(
         device: &wgpu::Device,
         eye: cgmath::Point3<f32>,
@@ -76,6 +90,7 @@ impl Camera {
         }
     }
 
+    /// Update the camera matrix with the new camera position
     pub fn update_matrix(&self) -> cgmath::Matrix4<f32> {
         let view = cgmath::Matrix4::look_at_rh(self.eye, self.target, self.up);
         let proj = cgmath::perspective(cgmath::Deg(self.fovy), self.aspect, self.znear, self.zfar);

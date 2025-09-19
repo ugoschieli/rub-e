@@ -1,12 +1,5 @@
 use std::sync::Arc;
-use wgpu::util::DeviceExt;
 use winit::{dpi::PhysicalSize, window::Window};
-
-use crate::Shader;
-use crate::buffer::BufferExt;
-use crate::camera::Camera;
-use crate::pipeline::Pipeline;
-use crate::vertex;
 
 /// A wrapper around muliple wgpu structs that holds the graphics state of the app
 pub struct Gfx {
@@ -20,14 +13,6 @@ pub struct Gfx {
     pub device: wgpu::Device,
     /// The wgpu Queue
     pub queue: wgpu::Queue,
-    /// The wgpu RenderPipeline
-    pub pipeline: Pipeline,
-    /// A vertex Buffer
-    pub vertex_buffer: wgpu::Buffer,
-    /// An index Buffer
-    pub index_buffer: wgpu::Buffer,
-    /// The camera
-    pub camera: Camera,
     /// The Depth Buffer Texture View
     pub depth_texture_view: wgpu::TextureView,
 }
@@ -57,17 +42,6 @@ impl Gfx {
             .unwrap();
         surface.configure(&device, &surface_config);
 
-        let camera = Camera::new(
-            &device,
-            (2.0, 2.0, 3.0).into(),
-            (0.0, 0.0, 0.0).into(),
-            cgmath::Vector3::unit_y(),
-            window_size.width as f32 / window_size.height as f32,
-            45.0,
-            0.1,
-            100.0,
-        );
-
         let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("depth_texture"),
             dimension: wgpu::TextureDimension::D2,
@@ -85,38 +59,19 @@ impl Gfx {
 
         let depth_texture_view = depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
-        let vertex_buffer = device.create_vertex_buffer(vertex::VERTICES, vertex::Vertex::desc());
-        // let vertex_buffer = device.create_vertex_buffer(vertex::VERTICES2, vertex::Vertex::desc());
-
-        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Index Buffer"),
-            contents: bytemuck::cast_slice(vertex::INDICES),
-            usage: wgpu::BufferUsages::INDEX,
-        });
-
-        let shader_str = include_str!("./shaders/shader.wgsl");
-        let shader = Shader::new(shader_str, &device, None);
-
-        let pipeline = Pipeline::new(
-            &device,
-            &[&camera.uniform.layout],
-            &shader,
-            &surface_config,
-            &vertex_buffer,
-        );
-
         Gfx {
             instance,
             surface,
             surface_config,
             device,
             queue,
-            pipeline,
-            vertex_buffer: vertex_buffer.buffer,
-            index_buffer,
-            camera,
             depth_texture_view,
         }
+    }
+
+    /// Getter function to obtain the wgpu::Device
+    pub fn device(&self) -> &wgpu::Device {
+        &self.device
     }
 
     /// Get the texture and view of the next frame that will be rendered

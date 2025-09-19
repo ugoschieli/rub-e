@@ -6,10 +6,10 @@ use crate::Gfx;
 /// The primary Trait provided by the library your primary game state struct must implement this
 pub trait Game: ApplicationHandler {
     /// The function called at the initialization of the engine
-    fn init(&mut self, event_loop: &winit::event_loop::ActiveEventLoop);
+    // fn init(&mut self, event_loop: &winit::event_loop::ActiveEventLoop);
 
     /// The function called each frame by the engine
-    fn render(&mut self);
+    // fn render(&mut self);
 
     /// Getter for a mutable etib::Gfx struct
     fn gfx(&mut self) -> &mut Gfx;
