@@ -186,6 +186,17 @@ impl ApplicationHandler for MyGame<'_> {
                 if let Some(gfx) = &mut self.gfx {
                     gfx.reconfigure_surface_size(size);
 
+                    // Update camera aspect ratio
+                    if let Some(my_gfx) = &mut self.my_gfx {
+                        my_gfx.camera.aspect = size.width as f32 / size.height as f32;
+                        let new_matrix = my_gfx.camera.update_matrix();
+                        gfx.queue.write_buffer(
+                            &my_gfx.camera.buffer,
+                            0,
+                            bytemuck::cast_slice(&[Into::<[[f32; 4]; 4]>::into(new_matrix)]),
+                        );
+                    }
+
                     if let Some(window) = &self.window {
                         window.request_redraw();
                     }

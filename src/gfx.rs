@@ -126,5 +126,23 @@ impl Gfx {
         self.surface_config.width = size.width;
         self.surface_config.height = size.height;
         self.surface.configure(&self.device, &self.surface_config);
+
+        // Recreate depth buffer with new size
+        let depth_texture = self.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("depth_texture"),
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Depth24PlusStencil8,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[],
+            size: wgpu::Extent3d {
+                width: size.width,
+                height: size.height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+        });
+
+        self.depth_texture_view = depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
     }
 }
