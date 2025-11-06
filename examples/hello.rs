@@ -47,42 +47,9 @@ impl MyGame<'_> {
             100.0,
         );
 
-        // Define cube positions in a cat shape
-        let cube_positions = vec![
-            // Head (rounded)
-            cgmath::Vector3::new(0.0, 2.0, 0.0),
-            cgmath::Vector3::new(-1.0, 2.0, 0.0),
-            cgmath::Vector3::new(1.0, 2.0, 0.0),
-            cgmath::Vector3::new(0.0, 2.0, -1.0),
-            // Ears (pointed up)
-            cgmath::Vector3::new(-1.0, 3.0, 0.0),
-            cgmath::Vector3::new(1.0, 3.0, 0.0),
-            // Eyes
-            cgmath::Vector3::new(-1.0, 2.0, 1.0),
-            cgmath::Vector3::new(1.0, 2.0, 1.0),
-            // Nose
-            cgmath::Vector3::new(0.0, 2.0, 1.0),
-            // Body (horizontal elongated)
-            cgmath::Vector3::new(0.0, 1.0, 0.0),
-            cgmath::Vector3::new(0.0, 1.0, -1.0),
-            cgmath::Vector3::new(0.0, 1.0, -2.0),
-            cgmath::Vector3::new(0.0, 1.0, -3.0),
-            cgmath::Vector3::new(1.0, 1.0, -1.0),
-            cgmath::Vector3::new(-1.0, 1.0, -1.0),
-            // Legs (four legs)
-            cgmath::Vector3::new(-1.0, 0.0, 0.0),
-            cgmath::Vector3::new(1.0, 0.0, 0.0),
-            cgmath::Vector3::new(-1.0, 0.0, -2.0),
-            cgmath::Vector3::new(1.0, 0.0, -2.0),
-            cgmath::Vector3::new(-1.0, -1.0, 0.0),
-            cgmath::Vector3::new(1.0, -1.0, 0.0),
-            cgmath::Vector3::new(-1.0, -1.0, -2.0),
-            cgmath::Vector3::new(1.0, -1.0, -2.0),
-            // Tail (curved upward)
-            cgmath::Vector3::new(0.0, 1.0, -4.0),
-            cgmath::Vector3::new(0.0, 2.0, -4.0),
-            cgmath::Vector3::new(0.0, 3.0, -4.0),
-        ];
+        // Load cube positions from model file
+        let cube_positions =
+            etib::load_model("examples/models/cat.model").expect("Failed to load model file");
 
         // Create uniforms for each cube
         let cubes: Vec<etib::Uniform> = cube_positions
@@ -132,10 +99,25 @@ impl MyGame<'_> {
         self.is_initialized = true;
     }
 
-    fn render(&self) {
+    fn render(&mut self) {
         let gfx = self.gfx.as_ref().unwrap();
-        let my_gfx = self.my_gfx.as_ref().unwrap();
+        let my_gfx = self.my_gfx.as_mut().unwrap();
         let (frame, view) = gfx.get_next_frame();
+
+        // Update camera position to rotate around the model
+        let radius = 10.0;
+        let rotation_speed = 0.5; // radians per second
+        let angle = self.time.elapsed_time * rotation_speed;
+        let camera_x = radius * angle.cos();
+        let camera_z = radius * angle.sin();
+
+        my_gfx.camera.eye = cgmath::Point3::new(camera_x, 0.0, camera_z);
+        let new_matrix = my_gfx.camera.update_matrix();
+        gfx.queue.write_buffer(
+            &my_gfx.camera.buffer,
+            0,
+            bytemuck::cast_slice(&[Into::<[[f32; 4]; 4]>::into(new_matrix)]),
+        );
 
         let mut encoder = gfx
             .device

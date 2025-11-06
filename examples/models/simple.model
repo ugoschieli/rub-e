@@ -1,0 +1,10 @@
+# Simple cube arrangement
+# Center
+0.0 0.0 0.0
+# Surrounding cubes
+-1.0 0.0 0.0
+1.0 0.0 0.0
+0.0 -1.0 0.0
+0.0 1.0 0.0
+0.0 0.0 -1.0
+0.0 0.0 1.0

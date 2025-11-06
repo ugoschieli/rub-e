@@ -30,6 +30,8 @@ pub fn run<T: Game>(game: &mut T, event_loop: EventLoop<()>) -> Result<(), Event
 pub struct TimeState {
     /// The time elapsed since the last frame
     pub dt: f32,
+    /// The total time elapsed since the start of the application
+    pub elapsed_time: f32,
     last_time: Instant,
 }
 
@@ -39,6 +41,7 @@ impl TimeState {
         let now = Instant::now();
         let dt = now.duration_since(self.last_time).as_secs_f32();
         self.dt = dt;
+        self.elapsed_time += dt;
         self.last_time = now;
         log::debug!("dt = {}, fps = {}", 1000. * dt, 1. / dt);
     }
@@ -48,6 +51,7 @@ impl Default for TimeState {
     fn default() -> Self {
         Self {
             dt: 0.,
+            elapsed_time: 0.,
             last_time: Instant::now(),
         }
     }
