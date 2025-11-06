@@ -6,7 +6,7 @@
     "distDir": "../out"
   },
   "package": {
-    "productName": "next-tauri",
+    "productName": "asset-software",
     "version": "0.1.0"
   },
   "tauri": {
@@ -57,7 +57,7 @@
         "fullscreen": false,
         "height": 600,
         "resizable": true,
-        "title": "next-tauri",
+        "title": "asset-software",
         "width": 800
       }
     ]
