@@ -23,6 +23,8 @@ struct MyGfx<'vertex> {
     pipeline: etib::Pipeline,
     vertex_buffer: etib::VertexBuffer<'vertex, etib::Vertex>,
     index_buffer: wgpu::Buffer,
+    cube: etib::Uniform,
+    cube2: etib::Uniform,
 }
 
 impl MyGame<'_> {
@@ -46,6 +48,33 @@ impl MyGame<'_> {
             100.0,
         );
 
+        let cube = etib::Uniform::new_with_buffer(
+            device,
+            &Into::<[[f32; 4]; 4]>::into(cgmath::Matrix4::<f32>::from_translation(
+                cgmath::Vector3 {
+                    x: 1.,
+                    y: 0.,
+                    z: 0.,
+                },
+            )),
+        );
+
+        let cube2 = etib::Uniform::new_with_buffer(
+            device,
+            &Into::<[[f32; 4]; 4]>::into(cgmath::Matrix4::<f32>::from_translation(
+                cgmath::Vector3 {
+                    x: -1.,
+                    y: 0.,
+                    z: 0.,
+                },
+            )),
+        );
+
+        let instance_buffer = device.create_vertex_buffer(
+            &[Into::<etib::CubeRaw>::into(etib::Cube::new())],
+            etib::Cube::desc(),
+        );
+
         let shader_str = include_str!("../src/shaders/shader.wgsl");
         let shader = etib::Shader::new(shader_str, &device, None);
         let vertex_buffer = device.create_vertex_buffer(etib::VERTICES, etib::Vertex::desc());
@@ -58,7 +87,7 @@ impl MyGame<'_> {
 
         let pipeline = etib::Pipeline::new(
             &device,
-            &[&camera.uniform.layout],
+            &[&camera.uniform.layout, &cube.layout],
             &shader,
             &gfx.surface_config,
             &vertex_buffer,
@@ -69,6 +98,8 @@ impl MyGame<'_> {
             pipeline,
             vertex_buffer,
             index_buffer,
+            cube,
+            cube2,
         };
 
         self.window = Some(window);
@@ -91,10 +122,14 @@ impl MyGame<'_> {
 
             render_pass.set_pipeline(&my_gfx.pipeline.pipeline);
             render_pass.set_bind_group(0, &my_gfx.camera.uniform.bind_group, &[]);
+
+            render_pass.set_bind_group(1, &my_gfx.cube.bind_group, &[]);
             render_pass.set_vertex_buffer(0, my_gfx.vertex_buffer.buffer.slice(..));
             render_pass.set_index_buffer(my_gfx.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
             render_pass.draw_indexed(0..etib::INDICES.len() as u32, 0, 0..1);
-            // render_pass.draw(0..vertex::VERTICES2.len() as u32, 0..1);
+
+            render_pass.set_bind_group(1, &my_gfx.cube2.bind_group, &[]);
+            render_pass.draw_indexed(0..etib::INDICES.len() as u32, 0, 0..1);
         }
 
         gfx.queue.submit(Some(encoder.finish()));

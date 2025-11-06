@@ -1,11 +1,15 @@
 use wgpu::{BindGroupLayoutEntry, util::DeviceExt};
 
+/// Wrapper around a wgpu::BindGroup to represent a Uniform value
 pub struct Uniform {
+    /// The layout of the Uniform
     pub layout: wgpu::BindGroupLayout,
+    /// The wrapped wgpu::BindGroup
     pub bind_group: wgpu::BindGroup,
 }
 
 impl Uniform {
+    /// Create a new Uniform
     pub fn new(
         device: &wgpu::Device,
         layout: &wgpu::BindGroupLayoutDescriptor,
@@ -34,10 +38,12 @@ impl Uniform {
         Uniform { layout, bind_group }
     }
 
-    pub fn new_with_buffer<T: bytemuck::Pod>(device: &wgpu::Device, contents: &[T]) -> Uniform {
+    /// Create a new Uniform from contents.
+    /// A wgpu::Buffer will automatically be created
+    pub fn new_with_buffer<T: bytemuck::Pod>(device: &wgpu::Device, contents: &T) -> Uniform {
         let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: None,
-            contents: bytemuck::cast_slice(contents),
+            contents: bytemuck::bytes_of(contents),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
