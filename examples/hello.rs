@@ -23,8 +23,7 @@ struct MyGfx<'vertex> {
     pipeline: etib::Pipeline,
     vertex_buffer: etib::VertexBuffer<'vertex, etib::Vertex>,
     index_buffer: wgpu::Buffer,
-    cube: etib::Uniform,
-    cube2: etib::Uniform,
+    cubes: Vec<etib::Uniform>,
 }
 
 impl MyGame<'_> {
@@ -39,7 +38,7 @@ impl MyGame<'_> {
 
         let camera = etib::Camera::new(
             &device,
-            (2.0, 2.0, 3.0).into(),
+            (4.0, 0.0, 10.0).into(),
             (0.0, 0.0, 0.0).into(),
             cgmath::Vector3::unit_y(),
             window_size.width as f32 / window_size.height as f32,
@@ -48,29 +47,55 @@ impl MyGame<'_> {
             100.0,
         );
 
-        let cube = etib::Uniform::new_with_buffer(
-            device,
-            &Into::<[[f32; 4]; 4]>::into(cgmath::Matrix4::<f32>::from_translation(
-                cgmath::Vector3 {
-                    x: 1.,
-                    y: 0.,
-                    z: 0.,
-                },
-            )),
-        );
+        // Define cube positions in a cat shape
+        let cube_positions = vec![
+            // Head (rounded)
+            cgmath::Vector3::new(0.0, 2.0, 0.0),
+            cgmath::Vector3::new(-1.0, 2.0, 0.0),
+            cgmath::Vector3::new(1.0, 2.0, 0.0),
+            cgmath::Vector3::new(0.0, 2.0, -1.0),
+            // Ears (pointed up)
+            cgmath::Vector3::new(-1.0, 3.0, 0.0),
+            cgmath::Vector3::new(1.0, 3.0, 0.0),
+            // Eyes
+            cgmath::Vector3::new(-1.0, 2.0, 1.0),
+            cgmath::Vector3::new(1.0, 2.0, 1.0),
+            // Nose
+            cgmath::Vector3::new(0.0, 2.0, 1.0),
+            // Body (horizontal elongated)
+            cgmath::Vector3::new(0.0, 1.0, 0.0),
+            cgmath::Vector3::new(0.0, 1.0, -1.0),
+            cgmath::Vector3::new(0.0, 1.0, -2.0),
+            cgmath::Vector3::new(0.0, 1.0, -3.0),
+            cgmath::Vector3::new(1.0, 1.0, -1.0),
+            cgmath::Vector3::new(-1.0, 1.0, -1.0),
+            // Legs (four legs)
+            cgmath::Vector3::new(-1.0, 0.0, 0.0),
+            cgmath::Vector3::new(1.0, 0.0, 0.0),
+            cgmath::Vector3::new(-1.0, 0.0, -2.0),
+            cgmath::Vector3::new(1.0, 0.0, -2.0),
+            cgmath::Vector3::new(-1.0, -1.0, 0.0),
+            cgmath::Vector3::new(1.0, -1.0, 0.0),
+            cgmath::Vector3::new(-1.0, -1.0, -2.0),
+            cgmath::Vector3::new(1.0, -1.0, -2.0),
+            // Tail (curved upward)
+            cgmath::Vector3::new(0.0, 1.0, -4.0),
+            cgmath::Vector3::new(0.0, 2.0, -4.0),
+            cgmath::Vector3::new(0.0, 3.0, -4.0),
+        ];
 
-        let cube2 = etib::Uniform::new_with_buffer(
-            device,
-            &Into::<[[f32; 4]; 4]>::into(cgmath::Matrix4::<f32>::from_translation(
-                cgmath::Vector3 {
-                    x: -1.,
-                    y: 0.,
-                    z: 0.,
-                },
-            )),
-        );
+        // Create uniforms for each cube
+        let cubes: Vec<etib::Uniform> = cube_positions
+            .iter()
+            .map(|pos| {
+                etib::Uniform::new_with_buffer(
+                    device,
+                    &Into::<[[f32; 4]; 4]>::into(cgmath::Matrix4::<f32>::from_translation(*pos)),
+                )
+            })
+            .collect();
 
-        let instance_buffer = device.create_vertex_buffer(
+        let _instance_buffer = device.create_vertex_buffer(
             &[Into::<etib::CubeRaw>::into(etib::Cube::new())],
             etib::Cube::desc(),
         );
@@ -87,7 +112,7 @@ impl MyGame<'_> {
 
         let pipeline = etib::Pipeline::new(
             &device,
-            &[&camera.uniform.layout, &cube.layout],
+            &[&camera.uniform.layout, &cubes[0].layout],
             &shader,
             &gfx.surface_config,
             &vertex_buffer,
@@ -98,8 +123,7 @@ impl MyGame<'_> {
             pipeline,
             vertex_buffer,
             index_buffer,
-            cube,
-            cube2,
+            cubes,
         };
 
         self.window = Some(window);
@@ -122,14 +146,14 @@ impl MyGame<'_> {
 
             render_pass.set_pipeline(&my_gfx.pipeline.pipeline);
             render_pass.set_bind_group(0, &my_gfx.camera.uniform.bind_group, &[]);
-
-            render_pass.set_bind_group(1, &my_gfx.cube.bind_group, &[]);
             render_pass.set_vertex_buffer(0, my_gfx.vertex_buffer.buffer.slice(..));
             render_pass.set_index_buffer(my_gfx.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-            render_pass.draw_indexed(0..etib::INDICES.len() as u32, 0, 0..1);
 
-            render_pass.set_bind_group(1, &my_gfx.cube2.bind_group, &[]);
-            render_pass.draw_indexed(0..etib::INDICES.len() as u32, 0, 0..1);
+            // Draw each cube
+            for cube in &my_gfx.cubes {
+                render_pass.set_bind_group(1, &cube.bind_group, &[]);
+                render_pass.draw_indexed(0..etib::INDICES.len() as u32, 0, 0..1);
+            }
         }
 
         gfx.queue.submit(Some(encoder.finish()));
