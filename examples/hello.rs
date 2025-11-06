@@ -9,13 +9,13 @@ use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::Window;
 
-#[derive(Default)]
 struct MyGame<'vertex> {
     window: Option<Arc<Window>>,
     gfx: Option<etib::Gfx>,
     my_gfx: Option<MyGfx<'vertex>>,
     time: etib::TimeState,
     is_initialized: bool,
+    model_path: String,
 }
 
 struct MyGfx<'vertex> {
@@ -38,8 +38,8 @@ impl MyGame<'_> {
 
         let camera = etib::Camera::new(
             &device,
-            (4.0, 0.0, 10.0).into(),
-            (0.0, 0.0, 0.0).into(),
+            (0.0, 10.0, 40.0).into(),
+            (0.0, 7.0, -10.0).into(),
             cgmath::Vector3::unit_y(),
             window_size.width as f32 / window_size.height as f32,
             45.0,
@@ -48,8 +48,7 @@ impl MyGame<'_> {
         );
 
         // Load cube positions from model file
-        let model_cubes =
-            etib::load_model("examples/models/cat.model").expect("Failed to load model file");
+        let model_cubes = etib::load_model(&self.model_path).expect("Failed to load model file");
 
         // CubeUniform data structure matching the shader (mat4x4 + vec4)
         #[repr(C)]
@@ -114,13 +113,14 @@ impl MyGame<'_> {
         let (frame, view) = gfx.get_next_frame();
 
         // Update camera position to rotate around the model
-        let radius = 10.0;
-        let rotation_speed = 0.5; // radians per second
+        let radius = 40.0;
+        let rotation_speed = 0.3; // radians per second
         let angle = self.time.elapsed_time * rotation_speed;
         let camera_x = radius * angle.cos();
-        let camera_z = radius * angle.sin();
+        let camera_z = -10.0 + radius * angle.sin();
 
-        my_gfx.camera.eye = cgmath::Point3::new(camera_x, 0.0, camera_z);
+        my_gfx.camera.eye = cgmath::Point3::new(camera_x, 10.0, camera_z);
+        my_gfx.camera.target = cgmath::Point3::new(0.0, 7.0, -10.0);
         let new_matrix = my_gfx.camera.update_matrix();
         gfx.queue.write_buffer(
             &my_gfx.camera.buffer,
@@ -208,7 +208,29 @@ fn main() -> anyhow::Result<()> {
     env_logger::init();
     info!("Initializing ETIB");
 
-    let mut game = MyGame::default();
+    let args: Vec<String> = std::env::args().collect();
+    let model_path = if args.len() > 1 {
+        args[1].clone()
+    } else {
+        eprintln!("Usage: {} <model_file>", args[0]);
+        eprintln!("Example: {} examples/models/cat.model", args[0]);
+        std::process::exit(1);
+    };
+
+    // Check if the model file exists
+    if !std::path::Path::new(&model_path).exists() {
+        eprintln!("Error: Model file '{}' does not exist", model_path);
+        std::process::exit(1);
+    }
+
+    let mut game = MyGame {
+        window: None,
+        gfx: None,
+        my_gfx: None,
+        time: etib::TimeState::default(),
+        is_initialized: false,
+        model_path,
+    };
     let event_loop = EventLoop::new().unwrap();
     event_loop.set_control_flow(ControlFlow::Poll);
 
