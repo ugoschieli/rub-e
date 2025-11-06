@@ -4,6 +4,7 @@ struct CameraUniform {
 
 struct CubeUniform {
     model: mat4x4<f32>,
+    color: vec4<f32>,
 };
 
 struct VertexInput {
@@ -25,7 +26,7 @@ var<uniform> cube: CubeUniform;
 @vertex
 fn vs_main(model: VertexInput) -> VertexOutput {
     var out: VertexOutput;
-    out.color = model.color;
+    out.color = cube.color.rgb;
     out.clip_position = camera.view_proj * cube.model * vec4<f32>(model.position, 1.0);
     return out;
 }

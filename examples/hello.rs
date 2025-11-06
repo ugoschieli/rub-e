@@ -48,17 +48,26 @@ impl MyGame<'_> {
         );
 
         // Load cube positions from model file
-        let cube_positions =
+        let model_cubes =
             etib::load_model("examples/models/cat.model").expect("Failed to load model file");
 
+        // CubeUniform data structure matching the shader (mat4x4 + vec4)
+        #[repr(C)]
+        #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+        struct CubeUniform {
+            model: [[f32; 4]; 4],
+            color: [f32; 4],
+        }
+
         // Create uniforms for each cube
-        let cubes: Vec<etib::Uniform> = cube_positions
+        let cubes: Vec<etib::Uniform> = model_cubes
             .iter()
-            .map(|pos| {
-                etib::Uniform::new_with_buffer(
-                    device,
-                    &Into::<[[f32; 4]; 4]>::into(cgmath::Matrix4::<f32>::from_translation(*pos)),
-                )
+            .map(|cube| {
+                let cube_uniform = CubeUniform {
+                    model: cgmath::Matrix4::<f32>::from_translation(cube.position).into(),
+                    color: [cube.color.x, cube.color.y, cube.color.z, 1.0],
+                };
+                etib::Uniform::new_with_buffer(device, &cube_uniform)
             })
             .collect();
 

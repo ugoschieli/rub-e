@@ -5,43 +5,55 @@
 
 use std::fs;
 
-/// Load cube positions from a model file
+/// Represents a cube in a model with position and color
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ModelCube {
+    /// The 3D position of the cube
+    pub position: cgmath::Vector3<f32>,
+    /// The RGB color of the cube (values in range [0.0, 1.0])
+    pub color: cgmath::Vector3<f32>,
+}
+
+/// Load cubes from a model file
 ///
 /// # Format
-/// Each line in the file represents a cube position in the format: `x y z`
+/// Each line in the file represents a cube in one of two formats:
+/// - Position only: `x y z` (color defaults to white: 1.0 1.0 1.0)
+/// - Position and color: `x y z r g b`
 /// - Lines starting with `#` are treated as comments
 /// - Empty lines are ignored
-/// - Coordinates are parsed as floating-point numbers
+/// - All values are parsed as floating-point numbers
 ///
 /// # Example
 /// ```text
 /// # This is a comment
-/// 0.0 0.0 0.0
-/// 1.0 0.0 0.0
-/// -1.0 1.0 0.0
+/// 0.0 0.0 0.0 1.0 0.0 0.0   # Red cube at origin
+/// 1.0 0.0 0.0                # White cube (default)
+/// -1.0 1.0 0.0 0.0 0.0 1.0   # Blue cube
 /// ```
 ///
 /// # Arguments
 /// * `path` - Path to the model file
 ///
 /// # Returns
-/// A vector of cube positions as `cgmath::Vector3<f32>`
+/// A vector of `ModelCube` structs containing position and color
 ///
 /// # Errors
 /// Returns an error if:
 /// - The file cannot be read
 /// - A line contains invalid number format
+/// - A line has an invalid number of values (not 3 or 6)
 ///
 /// # Example
 /// ```no_run
 /// use etib::model::load_model;
 ///
-/// let positions = load_model("models/cat.model").expect("Failed to load model");
-/// println!("Loaded {} cubes", positions.len());
+/// let cubes = load_model("models/cat.model").expect("Failed to load model");
+/// println!("Loaded {} cubes", cubes.len());
 /// ```
-pub fn load_model(path: &str) -> anyhow::Result<Vec<cgmath::Vector3<f32>>> {
+pub fn load_model(path: &str) -> anyhow::Result<Vec<ModelCube>> {
     let content = fs::read_to_string(path)?;
-    let mut positions = Vec::new();
+    let mut cubes = Vec::new();
 
     for line in content.lines() {
         let line = line.trim();
@@ -51,15 +63,38 @@ pub fn load_model(path: &str) -> anyhow::Result<Vec<cgmath::Vector3<f32>>> {
         }
 
         let parts: Vec<&str> = line.split_whitespace().collect();
-        if parts.len() == 3 {
-            let x = parts[0].parse::<f32>()?;
-            let y = parts[1].parse::<f32>()?;
-            let z = parts[2].parse::<f32>()?;
-            positions.push(cgmath::Vector3::new(x, y, z));
-        }
+
+        let cube = match parts.len() {
+            3 => {
+                // Position only, default to white
+                let x = parts[0].parse::<f32>()?;
+                let y = parts[1].parse::<f32>()?;
+                let z = parts[2].parse::<f32>()?;
+                ModelCube {
+                    position: cgmath::Vector3::new(x, y, z),
+                    color: cgmath::Vector3::new(1.0, 1.0, 1.0),
+                }
+            }
+            6 => {
+                // Position and color
+                let x = parts[0].parse::<f32>()?;
+                let y = parts[1].parse::<f32>()?;
+                let z = parts[2].parse::<f32>()?;
+                let r = parts[3].parse::<f32>()?;
+                let g = parts[4].parse::<f32>()?;
+                let b = parts[5].parse::<f32>()?;
+                ModelCube {
+                    position: cgmath::Vector3::new(x, y, z),
+                    color: cgmath::Vector3::new(r, g, b),
+                }
+            }
+            _ => continue, // Skip invalid lines
+        };
+
+        cubes.push(cube);
     }
 
-    Ok(positions)
+    Ok(cubes)
 }
 
 #[cfg(test)]
@@ -72,15 +107,18 @@ mod tests {
         let mut file = tempfile::NamedTempFile::new().unwrap();
         writeln!(file, "# Test model").unwrap();
         writeln!(file, "0.0 0.0 0.0").unwrap();
-        writeln!(file, "1.0 2.0 3.0").unwrap();
+        writeln!(file, "1.0 2.0 3.0 1.0 0.0 0.0").unwrap();
         writeln!(file, "").unwrap();
-        writeln!(file, "-1.0 -2.0 -3.0").unwrap();
+        writeln!(file, "-1.0 -2.0 -3.0 0.0 1.0 0.0").unwrap();
 
-        let positions = load_model(file.path().to_str().unwrap()).unwrap();
+        let cubes = load_model(file.path().to_str().unwrap()).unwrap();
 
-        assert_eq!(positions.len(), 3);
-        assert_eq!(positions[0], cgmath::Vector3::new(0.0, 0.0, 0.0));
-        assert_eq!(positions[1], cgmath::Vector3::new(1.0, 2.0, 3.0));
-        assert_eq!(positions[2], cgmath::Vector3::new(-1.0, -2.0, -3.0));
+        assert_eq!(cubes.len(), 3);
+        assert_eq!(cubes[0].position, cgmath::Vector3::new(0.0, 0.0, 0.0));
+        assert_eq!(cubes[0].color, cgmath::Vector3::new(1.0, 1.0, 1.0)); // Default white
+        assert_eq!(cubes[1].position, cgmath::Vector3::new(1.0, 2.0, 3.0));
+        assert_eq!(cubes[1].color, cgmath::Vector3::new(1.0, 0.0, 0.0)); // Red
+        assert_eq!(cubes[2].position, cgmath::Vector3::new(-1.0, -2.0, -3.0));
+        assert_eq!(cubes[2].color, cgmath::Vector3::new(0.0, 1.0, 0.0)); // Green
     }
 }
