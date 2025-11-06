@@ -4,8 +4,10 @@ use crate::Vertex;
 
 /// Represents a cube instance with transformation and color information
 pub struct Cube {
-    model: cgmath::Matrix4<f32>,
-    color: cgmath::Vector4<f32>,
+    /// The 4x4 transformation matrix for positioning, rotating, and scaling the cube
+    pub model: cgmath::Matrix4<f32>,
+    /// The RGBA color vector for the cube
+    pub color: cgmath::Vector4<f32>,
 }
 
 /// Raw GPU-compatible representation of a cube instance
@@ -38,6 +40,14 @@ impl Cube {
             model: cgmath::Matrix4::zero(),
             color: cgmath::Vector4::zero(),
         }
+    }
+
+    /// Convert this Cube into its raw GPU-compatible representation
+    ///
+    /// # Returns
+    /// A `CubeRaw` instance ready for GPU upload
+    pub fn into_raw(self) -> CubeRaw {
+        self.into()
     }
 
     /// Create an instance buffer for cube rendering
@@ -83,54 +93,154 @@ impl Cube {
     }
 }
 
-/// The vertices to render a cube
+/// The vertices to render a cube with normals for lighting
 pub const VERTICES: &[Vertex] = &[
+    // Front face (Z+)
     Vertex {
         position: [-0.5, 0.5, 0.5],
         color: [0.5, 0.0, 0.5],
-    }, // Front Face Top Left 0
+        normal: [0.0, 0.0, 1.0],
+    }, // 0
     Vertex {
         position: [-0.5, -0.5, 0.5],
         color: [0.0, 0.5, 0.5],
-    }, // Front Face Bottom Left 1
+        normal: [0.0, 0.0, 1.0],
+    }, // 1
     Vertex {
         position: [0.5, -0.5, 0.5],
         color: [0.5, 0.5, 0.0],
-    }, // Front Face Bottom Right 2
+        normal: [0.0, 0.0, 1.0],
+    }, // 2
     Vertex {
         position: [0.5, 0.5, 0.5],
         color: [1.0, 0.0, 0.0],
-    }, // Front Face Top Right 3
+        normal: [0.0, 0.0, 1.0],
+    }, // 3
+    // Back face (Z-)
     Vertex {
         position: [-0.5, 0.5, -0.5],
         color: [0.5, 0.0, 0.5],
-    }, // Back Face Top Left 4
+        normal: [0.0, 0.0, -1.0],
+    }, // 4
     Vertex {
         position: [-0.5, -0.5, -0.5],
         color: [0.0, 0.5, 0.5],
-    }, // Back Face Bottom Left 5
+        normal: [0.0, 0.0, -1.0],
+    }, // 5
     Vertex {
         position: [0.5, -0.5, -0.5],
         color: [0.5, 0.5, 0.0],
-    }, // Back Face Bottom Right 6
+        normal: [0.0, 0.0, -1.0],
+    }, // 6
     Vertex {
         position: [0.5, 0.5, -0.5],
         color: [1.0, 0.0, 0.0],
-    }, // Back Face Top Right 7
+        normal: [0.0, 0.0, -1.0],
+    }, // 7
+    // Top face (Y+) - duplicate vertices with different normals
+    Vertex {
+        position: [-0.5, 0.5, -0.5],
+        color: [0.5, 0.0, 0.5],
+        normal: [0.0, 1.0, 0.0],
+    }, // 8
+    Vertex {
+        position: [-0.5, 0.5, 0.5],
+        color: [0.5, 0.0, 0.5],
+        normal: [0.0, 1.0, 0.0],
+    }, // 9
+    Vertex {
+        position: [0.5, 0.5, 0.5],
+        color: [1.0, 0.0, 0.0],
+        normal: [0.0, 1.0, 0.0],
+    }, // 10
+    Vertex {
+        position: [0.5, 0.5, -0.5],
+        color: [1.0, 0.0, 0.0],
+        normal: [0.0, 1.0, 0.0],
+    }, // 11
+    // Bottom face (Y-)
+    Vertex {
+        position: [-0.5, -0.5, 0.5],
+        color: [0.0, 0.5, 0.5],
+        normal: [0.0, -1.0, 0.0],
+    }, // 12
+    Vertex {
+        position: [-0.5, -0.5, -0.5],
+        color: [0.0, 0.5, 0.5],
+        normal: [0.0, -1.0, 0.0],
+    }, // 13
+    Vertex {
+        position: [0.5, -0.5, -0.5],
+        color: [0.5, 0.5, 0.0],
+        normal: [0.0, -1.0, 0.0],
+    }, // 14
+    Vertex {
+        position: [0.5, -0.5, 0.5],
+        color: [0.5, 0.5, 0.0],
+        normal: [0.0, -1.0, 0.0],
+    }, // 15
+    // Right face (X+)
+    Vertex {
+        position: [0.5, 0.5, 0.5],
+        color: [1.0, 0.0, 0.0],
+        normal: [1.0, 0.0, 0.0],
+    }, // 16
+    Vertex {
+        position: [0.5, -0.5, 0.5],
+        color: [0.5, 0.5, 0.0],
+        normal: [1.0, 0.0, 0.0],
+    }, // 17
+    Vertex {
+        position: [0.5, -0.5, -0.5],
+        color: [0.5, 0.5, 0.0],
+        normal: [1.0, 0.0, 0.0],
+    }, // 18
+    Vertex {
+        position: [0.5, 0.5, -0.5],
+        color: [1.0, 0.0, 0.0],
+        normal: [1.0, 0.0, 0.0],
+    }, // 19
+    // Left face (X-)
+    Vertex {
+        position: [-0.5, 0.5, -0.5],
+        color: [0.5, 0.0, 0.5],
+        normal: [-1.0, 0.0, 0.0],
+    }, // 20
+    Vertex {
+        position: [-0.5, -0.5, -0.5],
+        color: [0.0, 0.5, 0.5],
+        normal: [-1.0, 0.0, 0.0],
+    }, // 21
+    Vertex {
+        position: [-0.5, -0.5, 0.5],
+        color: [0.0, 0.5, 0.5],
+        normal: [-1.0, 0.0, 0.0],
+    }, // 22
+    Vertex {
+        position: [-0.5, 0.5, 0.5],
+        color: [0.5, 0.0, 0.5],
+        normal: [-1.0, 0.0, 0.0],
+    }, // 23
 ];
 
-/// The indices to render a cube
+/// The indices to render a cube with proper normals and CCW winding
 pub const INDICES: &[u16] = &[
-    0, 1, 2, // Front Face 1
-    0, 2, 3, // Front Face 2
-    4, 0, 3, // Top Face 1
-    4, 3, 7, // Top Face 2
-    7, 6, 5, // Back Face 1
-    7, 5, 4, // Back Face 2
-    1, 5, 6, // Bottom Face 1
-    1, 6, 2, // Bottom Face 1
-    3, 2, 6, // Right Face 1
-    3, 6, 7, // Right Face 2
-    4, 5, 1, // Left Face 1
-    4, 1, 0, // Left Face 2
+    // Front Face (Z+) - CCW from outside: TL -> BL -> BR -> TR
+    0, 1, 2, // Triangle 1: TL, BL, BR
+    0, 2, 3, // Triangle 2: TL, BR, TR
+    // Back Face (Z-) - CCW from outside: TR -> BR -> BL -> TL
+    4, 7, 6, // Triangle 1: TL, TR, BR
+    4, 6, 5, // Triangle 2: TL, BR, BL
+    // Top Face (Y+) - CCW from above: BL -> FL -> FR -> BR
+    8, 9, 10, // Triangle 1
+    8, 10, 11, // Triangle 2
+    // Bottom Face (Y-) - CCW from below: FL -> BL -> BR -> FR
+    12, 13, 14, // Triangle 1
+    12, 14, 15, // Triangle 2
+    // Right Face (X+) - CCW from outside: TF -> BF -> BB -> TB
+    16, 17, 18, // Triangle 1
+    16, 18, 19, // Triangle 2
+    // Left Face (X-) - CCW from outside: TB -> BB -> BF -> TF
+    20, 21, 22, // Triangle 1
+    20, 22, 23, // Triangle 2
 ];

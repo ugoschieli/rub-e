@@ -1,7 +1,7 @@
-/// A simple vertex struct representing a 3D point with color
+/// A simple vertex struct representing a 3D point with color and normal
 ///
-/// This structure contains the basic data for a single vertex: its 3D position
-/// and RGB color values. The layout is compatible with GPU vertex buffers.
+/// This structure contains the basic data for a single vertex: its 3D position,
+/// RGB color values, and normal vector. The layout is compatible with GPU vertex buffers.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct Vertex {
@@ -9,6 +9,8 @@ pub struct Vertex {
     pub position: [f32; 3],
     /// The RGB color of the vertex (r, g, b) with values in range [0.0, 1.0]
     pub color: [f32; 3],
+    /// The normal vector of the vertex (nx, ny, nz)
+    pub normal: [f32; 3],
 }
 
 impl Vertex {
@@ -26,6 +28,11 @@ impl Vertex {
                 wgpu::VertexAttribute {
                     offset: std::mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
                     shader_location: 1,
+                    format: wgpu::VertexFormat::Float32x3,
+                },
+                wgpu::VertexAttribute {
+                    offset: (std::mem::size_of::<[f32; 3]>() * 2) as wgpu::BufferAddress,
+                    shader_location: 2,
                     format: wgpu::VertexFormat::Float32x3,
                 },
             ],
