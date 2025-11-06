@@ -2,11 +2,16 @@ use cgmath::Zero;
 
 use crate::Vertex;
 
+/// Represents a cube instance with transformation and color information
 pub struct Cube {
     model: cgmath::Matrix4<f32>,
     color: cgmath::Vector4<f32>,
 }
 
+/// Raw GPU-compatible representation of a cube instance
+///
+/// This struct is laid out in a way that can be directly uploaded to the GPU
+/// for instanced rendering. It contains the model transformation matrix and color.
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct CubeRaw {
@@ -24,6 +29,10 @@ impl Into<CubeRaw> for Cube {
 }
 
 impl Cube {
+    /// Create a new cube instance with default (zero) transformation and color
+    ///
+    /// # Returns
+    /// A new `Cube` with identity matrix and black color
     pub fn new() -> Self {
         Self {
             model: cgmath::Matrix4::zero(),
@@ -31,8 +40,19 @@ impl Cube {
         }
     }
 
+    /// Create an instance buffer for cube rendering
+    ///
+    /// This function is currently a placeholder for future instanced rendering implementation.
     pub fn create_instance_buffer() {}
 
+    /// Get the vertex buffer layout descriptor for cube instances
+    ///
+    /// This describes how cube instance data is laid out in GPU memory for the vertex shader.
+    /// The layout includes the model transformation matrix (4x Vec4) distributed across
+    /// shader locations 2-5.
+    ///
+    /// # Returns
+    /// A `wgpu::VertexBufferLayout` describing the instance data structure
     pub fn desc() -> wgpu::VertexBufferLayout<'static> {
         wgpu::VertexBufferLayout {
             array_stride: std::mem::size_of::<CubeRaw>() as u64,

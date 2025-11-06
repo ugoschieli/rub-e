@@ -1,8 +1,13 @@
+/// A simple vertex struct representing a 3D point with color
+///
+/// This structure contains the basic data for a single vertex: its 3D position
+/// and RGB color values. The layout is compatible with GPU vertex buffers.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-/// A simple vertex struct
 pub struct Vertex {
+    /// The 3D position of the vertex (x, y, z)
     pub position: [f32; 3],
+    /// The RGB color of the vertex (r, g, b) with values in range [0.0, 1.0]
     pub color: [f32; 3],
 }
 
