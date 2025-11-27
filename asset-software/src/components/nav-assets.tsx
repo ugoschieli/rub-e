@@ -18,7 +18,7 @@ import {
   SidebarMenuSubItem,
 } from "@/components/ui/sidebar"
 
-export function NavMain({
+export function NavAssets({
   items,
 }: {
   items: {
@@ -34,7 +34,7 @@ export function NavMain({
 }) {
   return (
     <SidebarGroup>
-      <SidebarGroupLabel>Platform</SidebarGroupLabel>
+      <SidebarGroupLabel>Manage your assets</SidebarGroupLabel>
       <SidebarMenu>
         {items.map((item) => (
           <Collapsible
