@@ -42,43 +42,48 @@ const data = {
   assets: [
     {
       title: "Assets",
-      url: "#",
+      url: "/assets",
       icon: SquareTerminal,
       isActive: true,
       items: [
         {
-          title: "History",
-          url: "#",
+          title: "Rock",
+          url: "/assets/rock",
         },
         {
-          title: "Starred",
-          url: "#",
+          title: "Wood",
+          url: "/assets/wood",
         },
         {
-          title: "Settings",
-          url: "#",
+          title: "Squard",
+          url: "/assets/squard",
         },
       ],
     }
   ],
   projects: [
     {
-      title: "Project",
-      url: "#",
-      icon: SquareTerminal,
+      title: "All Projects",
+      url: "/all-projects",
+      icon: PieChart,
+    },
+    {
+      title: "Projects",
+      url: "/projects",
+      icon: Frame,
       isActive: true,
       items: [
         {
           title: "Design Engineering",
-          url: "/design-engineering",
+          url: "/projects",
         },
         {
-          title: "Starred",
-          url: "#",
+          title: "Marketing",
+          url: "/projects/marketing",
         },
         {
-          title: "Settings",
-          url: "#",
+          title: "Job Application",
+          url: "/projects/job-application",
         },
       ],
     }
@@ -98,7 +103,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       <SidebarFooter>
         {/* <NavUser user={data.user} /> */}
       </SidebarFooter>
-      <SidebarRail />
+      <SidebarRail/>
     </Sidebar>
   )
 }
