@@ -21,3 +21,16 @@ export default function Page() {
     </div>
   )
 }
+
+// {
+//   links.map((link) => (
+//     <Link
+//       key={link.href}
+//       href={link.href}
+//       className={`${pathname === link.href ? "font-bold underline" : ""
+//         }`}
+//     >
+//       {link.name}
+//     </Link>
+//   ))
+// }

@@ -7,7 +7,8 @@
   },
   "teams": [
     {
-      "name": "STG-02"    
+      "name": "STG-02",
+      "logo": "/public/STG-02.png"
     }
   ],
   "assets": [
@@ -21,15 +22,15 @@
       "items": [
         {
           "title": "Rock",
-          "url": "/assets/rock"
+          "url": "/assets/Rock"
         },
         {
           "title": "Wood",
-          "url": "/assets/wood"
+          "url": "/assets/Wood"
         },
         {
           "title": "Squard",
-          "url": "/assets/squard"
+          "url": "/assets/Squard"
         }
       ]
     }

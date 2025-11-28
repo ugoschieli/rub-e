@@ -8,7 +8,7 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 
-export default function AssetLayout({ children, params }: { children: React.ReactNode, params: Promise<{ slug: string }> }) {
+export default function ProjectLayout({ children, params }: { children: React.ReactNode, params: Promise<{ slug: string }> }) {
   const slug = React.use(params).slug; // unwrap promise with React.use() (Next.js 13.5+)
 
 
@@ -19,7 +19,7 @@ export default function AssetLayout({ children, params }: { children: React.Reac
           <Breadcrumb>
             <BreadcrumbList>
               <BreadcrumbItem className="hidden md:block">
-                <BreadcrumbPage>Assets</BreadcrumbPage>
+                <BreadcrumbPage>Projects</BreadcrumbPage>
               </BreadcrumbItem>
               <BreadcrumbSeparator />
               <BreadcrumbItem className="hidden md:block">
