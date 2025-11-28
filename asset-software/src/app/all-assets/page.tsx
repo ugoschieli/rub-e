@@ -28,7 +28,7 @@ export default function Page() {
               <BreadcrumbList>
                 <BreadcrumbItem className="hidden md:block">
                 <BreadcrumbPage >
-                    All Projects
+                    All Assets
                 </BreadcrumbPage>
                 </BreadcrumbItem>
             </BreadcrumbList>

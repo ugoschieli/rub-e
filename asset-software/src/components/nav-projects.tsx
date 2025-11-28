@@ -84,8 +84,6 @@ export function NavProjects({
         }
         )
         }
-
-
       </SidebarMenu>
     </SidebarGroup>
   )

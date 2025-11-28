@@ -41,9 +41,14 @@ const data = {
   ],
   assets: [
     {
+      title: "All assets",
+      url: "/all-assets",
+      icon: GalleryVerticalEnd,
+    },
+    {
       title: "Assets",
       url: "/assets",
-      icon: SquareTerminal,
+      icon: Bot,
       isActive: true,
       items: [
         {
@@ -75,7 +80,7 @@ const data = {
       items: [
         {
           title: "Design Engineering",
-          url: "/projects",
+          url: "/projects/design-engineering",
         },
         {
           title: "Marketing",

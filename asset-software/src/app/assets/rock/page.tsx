@@ -28,9 +28,16 @@ export default function Page() {
               <BreadcrumbList>
                 <BreadcrumbItem className="hidden md:block">
                 <BreadcrumbPage >
-                    All Projects
+                    Assets
                 </BreadcrumbPage>
                 </BreadcrumbItem>
+              <BreadcrumbSeparator />
+
+              <BreadcrumbItem className="hidden md:block">
+                <BreadcrumbPage >
+                  Rock
+                </BreadcrumbPage>
+              </BreadcrumbItem>
             </BreadcrumbList>
             </Breadcrumb>
           </div>
