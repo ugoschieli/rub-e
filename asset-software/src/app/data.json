@@ -1,0 +1,62 @@
+
+{
+  "user": {
+    "name": "shadcn",
+    "email": "m@example.com",
+    "avatar": "/avatars/shadcn.jpg"
+  },
+  "teams": [
+    {
+      "name": "STG-02"    
+    }
+  ],
+  "assets": [
+    {
+      "title": "All assets",
+      "url": "/all-assets"    },
+    {
+      "title": "Assets",
+      "url": "/assets",
+      "isActive": true,
+      "items": [
+        {
+          "title": "Rock",
+          "url": "/assets/rock"
+        },
+        {
+          "title": "Wood",
+          "url": "/assets/wood"
+        },
+        {
+          "title": "Squard",
+          "url": "/assets/squard"
+        }
+      ]
+    }
+  ],
+  "projects": [
+    {
+      "title": "All Projects",
+      "url": "/all-projects"
+    },
+    {
+      "title": "Projects",
+      "url": "/projects",
+      "isActive": true,
+      "items": [
+        {
+          "title": "Design Engineering",
+          "url": "/projects/design-engineering"
+        },
+        {
+          "title": "Marketing",
+          "url": "/projects/marketing"
+        },
+        {
+          "title": "Job Application",
+          "url": "/projects/job-application"
+        }
+      ]
+    }
+  ]
+}
