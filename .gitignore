@@ -2,3 +2,4 @@
 /target
 *.model
 TODO.md
+.vscode/
