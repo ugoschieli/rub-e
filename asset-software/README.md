@@ -2,6 +2,12 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
+Install tauri cli
+
+```bash
+cargo install tauri-cli
+```
+
 First, run the development server:
 
 ```bash
