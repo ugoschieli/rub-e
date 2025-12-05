@@ -13,33 +13,40 @@
   ],
   "assets": [
     {
-      "title": "All assets",
-      "url": "/all-assets"    },
-    {
       "title": "Assets",
       "url": "/assets",
       "isActive": true,
       "items": [
         {
           "title": "Rock",
-          "url": "/assets/Rock"
+          "url": "/assets/Rock",
+          "tag": ["Character", "Hero"]
         },
         {
           "title": "Wood",
-          "url": "/assets/Wood"
+          "url": "/assets/Wood",
+          "tag": ["Character", "Hero"]          
         },
         {
           "title": "Squard",
-          "url": "/assets/Squard"
+          "url": "/assets/Squard",
+          "tag": ["Character", "Hero","bite"]
+        },
+         {
+          "title": "a",
+          "url": "/assets/a",
+          "tag": ["Hero"]
+        },
+                 {
+          "title": "test",
+          "url": "/assets/test",
+          "tag": ["test"]
         }
       ]
+
     }
   ],
   "projects": [
-    {
-      "title": "All Projects",
-      "url": "/all-projects"
-    },
     {
       "title": "Projects",
       "url": "/projects",

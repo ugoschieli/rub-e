@@ -1,88 +1,87 @@
 "use client"
 
-import { ChevronRight, type LucideIcon } from "lucide-react"
-
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible"
+import * as React from "react"
 import {
   SidebarGroup,
   SidebarGroupLabel,
   SidebarMenu,
-  SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuButton,
   SidebarMenuSub,
-  SidebarMenuSubButton,
   SidebarMenuSubItem,
+  SidebarMenuSubButton,
 } from "@/components/ui/sidebar"
 
-export function NavAssets({
-  items,
-}: {
-  items: {
-    title: string
-    url: string
-    icon?: LucideIcon
-    isActive?: boolean
-    items?: {
-      title: string
-      url: string
-    }[]
-  }[]
-}) {
+// ------------------------
+// Types
+// ------------------------
+export interface AssetItem {
+  title: string
+  url: string
+  tag?: string[]
+}
+
+export interface AssetGroup {
+  title: string
+  url: string
+  isActive?: boolean
+  items?: AssetItem[]
+}
+
+interface NavAssetsProps {
+  items: AssetGroup[]
+}
+
+// ------------------------
+// Utilitaire slugify
+// ------------------------
+function slugify(text: string) {
+  return text.toLowerCase().replace(/\s+/g, "-")
+}
+
+// ------------------------
+// Composant
+// ------------------------
+export function NavAssets({ items }: NavAssetsProps) {
+  // Extraire tous les tags uniques depuis les assets
+  const tags = React.useMemo(() => {
+    const tagSet = new Set<string>()
+
+    items.forEach((group) => {
+      group.items?.forEach((asset) => {
+        asset.tag?.forEach((t) => tagSet.add(t))
+      })
+    })
+
+    return Array.from(tagSet) // ex: ["Hero", "Character"]
+  }, [items])
+
   return (
     <SidebarGroup>
       <SidebarGroupLabel>Manage your assets</SidebarGroupLabel>
+
       <SidebarMenu>
-        {items.map((item) => {
-          if (item.items && item.items.length > 0) {
-            return (
-              <Collapsible
-                key={item.title}
-                asChild
-                defaultOpen={item.isActive}
-                className="group/collapsible"
-              >
-                <SidebarMenuItem>
-                  <CollapsibleTrigger asChild>
-                    <SidebarMenuButton tooltip={item.title}>
-                      {item.icon && <item.icon />}
-                      <span>{item.title}</span>
-                      <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
-                    </SidebarMenuButton>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <SidebarMenuSub>
-                      {item.items?.map((subItem) => (
-                        <SidebarMenuSubItem key={subItem.title}>
-                          <SidebarMenuSubButton asChild>
-                            <a href={subItem.url}>
-                              <span>{subItem.title}</span>
-                            </a>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                      ))}
-                    </SidebarMenuSub>
-                  </CollapsibleContent>
-                </SidebarMenuItem>
-              </Collapsible>
-            )
-          }
-          return (
-            <SidebarMenuItem key={item.title}>
-              <SidebarMenuButton tooltip={item.title} asChild>
-                <a href={item.url}>
-                  {item.icon && <item.icon />}
-                  <span>{item.title}</span>
-                </a>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          )
-        }
-        )
-        }
+        {items.map((group) => (
+          <SidebarMenuItem key={group.title}>
+            <SidebarMenuButton asChild>
+              <a href={group.url}>
+                <span>{group.title}</span>
+              </a>
+            </SidebarMenuButton>
+
+            <SidebarMenuSub>
+              {tags.map((tag) => (
+                <SidebarMenuSubItem key={tag}>
+                  <SidebarMenuSubButton asChild>
+                    <a href={`/assets/${slugify(tag)}`}>
+                      <span>{tag}</span>
+                    </a>
+                  </SidebarMenuSubButton>
+                </SidebarMenuSubItem>
+              ))}
+            </SidebarMenuSub>
+          </SidebarMenuItem>
+        ))}
       </SidebarMenu>
     </SidebarGroup>
   )
