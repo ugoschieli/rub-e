@@ -30,9 +30,7 @@
         {
           "title": "Squard",
           "url": "/assets/Squard",
-          "tag": ["Character", "Hero"]
-          
-          
+          "tag": ["Character", "Hero","bite"]
         },
          {
           "title": "a",
@@ -45,13 +43,10 @@
           "tag": ["test"]
         }
       ]
+
     }
   ],
   "projects": [
-    {
-      "title": "All Projects",
-      "url": "/all-projects"
-    },
     {
       "title": "Projects",
       "url": "/projects",
