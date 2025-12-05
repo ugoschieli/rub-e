@@ -1,2 +1,4 @@
 pub mod model;
-pub mod manager;
+pub mod projects;
+pub mod assets;
+pub mod categories;

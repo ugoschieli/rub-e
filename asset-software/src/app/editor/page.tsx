@@ -7,33 +7,18 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar"
+import { EditorNavbar } from "@/components/editor-navbar";
 export const metadata: Metadata = {
   title: "MyApp",
 };
-import {
-  NavigationMenu,
-  NavigationMenuContent,
-  NavigationMenuIndicator,
-  NavigationMenuItem,
-  NavigationMenuLink,
-  NavigationMenuList,
-  NavigationMenuTrigger,
-  NavigationMenuViewport,
-} from "@/components/ui/navigation-menu"
+import React from "react";
+import { EditorLayout } from "@/components/editor-layout";
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="h-screen w-full bg-black">
-      <NavigationMenu>
-        <NavigationMenuList>
-          <NavigationMenuItem>
-            <NavigationMenuTrigger>Item One</NavigationMenuTrigger>
-            <NavigationMenuContent>
-              <NavigationMenuLink>Link</NavigationMenuLink>
-            </NavigationMenuContent>
-          </NavigationMenuItem>
-        </NavigationMenuList>
-      </NavigationMenu>
+      <EditorNavbar />
+      <EditorLayout />
     </div>
   )
 }
