@@ -1,23 +1,33 @@
-import { AppSidebar } from "@/components/app-sidebar"
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb"
-import { Separator } from "@/components/ui/separator"
-import {
-  SidebarInset,
-  SidebarProvider,
-  SidebarTrigger,
-} from "@/components/ui/sidebar"
-import data from "@/app/data.json";
+"use client"
+
+import React from "react"
+import data from "@/app/data.json"
+import AssetCard, { Asset } from "@/components/asset-card"
+
 export default function Page() {
+  // Transformer les items du JSON en assets pour AssetCard
+  const assets: Asset[] = React.useMemo(() => {
+    const allAssets: Asset[] = []
+    data.assets.forEach((group) => {
+      group.items?.forEach((item) => {
+        allAssets.push({
+          title: item.title,
+          tag: item.tag ?? [],
+          url: item.url,
+          type: "Asset", // par défaut si tu n'as pas de type spécifique
+          image: "/STG_02.png", // ou mettre un placeholder si besoin
+          param: [], // vide pour l'instant, tu peux remplir si tu veux
+        })
+      })
+    })
+    return allAssets
+  }, [])
+
   return (
-    <div>
-     
+    <div className="flex flex-wrap p-4 gap-4">
+      {assets.map((asset, index) => (
+        <AssetCard key={index} asset={asset} />
+      ))}
     </div>
   )
 }
