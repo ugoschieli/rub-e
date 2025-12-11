@@ -11,6 +11,7 @@ import {
   SidebarMenuSubItem,
   SidebarMenuSubButton,
 } from "@/components/ui/sidebar"
+import AddCategory from "@/components/add-categorie";
 
 // ------------------------
 // Types
@@ -79,6 +80,7 @@ export function NavAssets({ items }: NavAssetsProps) {
                   </SidebarMenuSubButton>
                 </SidebarMenuSubItem>
               ))}
+              <AddCategory/>
             </SidebarMenuSub>
           </SidebarMenuItem>
         ))}

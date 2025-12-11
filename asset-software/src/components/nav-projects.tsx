@@ -18,6 +18,7 @@ import {
   SidebarMenuSubItem,
 } from "@/components/ui/sidebar"
 import { it } from "node:test"
+import AddProjet from "@/components/add-project";
 
 export function NavProjects({
   items,
@@ -65,6 +66,7 @@ export function NavProjects({
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                       ))}
+                      <AddProjet/>
                     </SidebarMenuSub>
                   </CollapsibleContent>
                 </SidebarMenuItem>
@@ -79,6 +81,7 @@ export function NavProjects({
                   <span>{item.title}</span>
                 </a>
               </SidebarMenuButton>
+              <AddProjet/>
             </SidebarMenuItem>
           )
         }
