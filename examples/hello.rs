@@ -1,3 +1,4 @@
+use cgmath::InnerSpace;
 use env_logger;
 use etib::BufferExt;
 use etib::Game;
@@ -5,8 +6,9 @@ use log::info;
 use std::sync::Arc;
 use wgpu::util::DeviceExt;
 use winit::application::ApplicationHandler;
-use winit::event::WindowEvent;
+use winit::event::{DeviceEvent, DeviceId, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
+use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::Window;
 
 struct MyGame<'vertex> {
@@ -16,6 +18,8 @@ struct MyGame<'vertex> {
     time: etib::TimeState,
     is_initialized: bool,
     model_path: String,
+    camera_controller: etib::CameraController,
+    cursor_grabbed: bool,
 }
 
 struct MyGfx<'vertex> {
@@ -104,15 +108,8 @@ impl MyGame<'_> {
         let my_gfx = self.my_gfx.as_mut().unwrap();
         let (frame, view) = gfx.get_next_frame();
 
-        // Update camera position to rotate around the model
-        let radius = 40.0;
-        let rotation_speed = 0.3; // radians per second
-        let angle = self.time.elapsed_time * rotation_speed;
-        let camera_x = radius * angle.cos();
-        let camera_z = -10.0 + radius * angle.sin();
-
-        my_gfx.camera.eye = cgmath::Point3::new(camera_x, 10.0, camera_z);
-        my_gfx.camera.target = cgmath::Point3::new(0.0, 7.0, -10.0);
+        // Update camera based on controller input
+        self.camera_controller.update_camera(&mut my_gfx.camera, self.time.dt);
         let new_matrix = my_gfx.camera.update_matrix();
         gfx.queue.write_buffer(
             &my_gfx.camera.buffer,
@@ -174,6 +171,35 @@ impl ApplicationHandler for MyGame<'_> {
                 println!("The close button was pressed; stopping");
                 event_loop.exit();
             }
+            WindowEvent::KeyboardInput { event, .. } => {
+                // Handle camera movement keys
+                self.camera_controller.process_keyboard(event.clone());
+
+                // Press ESC to release cursor, press C to grab cursor
+                if event.state == winit::event::ElementState::Pressed {
+                    match event.physical_key {
+                        PhysicalKey::Code(KeyCode::Escape) => {
+                            if let Some(window) = &self.window {
+                                self.cursor_grabbed = false;
+                                let _ = window.set_cursor_grab(winit::window::CursorGrabMode::None);
+                                window.set_cursor_visible(true);
+                            }
+                        }
+                        PhysicalKey::Code(KeyCode::KeyC) => {
+                            if let Some(window) = &self.window {
+                                self.cursor_grabbed = true;
+                                let _ = window.set_cursor_grab(winit::window::CursorGrabMode::Confined)
+                                    .or_else(|_| window.set_cursor_grab(winit::window::CursorGrabMode::Locked));
+                                window.set_cursor_visible(false);
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            WindowEvent::MouseWheel { delta, .. } => {
+                self.camera_controller.process_scroll(&delta);
+            }
             WindowEvent::Resized(size) => {
                 if let Some(gfx) = &mut self.gfx {
                     gfx.reconfigure_surface_size(size);
@@ -205,6 +231,20 @@ impl ApplicationHandler for MyGame<'_> {
             _ => (),
         }
     }
+
+    fn device_event(
+        &mut self,
+        _event_loop: &ActiveEventLoop,
+        _device_id: DeviceId,
+        event: DeviceEvent,
+    ) {
+        // Only process mouse movement when cursor is grabbed
+        if self.cursor_grabbed {
+            if let DeviceEvent::MouseMotion { delta } = event {
+                self.camera_controller.process_mouse(delta.0, delta.1);
+            }
+        }
+    }
 }
 
 fn main() -> anyhow::Result<()> {
@@ -226,6 +266,18 @@ fn main() -> anyhow::Result<()> {
         std::process::exit(1);
     }
 
+    // Calculate initial camera angles for FPS camera
+    // Camera starts at (0, 10, 40) looking at (0, 7, -10)
+    let initial_eye = cgmath::Point3::new(0.0_f32, 10.0, 40.0);
+    let initial_target = cgmath::Point3::new(0.0_f32, 7.0, -10.0);
+    let forward = (initial_target - initial_eye).normalize();
+    let initial_yaw: f32 = forward.z.atan2(forward.x);
+    let initial_pitch: f32 = forward.y.asin();
+    
+    let mut camera_controller = etib::CameraController::new(10.0, 0.003);
+    camera_controller.yaw = initial_yaw;
+    camera_controller.pitch = initial_pitch;
+    
     let mut game = MyGame {
         window: None,
         gfx: None,
@@ -233,6 +285,8 @@ fn main() -> anyhow::Result<()> {
         time: etib::TimeState::default(),
         is_initialized: false,
         model_path,
+        camera_controller,
+        cursor_grabbed: false,
     };
     let event_loop = EventLoop::new().unwrap();
     event_loop.set_control_flow(ControlFlow::Poll);
