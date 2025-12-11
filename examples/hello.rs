@@ -15,7 +15,7 @@ struct MyGame<'vertex> {
     window: Option<Arc<Window>>,
     gfx: Option<etib::Gfx>,
     my_gfx: Option<MyGfx<'vertex>>,
-    time: etib::TimeState,
+    time: etib::core::time::TimeState,
     is_initialized: bool,
     model_path: String,
     camera_controller: etib::CameraController,
@@ -59,13 +59,13 @@ impl MyGame<'_> {
         } else {
             etib::Camera::new(
                 &device,
-                (0.0, 30.0, 80.0).into(),  // Zoomed out and higher up
-                (0.0, 10.0, 0.0).into(),    // Looking towards center
+                (0.0, 30.0, 80.0).into(), // Zoomed out and higher up
+                (0.0, 10.0, 0.0).into(),  // Looking towards center
                 cgmath::Vector3::unit_y(),
                 window_size.width as f32 / window_size.height as f32,
                 etib::Projection::Perspective { fovy: 45.0 },
                 0.1,
-                500.0,  // Increased far plane for larger scene
+                500.0, // Increased far plane for larger scene
             )
         };
 
@@ -94,7 +94,7 @@ impl MyGame<'_> {
         });
 
         let shader_str = include_str!("../src/shaders/shader.wgsl");
-        let shader = etib::Shader::new(shader_str, &device, None);
+        let shader = etib::core::shader::Shader::new(shader_str, &device, None);
         let vertex_buffer = device.create_vertex_buffer(etib::VERTICES, etib::Vertex::desc());
 
         let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -106,26 +106,26 @@ impl MyGame<'_> {
         // Create pipeline with both vertex and instance buffer layouts
         let pipeline = etib::Pipeline::new_with_layouts(
             &device,
-            &[&camera.uniform.layout],  // Only camera uniform now
+            &[&camera.uniform.layout], // Only camera uniform now
             &shader,
             &gfx.surface_config,
             &[
-                etib::Vertex::desc(),  // Vertex buffer layout
-                etib::Cube::desc(),    // Instance buffer layout
+                etib::Vertex::desc(), // Vertex buffer layout
+                etib::Cube::desc(),   // Instance buffer layout
             ],
         );
 
         // Sky pipeline setup
         let sky_shader_str = include_str!("../src/shaders/sky.wgsl");
-        let sky_shader = etib::Shader::new(sky_shader_str, &device, None);
-        
+        let sky_shader = etib::core::shader::Shader::new(sky_shader_str, &device, None);
+
         // Sky pipeline doesn't need vertex buffers (uses vertex pulling) or uniforms (for now)
         let sky_pipeline = etib::Pipeline::new_with_layouts(
             &device,
-            &[],  // No uniforms
+            &[], // No uniforms
             &sky_shader,
             &gfx.surface_config,
-            &[],  // No vertex buffers
+            &[], // No vertex buffers
         );
 
         let my_gfx = MyGfx {
@@ -152,7 +152,7 @@ impl MyGame<'_> {
         // Update FPS counter
         self.frame_count += 1;
         self.fps_update_timer += self.time.dt;
-        
+
         // Update title bar every 0.5 seconds
         if self.fps_update_timer >= 0.5 {
             let fps = self.frame_count as f32 / self.fps_update_timer;
@@ -165,7 +165,8 @@ impl MyGame<'_> {
         }
 
         // Update camera based on controller input
-        self.camera_controller.update_camera(&mut my_gfx.camera, self.time.dt);
+        self.camera_controller
+            .update_camera(&mut my_gfx.camera, self.time.dt);
         let new_matrix = my_gfx.camera.update_matrix();
         gfx.queue.write_buffer(
             &my_gfx.camera.buffer,
@@ -193,11 +194,7 @@ impl MyGame<'_> {
             render_pass.set_index_buffer(my_gfx.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
 
             // Draw all cubes with a single instanced draw call!
-            render_pass.draw_indexed(
-                0..etib::INDICES.len() as u32,
-                0,
-                0..my_gfx.instance_count,
-            );
+            render_pass.draw_indexed(0..etib::INDICES.len() as u32, 0, 0..my_gfx.instance_count);
         }
 
         gfx.queue.submit(Some(encoder.finish()));
@@ -210,7 +207,7 @@ impl etib::Game for MyGame<'_> {
         self.gfx.as_mut().unwrap()
     }
 
-    fn time_state(&self) -> &etib::TimeState {
+    fn time_state(&self) -> &etib::core::time::TimeState {
         &self.time
     }
 
@@ -252,8 +249,12 @@ impl ApplicationHandler for MyGame<'_> {
                         PhysicalKey::Code(KeyCode::KeyC) => {
                             if let Some(window) = &self.window {
                                 self.cursor_grabbed = true;
-                                let _ = window.set_cursor_grab(winit::window::CursorGrabMode::Confined)
-                                    .or_else(|_| window.set_cursor_grab(winit::window::CursorGrabMode::Locked));
+                                let _ = window
+                                    .set_cursor_grab(winit::window::CursorGrabMode::Confined)
+                                    .or_else(|_| {
+                                        window
+                                            .set_cursor_grab(winit::window::CursorGrabMode::Locked)
+                                    });
                                 window.set_cursor_visible(false);
                             }
                         }
@@ -337,19 +338,19 @@ fn main() -> anyhow::Result<()> {
     let forward = (initial_target - initial_eye).normalize();
     let initial_yaw: f32 = forward.z.atan2(forward.x);
     let initial_pitch: f32 = forward.y.asin();
-    
-    let mut camera_controller = etib::CameraController::new(20.0, 0.003);  // Increased speed for larger scene
+
+    let mut camera_controller = etib::CameraController::new(20.0, 0.003); // Increased speed for larger scene
     if is_isometric {
         camera_controller.mode = etib::CameraMode::Isometric;
     }
     camera_controller.yaw = initial_yaw;
     camera_controller.pitch = initial_pitch;
-    
+
     let mut game = MyGame {
         window: None,
         gfx: None,
         my_gfx: None,
-        time: etib::TimeState::default(),
+        time: etib::core::time::TimeState::new(),
         is_initialized: false,
         model_path,
         camera_controller,

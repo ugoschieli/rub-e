@@ -1,5 +1,8 @@
 use std::sync::Arc;
+
 use winit::{dpi::PhysicalSize, window::Window};
+
+use crate::wgpu_utils;
 
 /// A wrapper around muliple wgpu structs that holds the graphics state of the app
 pub struct Gfx {
@@ -23,28 +26,13 @@ impl Gfx {
     pub fn new(window: Arc<Window>) -> Gfx {
         let window_size = window.inner_size();
 
-        let instance_desc = wgpu::InstanceDescriptor::default();
-        let instance = wgpu::Instance::new(&instance_desc);
+        let instance = wgpu_utils::create_instance();
         let surface = instance.create_surface(window).unwrap();
+        let adapter = pollster::block_on(wgpu_utils::create_adapter(&instance, &surface)).unwrap();
+        let (device, queue) = pollster::block_on(wgpu_utils::create_device(&adapter)).unwrap();
 
-        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::default(),
-            force_fallback_adapter: false,
-            compatible_surface: Some(&surface),
-        }))
-        .unwrap();
-
-        let (device, queue) =
-            pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default())).unwrap();
-
-        let mut surface_config = surface
-            .get_default_config(&adapter, window_size.width, window_size.height)
-            .unwrap();
-        
-        // Disable VSync for maximum frame rate
-        surface_config.present_mode = wgpu::PresentMode::Immediate;
-        
-        surface.configure(&device, &surface_config);
+        let surface_config =
+            wgpu_utils::configure_surface(&adapter, &device, &surface, window_size);
 
         let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("depth_texture"),
@@ -147,6 +135,7 @@ impl Gfx {
             sample_count: 1,
         });
 
-        self.depth_texture_view = depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
+        self.depth_texture_view =
+            depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
     }
 }

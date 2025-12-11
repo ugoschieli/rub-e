@@ -4,16 +4,28 @@ use wgpu::util::DeviceExt;
 use winit::event::{ElementState, KeyEvent, MouseScrollDelta};
 use winit::keyboard::{KeyCode, PhysicalKey};
 
+/// Enum representing the different camera modes
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CameraMode {
+    /// First-person camera mode
     FirstPerson,
+    /// Isometric camera mode
     Isometric,
 }
 
+/// Enum representing the different projection types
 #[derive(Debug, Clone, Copy)]
 pub enum Projection {
-    Perspective { fovy: f32 },
-    Orthographic { scale: f32 },
+    /// Perspective projection
+    Perspective {
+        /// Field of view in the Y direction (vertical angle)
+        fovy: f32,
+    },
+    /// Orthographic projection
+    Orthographic {
+        /// Scale factor for the projection
+        scale: f32,
+    },
 }
 
 /// The camera struct
@@ -41,21 +53,21 @@ pub struct Camera {
 }
 
 /// Camera controller for FPS-style keyboard and mouse input
-/// 
+///
 /// # Example
 /// ```no_run
 /// use etib::{CameraController, CameraMode};
-/// 
+///
 /// // Create a controller with speed=10.0 units/sec and sensitivity=0.003
 /// let mut controller = CameraController::new(10.0, 0.003);
 /// controller.mode = CameraMode::Isometric; // or FirstPerson
-/// 
+///
 /// // In your event loop:
 /// // - Call process_keyboard() for KeyboardInput events
 /// // - Call process_mouse() for MouseMotion events  
 /// // - Call process_scroll() for MouseWheel events
 /// // - Call update_camera() in your render function
-/// 
+///
 /// // Controls:
 /// // - WASD or Arrow keys: Move forward/back/left/right (pans in Isometric mode)
 /// // - Space: Move up
@@ -240,7 +252,10 @@ impl CameraController {
             self.pitch -= delta_y as f32 * self.sensitivity;
 
             // Clamp pitch to avoid gimbal lock
-            self.pitch = self.pitch.clamp(-std::f32::consts::FRAC_PI_2 + 0.1, std::f32::consts::FRAC_PI_2 - 0.1);
+            self.pitch = self.pitch.clamp(
+                -std::f32::consts::FRAC_PI_2 + 0.1,
+                std::f32::consts::FRAC_PI_2 - 0.1,
+            );
         }
     }
 

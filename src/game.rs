@@ -1,7 +1,7 @@
-use std::time::Instant;
 use winit::{application::ApplicationHandler, error::EventLoopError, event_loop::EventLoop};
 
 use crate::Gfx;
+use crate::core::time::TimeState;
 
 /// The primary Trait provided by the library your primary game state struct must implement this
 pub trait Game: ApplicationHandler {
@@ -24,35 +24,4 @@ pub trait Game: ApplicationHandler {
 /// Launch the game
 pub fn run<T: Game>(game: &mut T, event_loop: EventLoop<()>) -> Result<(), EventLoopError> {
     event_loop.run_app(game)
-}
-
-/// The struct managing time synchronization
-pub struct TimeState {
-    /// The time elapsed since the last frame
-    pub dt: f32,
-    /// The total time elapsed since the start of the application
-    pub elapsed_time: f32,
-    last_time: Instant,
-}
-
-impl TimeState {
-    /// Calculate the new frame time. MUST BE CALLED EACH FRAME
-    pub fn tick(&mut self) {
-        let now = Instant::now();
-        let dt = now.duration_since(self.last_time).as_secs_f32();
-        self.dt = dt;
-        self.elapsed_time += dt;
-        self.last_time = now;
-        log::debug!("dt = {}, fps = {}", 1000. * dt, 1. / dt);
-    }
-}
-
-impl Default for TimeState {
-    fn default() -> Self {
-        Self {
-            dt: 0.,
-            elapsed_time: 0.,
-            last_time: Instant::now(),
-        }
-    }
 }

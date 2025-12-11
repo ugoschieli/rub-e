@@ -1,4 +1,4 @@
-use crate::{Shader, buffer::VertexBuffer};
+use crate::{buffer::VertexBuffer, core::shader::Shader};
 
 /// The render pipeline
 pub struct Pipeline {
