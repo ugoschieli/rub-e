@@ -19,6 +19,7 @@ struct MyGame<'vertex> {
     is_initialized: bool,
     model_path: String,
     camera_controller: etib::CameraController,
+    is_isometric: bool,
     cursor_grabbed: bool,
     frame_count: u32,
     fps_update_timer: f32,
@@ -43,16 +44,29 @@ impl MyGame<'_> {
         let gfx = etib::Gfx::new(window.clone());
         let device = gfx.device();
 
-        let camera = etib::Camera::new(
-            &device,
-            (0.0, 30.0, 80.0).into(),  // Zoomed out and higher up
-            (0.0, 10.0, 0.0).into(),    // Looking towards center
-            cgmath::Vector3::unit_y(),
-            window_size.width as f32 / window_size.height as f32,
-            45.0,
-            0.1,
-            500.0,  // Increased far plane for larger scene
-        );
+        let camera = if self.is_isometric {
+            etib::Camera::new(
+                &device,
+                (50.0, 50.0, 50.0).into(), // Isometric position
+                (0.0, 0.0, 0.0).into(),    // Looking at the origin
+                cgmath::Vector3::unit_y(),
+                window_size.width as f32 / window_size.height as f32,
+                etib::Projection::Orthographic { scale: 50.0 },
+                -200.0, // adjusted near/far for ortho
+                200.0,
+            )
+        } else {
+            etib::Camera::new(
+                &device,
+                (0.0, 30.0, 80.0).into(),  // Zoomed out and higher up
+                (0.0, 10.0, 0.0).into(),    // Looking towards center
+                cgmath::Vector3::unit_y(),
+                window_size.width as f32 / window_size.height as f32,
+                etib::Projection::Perspective { fovy: 45.0 },
+                0.1,
+                500.0,  // Increased far plane for larger scene
+            )
+        };
 
         // Load cube positions from model file
         let model_cubes = etib::load_model(&self.model_path).expect("Failed to load model file");
@@ -281,13 +295,13 @@ fn main() -> anyhow::Result<()> {
     info!("Initializing ETIB");
 
     let args: Vec<String> = std::env::args().collect();
-    let model_path = if args.len() > 1 {
-        args[1].clone()
-    } else {
-        eprintln!("Usage: {} <model_file>", args[0]);
+    if args.len() < 2 {
+        eprintln!("Usage: {} <model_file> [--isometric]", args[0]);
         eprintln!("Example: {} examples/models/cat.model", args[0]);
         std::process::exit(1);
-    };
+    }
+    let model_path = args[1].clone();
+    let is_isometric = args.contains(&"--isometric".to_string());
 
     // Check if the model file exists
     if !std::path::Path::new(&model_path).exists() {
@@ -304,6 +318,9 @@ fn main() -> anyhow::Result<()> {
     let initial_pitch: f32 = forward.y.asin();
     
     let mut camera_controller = etib::CameraController::new(20.0, 0.003);  // Increased speed for larger scene
+    if is_isometric {
+        camera_controller.mode = etib::CameraMode::Isometric;
+    }
     camera_controller.yaw = initial_yaw;
     camera_controller.pitch = initial_pitch;
     
@@ -315,6 +332,7 @@ fn main() -> anyhow::Result<()> {
         is_initialized: false,
         model_path,
         camera_controller,
+        is_isometric,
         cursor_grabbed: false,
         frame_count: 0,
         fps_update_timer: 0.0,
