@@ -31,6 +31,7 @@ pub fn configure_surface(
     device: &wgpu::Device,
     surface: &wgpu::Surface<'_>,
     size: winit::dpi::PhysicalSize<u32>,
+    vsync: bool,
 ) -> wgpu::SurfaceConfiguration {
     let surface_caps = surface.get_capabilities(&adapter);
     let surface_format = surface_caps
@@ -40,8 +41,9 @@ pub fn configure_surface(
         .find(|f| f.is_srgb())
         .unwrap_or(surface_caps.formats[0]);
 
-    // Use Immediate mode for unlimited FPS (no VSync)
-    let present_mode = if surface_caps
+    let present_mode = if vsync {
+        wgpu::PresentMode::Fifo
+    } else if surface_caps
         .present_modes
         .contains(&wgpu::PresentMode::Immediate)
     {

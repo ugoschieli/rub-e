@@ -31,8 +31,9 @@ impl Gfx {
         let adapter = pollster::block_on(wgpu_utils::create_adapter(&instance, &surface)).unwrap();
         let (device, queue) = pollster::block_on(wgpu_utils::create_device(&adapter)).unwrap();
 
+        let config = crate::core::config::EngineConfig::load_from_file("config.json");
         let surface_config =
-            wgpu_utils::configure_surface(&adapter, &device, &surface, window_size);
+            wgpu_utils::configure_surface(&adapter, &device, &surface, window_size, config.vsync);
 
         let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("depth_texture"),

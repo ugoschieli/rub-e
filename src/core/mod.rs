@@ -1,5 +1,7 @@
 /// Module containing the bindgroup module
 pub mod bindgroup;
+/// Module containing the engine configuration
+pub mod config;
 /// Module containing the shader module
 pub mod shader;
 /// Module containing the texture module
