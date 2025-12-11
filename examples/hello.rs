@@ -20,6 +20,8 @@ struct MyGame<'vertex> {
     model_path: String,
     camera_controller: etib::CameraController,
     cursor_grabbed: bool,
+    frame_count: u32,
+    fps_update_timer: f32,
 }
 
 struct MyGfx<'vertex> {
@@ -27,7 +29,8 @@ struct MyGfx<'vertex> {
     pipeline: etib::Pipeline,
     vertex_buffer: etib::VertexBuffer<'vertex, etib::Vertex>,
     index_buffer: wgpu::Buffer,
-    cubes: Vec<etib::Uniform>,
+    instance_buffer: wgpu::Buffer,
+    instance_count: u32,
 }
 
 impl MyGame<'_> {
@@ -42,34 +45,38 @@ impl MyGame<'_> {
 
         let camera = etib::Camera::new(
             &device,
-            (0.0, 10.0, 40.0).into(),
-            (0.0, 7.0, -10.0).into(),
+            (0.0, 30.0, 80.0).into(),  // Zoomed out and higher up
+            (0.0, 10.0, 0.0).into(),    // Looking towards center
             cgmath::Vector3::unit_y(),
             window_size.width as f32 / window_size.height as f32,
             45.0,
             0.1,
-            100.0,
+            500.0,  // Increased far plane for larger scene
         );
 
         // Load cube positions from model file
         let model_cubes = etib::load_model(&self.model_path).expect("Failed to load model file");
 
-        // Create uniforms for each cube
-        let cubes: Vec<etib::Uniform> = model_cubes
+        // Create instance data for all cubes
+        let instance_data: Vec<etib::CubeRaw> = model_cubes
             .iter()
             .map(|cube| {
-                let cube_uniform = etib::Cube {
+                let cube_instance = etib::Cube {
                     model: cgmath::Matrix4::<f32>::from_translation(cube.position).into(),
                     color: cgmath::Vector4::from([cube.color.x, cube.color.y, cube.color.z, 1.0]),
                 };
-                etib::Uniform::new_with_buffer(device, &cube_uniform.into_raw())
+                cube_instance.into_raw()
             })
             .collect();
 
-        let _instance_buffer = device.create_vertex_buffer(
-            &[Into::<etib::CubeRaw>::into(etib::Cube::new())],
-            etib::Cube::desc(),
-        );
+        let instance_count = instance_data.len() as u32;
+
+        // Create instance buffer
+        let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Instance Buffer"),
+            contents: bytemuck::cast_slice(&instance_data),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
 
         let shader_str = include_str!("../src/shaders/shader.wgsl");
         let shader = etib::Shader::new(shader_str, &device, None);
@@ -81,12 +88,16 @@ impl MyGame<'_> {
             usage: wgpu::BufferUsages::INDEX,
         });
 
-        let pipeline = etib::Pipeline::new(
+        // Create pipeline with both vertex and instance buffer layouts
+        let pipeline = etib::Pipeline::new_with_layouts(
             &device,
-            &[&camera.uniform.layout, &cubes[0].layout],
+            &[&camera.uniform.layout],  // Only camera uniform now
             &shader,
             &gfx.surface_config,
-            &vertex_buffer,
+            &[
+                etib::Vertex::desc(),  // Vertex buffer layout
+                etib::Cube::desc(),    // Instance buffer layout
+            ],
         );
 
         let my_gfx = MyGfx {
@@ -94,7 +105,8 @@ impl MyGame<'_> {
             pipeline,
             vertex_buffer,
             index_buffer,
-            cubes,
+            instance_buffer,
+            instance_count,
         };
 
         self.window = Some(window);
@@ -107,6 +119,21 @@ impl MyGame<'_> {
         let gfx = self.gfx.as_ref().unwrap();
         let my_gfx = self.my_gfx.as_mut().unwrap();
         let (frame, view) = gfx.get_next_frame();
+
+        // Update FPS counter
+        self.frame_count += 1;
+        self.fps_update_timer += self.time.dt;
+        
+        // Update title bar every 0.5 seconds
+        if self.fps_update_timer >= 0.5 {
+            let fps = self.frame_count as f32 / self.fps_update_timer;
+            let cube_count = my_gfx.instance_count;
+            if let Some(window) = &self.window {
+                window.set_title(&format!("ETIB - {:.0} FPS - {} cubes", fps, cube_count));
+            }
+            self.frame_count = 0;
+            self.fps_update_timer = 0.0;
+        }
 
         // Update camera based on controller input
         self.camera_controller.update_camera(&mut my_gfx.camera, self.time.dt);
@@ -127,13 +154,15 @@ impl MyGame<'_> {
             render_pass.set_pipeline(&my_gfx.pipeline.pipeline);
             render_pass.set_bind_group(0, &my_gfx.camera.uniform.bind_group, &[]);
             render_pass.set_vertex_buffer(0, my_gfx.vertex_buffer.buffer.slice(..));
+            render_pass.set_vertex_buffer(1, my_gfx.instance_buffer.slice(..));
             render_pass.set_index_buffer(my_gfx.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
 
-            // Draw each cube
-            for cube in &my_gfx.cubes {
-                render_pass.set_bind_group(1, &cube.bind_group, &[]);
-                render_pass.draw_indexed(0..etib::INDICES.len() as u32, 0, 0..1);
-            }
+            // Draw all cubes with a single instanced draw call!
+            render_pass.draw_indexed(
+                0..etib::INDICES.len() as u32,
+                0,
+                0..my_gfx.instance_count,
+            );
         }
 
         gfx.queue.submit(Some(encoder.finish()));
@@ -267,14 +296,14 @@ fn main() -> anyhow::Result<()> {
     }
 
     // Calculate initial camera angles for FPS camera
-    // Camera starts at (0, 10, 40) looking at (0, 7, -10)
-    let initial_eye = cgmath::Point3::new(0.0_f32, 10.0, 40.0);
-    let initial_target = cgmath::Point3::new(0.0_f32, 7.0, -10.0);
+    // Camera starts at (0, 30, 80) looking at (0, 10, 0) - zoomed out view
+    let initial_eye = cgmath::Point3::new(0.0_f32, 30.0, 80.0);
+    let initial_target = cgmath::Point3::new(0.0_f32, 10.0, 0.0);
     let forward = (initial_target - initial_eye).normalize();
     let initial_yaw: f32 = forward.z.atan2(forward.x);
     let initial_pitch: f32 = forward.y.asin();
     
-    let mut camera_controller = etib::CameraController::new(10.0, 0.003);
+    let mut camera_controller = etib::CameraController::new(20.0, 0.003);  // Increased speed for larger scene
     camera_controller.yaw = initial_yaw;
     camera_controller.pitch = initial_pitch;
     
@@ -287,6 +316,8 @@ fn main() -> anyhow::Result<()> {
         model_path,
         camera_controller,
         cursor_grabbed: false,
+        frame_count: 0,
+        fps_update_timer: 0.0,
     };
     let event_loop = EventLoop::new().unwrap();
     event_loop.set_control_flow(ControlFlow::Poll);

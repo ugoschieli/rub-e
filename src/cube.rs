@@ -59,7 +59,7 @@ impl Cube {
     ///
     /// This describes how cube instance data is laid out in GPU memory for the vertex shader.
     /// The layout includes the model transformation matrix (4x Vec4) distributed across
-    /// shader locations 2-5.
+    /// shader locations 3-6, and color at location 7.
     ///
     /// # Returns
     /// A `wgpu::VertexBufferLayout` describing the instance data structure
@@ -68,25 +68,32 @@ impl Cube {
             array_stride: std::mem::size_of::<CubeRaw>() as u64,
             step_mode: wgpu::VertexStepMode::Instance,
             attributes: &[
+                // Model matrix (4x vec4)
                 wgpu::VertexAttribute {
                     offset: 0,
-                    format: wgpu::VertexFormat::Float32x4,
-                    shader_location: 2,
-                },
-                wgpu::VertexAttribute {
-                    offset: 16,
                     format: wgpu::VertexFormat::Float32x4,
                     shader_location: 3,
                 },
                 wgpu::VertexAttribute {
-                    offset: 32,
+                    offset: 16,
                     format: wgpu::VertexFormat::Float32x4,
                     shader_location: 4,
                 },
                 wgpu::VertexAttribute {
-                    offset: 48,
+                    offset: 32,
                     format: wgpu::VertexFormat::Float32x4,
                     shader_location: 5,
+                },
+                wgpu::VertexAttribute {
+                    offset: 48,
+                    format: wgpu::VertexFormat::Float32x4,
+                    shader_location: 6,
+                },
+                // Color (vec4)
+                wgpu::VertexAttribute {
+                    offset: 64,
+                    format: wgpu::VertexFormat::Float32x4,
+                    shader_location: 7,
                 },
             ],
         }

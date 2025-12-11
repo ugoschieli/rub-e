@@ -37,9 +37,13 @@ impl Gfx {
         let (device, queue) =
             pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default())).unwrap();
 
-        let surface_config = surface
+        let mut surface_config = surface
             .get_default_config(&adapter, window_size.width, window_size.height)
             .unwrap();
+        
+        // Disable VSync for maximum frame rate
+        surface_config.present_mode = wgpu::PresentMode::Immediate;
+        
         surface.configure(&device, &surface_config);
 
         let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
