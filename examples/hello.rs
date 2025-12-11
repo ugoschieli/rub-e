@@ -28,6 +28,7 @@ struct MyGame<'vertex> {
 struct MyGfx<'vertex> {
     camera: etib::Camera,
     pipeline: etib::Pipeline,
+    sky_pipeline: etib::Pipeline,
     vertex_buffer: etib::VertexBuffer<'vertex, etib::Vertex>,
     index_buffer: wgpu::Buffer,
     instance_buffer: wgpu::Buffer,
@@ -114,9 +115,23 @@ impl MyGame<'_> {
             ],
         );
 
+        // Sky pipeline setup
+        let sky_shader_str = include_str!("../src/shaders/sky.wgsl");
+        let sky_shader = etib::Shader::new(sky_shader_str, &device, None);
+        
+        // Sky pipeline doesn't need vertex buffers (uses vertex pulling) or uniforms (for now)
+        let sky_pipeline = etib::Pipeline::new_with_layouts(
+            &device,
+            &[],  // No uniforms
+            &sky_shader,
+            &gfx.surface_config,
+            &[],  // No vertex buffers
+        );
+
         let my_gfx = MyGfx {
             camera,
             pipeline,
+            sky_pipeline,
             vertex_buffer,
             index_buffer,
             instance_buffer,
@@ -165,6 +180,12 @@ impl MyGame<'_> {
             let color_attachments = [Some(etib::Gfx::color_attachments_from_view(&view))];
             let mut render_pass = encoder.begin_render_pass(&gfx.render_pass(&color_attachments));
 
+            // Render Sky (Fullscreen Triangle)
+            // No vertex buffers or index buffers needed for the sky
+            render_pass.set_pipeline(&my_gfx.sky_pipeline.pipeline);
+            render_pass.draw(0..3, 0..1);
+
+            // Render Scene
             render_pass.set_pipeline(&my_gfx.pipeline.pipeline);
             render_pass.set_bind_group(0, &my_gfx.camera.uniform.bind_group, &[]);
             render_pass.set_vertex_buffer(0, my_gfx.vertex_buffer.buffer.slice(..));
