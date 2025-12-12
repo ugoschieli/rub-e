@@ -8,12 +8,23 @@ pub fn create_instance() -> wgpu::Instance {
 pub fn create_adapter(
     instance: &wgpu::Instance,
     surface: &wgpu::Surface<'_>,
-) -> impl Future<Output = Result<wgpu::Adapter, wgpu::RequestAdapterError>> {
-    instance.request_adapter(&wgpu::RequestAdapterOptions {
+) -> Result<wgpu::Adapter, wgpu::RequestAdapterError> {
+    let gpus = instance.enumerate_adapters(wgpu::Backends::PRIMARY);
+    for gpu in gpus {
+        log::info!("FOUND GPU: {:?}", gpu.get_info());
+    }
+
+    let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
         power_preference: wgpu::PowerPreference::HighPerformance,
         compatible_surface: Some(surface),
         force_fallback_adapter: false,
-    })
+    }));
+    match adapter {
+        Ok(ref adapter) => log::info!("SELECTED GPU: {:?}", adapter.get_info()),
+        _ => log::error!("Failed to find adapter"),
+    };
+
+    adapter
 }
 
 pub fn create_device(

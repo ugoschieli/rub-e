@@ -8,10 +8,11 @@ mod camera;
 pub mod core;
 mod cube;
 mod game;
+mod gbuffer;
 mod gfx;
 mod model;
 mod pipeline;
-mod uniform;
+// mod raytracing;
 mod vertex;
 mod wgpu_utils;
 
@@ -22,5 +23,4 @@ pub use crate::game::*;
 pub use crate::gfx::*;
 pub use crate::model::*;
 pub use crate::pipeline::*;
-pub use crate::uniform::*;
 pub use crate::vertex::*;

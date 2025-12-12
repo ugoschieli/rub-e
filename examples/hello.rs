@@ -106,7 +106,7 @@ impl MyGame<'_> {
         // Create pipeline with both vertex and instance buffer layouts
         let pipeline = etib::Pipeline::new_with_layouts(
             &device,
-            &[&camera.uniform.layout], // Only camera uniform now
+            &[&camera.bind_group.layout], // Only camera uniform now
             &shader,
             &gfx.surface_config,
             &[
@@ -168,8 +168,8 @@ impl MyGame<'_> {
         self.camera_controller
             .update_camera(&mut my_gfx.camera, self.time.dt);
         let new_matrix = my_gfx.camera.update_matrix();
-        gfx.queue.write_buffer(
-            &my_gfx.camera.buffer,
+        my_gfx.camera.bind_group.write_buffer(
+            &gfx.queue,
             0,
             bytemuck::cast_slice(&[Into::<[[f32; 4]; 4]>::into(new_matrix)]),
         );
@@ -188,7 +188,7 @@ impl MyGame<'_> {
 
             // Render Scene
             render_pass.set_pipeline(&my_gfx.pipeline.pipeline);
-            render_pass.set_bind_group(0, &my_gfx.camera.uniform.bind_group, &[]);
+            render_pass.set_bind_group(0, &my_gfx.camera.bind_group.bind_group, &[]);
             render_pass.set_vertex_buffer(0, my_gfx.vertex_buffer.buffer.slice(..));
             render_pass.set_vertex_buffer(1, my_gfx.instance_buffer.slice(..));
             render_pass.set_index_buffer(my_gfx.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
@@ -273,8 +273,8 @@ impl ApplicationHandler for MyGame<'_> {
                     if let Some(my_gfx) = &mut self.my_gfx {
                         my_gfx.camera.aspect = size.width as f32 / size.height as f32;
                         let new_matrix = my_gfx.camera.update_matrix();
-                        gfx.queue.write_buffer(
-                            &my_gfx.camera.buffer,
+                        my_gfx.camera.bind_group.write_buffer(
+                            &gfx.queue,
                             0,
                             bytemuck::cast_slice(&[Into::<[[f32; 4]; 4]>::into(new_matrix)]),
                         );

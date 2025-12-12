@@ -24,16 +24,21 @@ impl Gfx {
     /// Create a new wgpu Instance and initialize the Gfx struct.
     /// Need to be called only once at the initialization of an app.
     pub fn new(window: Arc<Window>) -> Gfx {
+        let config = crate::core::config::EngineConfig::load_from_file("config.json");
+
         let window_size = window.inner_size();
 
         let instance = wgpu_utils::create_instance();
         let surface = instance.create_surface(window).unwrap();
-        let adapter = pollster::block_on(wgpu_utils::create_adapter(&instance, &surface)).unwrap();
+        let adapter = wgpu_utils::create_adapter(&instance, &surface).unwrap();
         let (device, queue) = pollster::block_on(wgpu_utils::create_device(&adapter)).unwrap();
 
-        let config = crate::core::config::EngineConfig::load_from_file("config.json");
         let surface_config =
             wgpu_utils::configure_surface(&adapter, &device, &surface, window_size, config.vsync);
+
+        if config.experimental_raytracing_pipeline {
+        } else {
+        }
 
         let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("depth_texture"),

@@ -7,15 +7,25 @@ pub struct EngineConfig {
     /// Whether VSync is enabled
     #[serde(default = "default_vsync")]
     pub vsync: bool,
+    /// Whether the experimental raytracing pipeline is enabled
+    #[serde(default = "default_experimental_raytracing_pipeline")]
+    pub experimental_raytracing_pipeline: bool,
 }
 
 fn default_vsync() -> bool {
     true
 }
 
+fn default_experimental_raytracing_pipeline() -> bool {
+    false
+}
+
 impl Default for EngineConfig {
     fn default() -> Self {
-        Self { vsync: true }
+        Self {
+            vsync: true,
+            experimental_raytracing_pipeline: false,
+        }
     }
 }
 

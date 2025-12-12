@@ -1,8 +1,8 @@
-use crate::uniform::Uniform;
 use cgmath::InnerSpace;
-use wgpu::util::DeviceExt;
 use winit::event::{ElementState, KeyEvent, MouseScrollDelta};
 use winit::keyboard::{KeyCode, PhysicalKey};
+
+use crate::core::bindgroup::{BindGroup, BindGroupBuilder};
 
 /// Enum representing the different camera modes
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -46,10 +46,8 @@ pub struct Camera {
     pub zfar: f32,
     /// The camera matrix (projection * view)
     pub matrix: cgmath::Matrix4<f32>,
-    /// The buffer storing the matrix
-    pub buffer: wgpu::Buffer,
-    /// The uniform associated with the matrix
-    pub uniform: Uniform,
+    /// The bind group associated with the matrix
+    pub bind_group: BindGroup,
 }
 
 /// Camera controller for FPS-style keyboard and mouse input
@@ -133,30 +131,20 @@ impl Camera {
         };
         let matrix = OPENGL_TO_WGPU_MATRIX * proj * view;
 
-        let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Camera Buffer"),
-            contents: bytemuck::cast_slice(&[Into::<[[f32; 4]; 4]>::into(matrix)]),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
+        // let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        //     label: Some("Camera Buffer"),
+        //     contents: bytemuck::cast_slice(&[Into::<[[f32; 4]; 4]>::into(matrix)]),
+        //     usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        // });
 
-        let uniform = Uniform::new(
-            device,
-            &wgpu::BindGroupLayoutDescriptor {
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                }],
-                label: Some("camera_bind_group_layout"),
-            },
-            vec![buffer.as_entire_binding()],
-            None,
-        );
+        let bind_group = BindGroupBuilder::new()
+            .add_uniform_buffer(
+                device,
+                0,
+                bytemuck::cast_slice(&[Into::<[[f32; 4]; 4]>::into(matrix)]),
+                wgpu::ShaderStages::VERTEX,
+            )
+            .build(device, Some("Camera Bind Group"));
 
         Self {
             eye,
@@ -167,8 +155,8 @@ impl Camera {
             znear,
             zfar,
             matrix,
-            buffer,
-            uniform,
+            // buffer,
+            bind_group,
         }
     }
 
