@@ -2,7 +2,7 @@ use std::fs;
 use std::path::Path;
 use super::model::{Asset, AssetCategory};
 
-const FILE_ASSETS: &str = "config/data_assets.json";
+const FILE_ASSETS: &str = "../config/data_assets.json";
 
 pub fn get_assets() -> Vec<Asset> {
     let path = Path::new(FILE_ASSETS);
@@ -15,7 +15,7 @@ pub fn get_assets() -> Vec<Asset> {
 pub fn add_asset(name: &str) {
     let mut items = get_assets();
 
-    // On cherche l'ID max actuel et on ajoute 1. Si la liste est vide, on retourne 1.
+    // find the current max ID and add 1. If the list is empty, return 1.
     let next_id = items.iter().map(|p| p.id).max().unwrap_or(0) + 1;
     items.push(Asset::new(next_id, name));
     save(&items);
@@ -27,7 +27,7 @@ pub fn remove_asset(name: &str) {
     save(&items);
 }
 
-// Fonction pour ajouter une catégorie existante à un asset
+// add a category to an asset by asset name
 pub fn add_category_to_asset(asset_name: &str, category: AssetCategory) {
     let mut items = get_assets();
     if let Some(asset) = items.iter_mut().find(|a| a.name == asset_name) {
@@ -43,6 +43,15 @@ fn save(items: &Vec<Asset>) {
     let path = Path::new(FILE_ASSETS);
     let data = serde_json::to_string_pretty(items).expect("unable to serialize");
     fs::write(path, data).expect("unable to write file");
+}
+
+pub fn init() {
+    let path = Path::new(FILE_ASSETS);
+    if !path.exists() {
+        let default_items = vec![Asset::new(1, "Exemple Asset")];
+        save(&default_items);
+        println!("Fichier assets créé avec une valeur par défaut.");
+    }
 }
 
 
@@ -61,7 +70,7 @@ mod tests {
     fn test_asset_lifecycle() {
         cleanup();
         
-        // Création
+        // creation
         add_asset("Hero Character");
         add_asset("Villain Character");
         let assets = get_assets();
@@ -82,16 +91,16 @@ mod tests {
     fn test_link_category_to_asset() {
         cleanup();
         
-        // 1. Créer un asset
+        // add an asset
         add_asset("Mur de briques");
         
-        // 2. Simuler une catégorie (normalement elle vient de categories.rs, mais ici on la crée à la main pour le test)
+        // create a category
         let cat = AssetCategory { id: 100, name: "Matériaux".to_string() };
         
-        // 3. Lier la catégorie à l'asset
+        // 3. Link the category to the asset
         add_category_to_asset("Mur de briques", cat);
         
-        // 4. Vérifier
+        // 4. Verify
         let assets = get_assets();
         println!("Assets with linked category: {:?}", assets);
         let mon_asset = &assets[0];

@@ -4,6 +4,7 @@ import React from "react"
 import { useParams } from "next/navigation"
 import data from "@/app/data.json"
 import AssetCard, { Asset } from "@/components/asset-card"
+import Link from "next/dist/client/link"
 
 function slugify(text: string) {
   return text.toLowerCase().replace(/\s+/g, "-")
@@ -35,7 +36,10 @@ export default function TagPage() {
   return (
     <div className="flex flex-wrap p-4 gap-4">
       {assets.length > 0 ? (
-        assets.map((asset, i) => <AssetCard key={i} asset={asset} />)
+        assets.map((asset, i) => 
+        <Link key={i} href="/editor">
+        <AssetCard key={i} asset={asset} />
+        </Link>)
       ) : (
         <p className="text-muted-foreground">
           No assets found for "{tagSlug}"

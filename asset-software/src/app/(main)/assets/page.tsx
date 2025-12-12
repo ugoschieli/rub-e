@@ -3,6 +3,7 @@
 import React from "react"
 import data from "@/app/data.json"
 import AssetCard, { Asset } from "@/components/asset-card"
+import Link from "next/dist/client/link"
 
 export default function Page() {
   // Transformer les items du JSON en assets pour AssetCard
@@ -26,7 +27,9 @@ export default function Page() {
   return (
     <div className="flex flex-wrap p-4 gap-4">
       {assets.map((asset, index) => (
-        <AssetCard key={index} asset={asset} />
+        <Link key={index} href="/editor">
+          <AssetCard asset={asset} />
+        </Link>
       ))}
     </div>
   )

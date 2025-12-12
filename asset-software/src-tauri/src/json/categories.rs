@@ -3,8 +3,8 @@ use std::path::Path;
 use super::model::AssetCategory;
 
 
-const DIR_CONFIG: &str = "config";
-const FILE_CATEGORIES: &str = "config/data_categories.json";
+const DIR_CONFIG: &str = "../config";
+const FILE_CATEGORIES: &str = "../config/data_categories.json";
 
 pub fn get_categories() -> Vec<AssetCategory> {
     let path = Path::new(FILE_CATEGORIES);
@@ -17,7 +17,7 @@ pub fn get_categories() -> Vec<AssetCategory> {
 pub fn add_category(name: &str) {
     let mut items = get_categories();
 
-    // On cherche l'ID max actuel et on ajoute 1. Si la liste est vide, on retourne 1.
+    // find the current max ID and add 1. If the list is empty, return 1.
     let next_id = items.iter().map(|p| p.id).max().unwrap_or(0) + 1;
     items.push(AssetCategory::new(next_id, name));
     save(&items);
@@ -37,6 +37,15 @@ fn save(items: &Vec<AssetCategory>) {
     let path = Path::new(FILE_CATEGORIES);
     let data = serde_json::to_string_pretty(items).expect("unable to serialize");
     fs::write(path, data).expect("unable to write file");
+}
+
+pub fn init() {
+    let path = Path::new(FILE_CATEGORIES);
+    if !path.exists() {
+        let default_items = vec![AssetCategory::new(1, "Général")];
+        save(&default_items);
+        println!("Fichier categories créé avec une valeur par défaut.");
+    }
 }
 
 

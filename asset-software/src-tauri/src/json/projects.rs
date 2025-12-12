@@ -2,8 +2,8 @@ use std::fs;
 use std::path::Path;
 use super::model::Project;
 
-const DIR_CONFIG: &str = "config";
-const FILE_PROJECTS: &str = "config/data_projects.json";
+const DIR_CONFIG: &str = "../config";
+const FILE_PROJECTS: &str = "../config/data_projects.json";
 
 pub fn get_projects() -> Vec<Project> {
     let path = Path::new(FILE_PROJECTS);
@@ -16,7 +16,7 @@ pub fn get_projects() -> Vec<Project> {
 pub fn add_project(name: &str) {
     let mut items = get_projects();
 
-    // On cherche l'ID max actuel et on ajoute 1. Si la liste est vide, on retourne 1.
+    // find the current max ID and add 1. If the list is empty, return 1.
     let next_id = items.iter().map(|p| p.id).max().unwrap_or(0) + 1;
     items.push(Project::new(next_id, name));
     save(&items);
@@ -39,11 +39,20 @@ fn save(items: &Vec<Project>) {
     fs::write(path, data).expect("unable to write file");
 }
 
+pub fn init() {
+    let path = Path::new(FILE_PROJECTS);
+    if !path.exists() {
+        let default_items = vec![Project::new(1, "Mon Premier Projet")];
+        save(&default_items);
+        println!("Fichier projects créé avec une valeur par défaut.");
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    // Fonction de nettoyage pour repartir sur une base saine à chaque test
+    // Helper to clean up the test file after each test
     fn cleanup() {
         let path = Path::new(FILE_PROJECTS);
         if path.exists() {
@@ -55,7 +64,7 @@ mod tests {
     fn test_add_and_get_project() {
         cleanup();
         
-        // Test d'ajout
+        // Test adding a project
         add_project("Projet Alpha");
         let projects = get_projects();
         println!("Projects: {:?}", projects);
@@ -79,7 +88,7 @@ mod tests {
         let projects = get_projects();
         println!("Projects after removal: {:?}", projects);
         assert_eq!(projects.len(), 1);
-        assert_eq!(projects[0].name, "Projet B"); // Seul B doit rester
+        assert_eq!(projects[0].name, "Projet B"); // Only B should remain
         
         cleanup();
     }
@@ -88,11 +97,11 @@ mod tests {
     fn test_persistence() {
         cleanup();
         
-        // On ajoute, on vérifie que le fichier existe
+        // Create and save a project
         add_project("Persistent Project");
         assert!(Path::new(FILE_PROJECTS).exists(), "Le fichier JSON doit être créé");
         
-        // On recharge depuis le disque
+        // Load projects from file
         let loaded_projects = get_projects();
         assert_eq!(loaded_projects[0].name, "Persistent Project");
         assert_eq!(loaded_projects[0].id, 1);
