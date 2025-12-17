@@ -79,7 +79,7 @@ pub fn configure_surface(
         height: size.height,
         present_mode,
         alpha_mode: surface_caps.alpha_modes[0],
-        view_formats: vec![],
+        view_formats: vec![surface_format],
         desired_maximum_frame_latency: 2,
     };
     surface.configure(&device, &config);
