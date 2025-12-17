@@ -1,7 +1,6 @@
 use cgmath::InnerSpace;
-use env_logger;
-use etib::BufferExt;
 use etib::Game;
+use etib::core::buffer::BufferExt;
 use log::info;
 use std::sync::Arc;
 use wgpu::util::DeviceExt;
@@ -15,10 +14,10 @@ struct MyGame<'vertex> {
     window: Option<Arc<Window>>,
     gfx: Option<etib::Gfx>,
     my_gfx: Option<MyGfx<'vertex>>,
-    time: etib::core::time::TimeState,
+    time: etib::time::TimeState,
     is_initialized: bool,
     model_path: String,
-    camera_controller: etib::CameraController,
+    camera_controller: etib::camera::CameraController,
     is_isometric: bool,
     cursor_grabbed: bool,
     frame_count: u32,
@@ -26,10 +25,10 @@ struct MyGame<'vertex> {
 }
 
 struct MyGfx<'vertex> {
-    camera: etib::Camera,
-    pipeline: etib::Pipeline,
-    sky_pipeline: etib::Pipeline,
-    vertex_buffer: etib::VertexBuffer<'vertex, etib::Vertex>,
+    camera: etib::camera::Camera,
+    pipeline: etib::core::pipeline::Pipeline,
+    sky_pipeline: etib::core::pipeline::Pipeline,
+    vertex_buffer: etib::core::buffer::VertexBuffer<'vertex, etib::Vertex>,
     index_buffer: wgpu::Buffer,
     instance_buffer: wgpu::Buffer,
     instance_count: u32,
@@ -46,38 +45,39 @@ impl MyGame<'_> {
         let device = gfx.device();
 
         let camera = if self.is_isometric {
-            etib::Camera::new(
+            etib::camera::Camera::new(
                 &device,
                 (50.0, 50.0, 50.0).into(), // Isometric position
                 (0.0, 0.0, 0.0).into(),    // Looking at the origin
                 cgmath::Vector3::unit_y(),
                 window_size.width as f32 / window_size.height as f32,
-                etib::Projection::Orthographic { scale: 50.0 },
+                etib::camera::Projection::Orthographic { scale: 50.0 },
                 -200.0, // adjusted near/far for ortho
                 200.0,
             )
         } else {
-            etib::Camera::new(
+            etib::camera::Camera::new(
                 &device,
                 (0.0, 30.0, 80.0).into(), // Zoomed out and higher up
                 (0.0, 10.0, 0.0).into(),  // Looking towards center
                 cgmath::Vector3::unit_y(),
                 window_size.width as f32 / window_size.height as f32,
-                etib::Projection::Perspective { fovy: 45.0 },
+                etib::camera::Projection::Perspective { fovy: 45.0 },
                 0.1,
                 500.0, // Increased far plane for larger scene
             )
         };
 
         // Load cube positions from model file
-        let model_cubes = etib::load_model(&self.model_path).expect("Failed to load model file");
+        let model_cubes =
+            etib::cube::load_model(&self.model_path).expect("Failed to load model file");
 
         // Create instance data for all cubes
-        let instance_data: Vec<etib::CubeRaw> = model_cubes
+        let instance_data: Vec<etib::cube::CubeRaw> = model_cubes
             .iter()
             .map(|cube| {
-                let cube_instance = etib::Cube {
-                    model: cgmath::Matrix4::<f32>::from_translation(cube.position).into(),
+                let cube_instance = etib::cube::Cube {
+                    model: cgmath::Matrix4::<f32>::from_translation(cube.position),
                     color: cgmath::Vector4::from([cube.color.x, cube.color.y, cube.color.z, 1.0]),
                 };
                 cube_instance.into_raw()
@@ -95,23 +95,23 @@ impl MyGame<'_> {
 
         let shader_str = include_str!("../src/shaders/shader.wgsl");
         let shader = etib::core::shader::Shader::new(shader_str, &device, None);
-        let vertex_buffer = device.create_vertex_buffer(etib::VERTICES, etib::Vertex::desc());
+        let vertex_buffer = device.create_vertex_buffer(etib::cube::VERTICES, etib::Vertex::desc());
 
         let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Index Buffer"),
-            contents: bytemuck::cast_slice(etib::INDICES),
+            contents: bytemuck::cast_slice(etib::cube::INDICES),
             usage: wgpu::BufferUsages::INDEX,
         });
 
         // Create pipeline with both vertex and instance buffer layouts
-        let pipeline = etib::Pipeline::new_with_layouts(
+        let pipeline = etib::core::pipeline::Pipeline::new_with_layouts(
             &device,
             &[&camera.bind_group.layout], // Only camera uniform now
             &shader,
             &gfx.surface_config,
             &[
-                etib::Vertex::desc(), // Vertex buffer layout
-                etib::Cube::desc(),   // Instance buffer layout
+                etib::Vertex::desc(),     // Vertex buffer layout
+                etib::cube::Cube::desc(), // Instance buffer layout
             ],
         );
 
@@ -120,7 +120,7 @@ impl MyGame<'_> {
         let sky_shader = etib::core::shader::Shader::new(sky_shader_str, &device, None);
 
         // Sky pipeline doesn't need vertex buffers (uses vertex pulling) or uniforms (for now)
-        let sky_pipeline = etib::Pipeline::new_with_layouts(
+        let sky_pipeline = etib::core::pipeline::Pipeline::new_with_layouts(
             &device,
             &[], // No uniforms
             &sky_shader,
@@ -194,7 +194,11 @@ impl MyGame<'_> {
             render_pass.set_index_buffer(my_gfx.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
 
             // Draw all cubes with a single instanced draw call!
-            render_pass.draw_indexed(0..etib::INDICES.len() as u32, 0, 0..my_gfx.instance_count);
+            render_pass.draw_indexed(
+                0..etib::cube::INDICES.len() as u32,
+                0,
+                0..my_gfx.instance_count,
+            );
         }
 
         gfx.queue.submit(Some(encoder.finish()));
@@ -202,17 +206,17 @@ impl MyGame<'_> {
     }
 }
 
-impl etib::Game for MyGame<'_> {
+impl Game for MyGame<'_> {
     fn gfx(&mut self) -> &mut etib::Gfx {
         self.gfx.as_mut().unwrap()
     }
 
-    fn time_state(&self) -> &etib::core::time::TimeState {
-        &self.time
-    }
-
     fn is_initialized(&self) -> bool {
         self.is_initialized
+    }
+
+    fn time_state(&self) -> &etib::time::TimeState {
+        &self.time
     }
 }
 
@@ -304,10 +308,10 @@ impl ApplicationHandler for MyGame<'_> {
         event: DeviceEvent,
     ) {
         // Only process mouse movement when cursor is grabbed
-        if self.cursor_grabbed {
-            if let DeviceEvent::MouseMotion { delta } = event {
-                self.camera_controller.process_mouse(delta.0, delta.1);
-            }
+        if self.cursor_grabbed
+            && let DeviceEvent::MouseMotion { delta } = event
+        {
+            self.camera_controller.process_mouse(delta.0, delta.1);
         }
     }
 }
@@ -339,9 +343,9 @@ fn main() -> anyhow::Result<()> {
     let initial_yaw: f32 = forward.z.atan2(forward.x);
     let initial_pitch: f32 = forward.y.asin();
 
-    let mut camera_controller = etib::CameraController::new(20.0, 0.003); // Increased speed for larger scene
+    let mut camera_controller = etib::camera::CameraController::new(20.0, 0.003); // Increased speed for larger scene
     if is_isometric {
-        camera_controller.mode = etib::CameraMode::Isometric;
+        camera_controller.mode = etib::camera::CameraMode::Isometric;
     }
     camera_controller.yaw = initial_yaw;
     camera_controller.pitch = initial_pitch;
@@ -350,7 +354,7 @@ fn main() -> anyhow::Result<()> {
         window: None,
         gfx: None,
         my_gfx: None,
-        time: etib::core::time::TimeState::new(),
+        time: etib::time::TimeState::new(),
         is_initialized: false,
         model_path,
         camera_controller,
@@ -359,7 +363,7 @@ fn main() -> anyhow::Result<()> {
         frame_count: 0,
         fps_update_timer: 0.0,
     };
-    let event_loop = EventLoop::new().unwrap();
+    let event_loop = EventLoop::new()?;
     event_loop.set_control_flow(ControlFlow::Poll);
 
     etib::run(&mut game, event_loop)?;

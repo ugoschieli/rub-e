@@ -13,6 +13,12 @@ pub struct TimeState {
     pub dt: f32,
 }
 
+impl Default for TimeState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TimeState {
     /// Create a new TimeState
     pub fn new() -> Self {

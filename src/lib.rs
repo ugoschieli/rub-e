@@ -2,25 +2,24 @@
 
 //! The ETIB Game engine crate.
 
-mod buffer;
-mod camera;
+/// Module containing the camera implementation
+pub mod camera;
 /// Core module containing wrapper for wgpu and time management
 pub mod core;
-mod cube;
+/// Module containing the cube data (Vertex + Instance) and model loading
+pub mod cube;
 mod game;
 mod gbuffer;
 mod gfx;
-mod model;
-mod pipeline;
+/// Utility module
+pub mod utils;
 // mod raytracing;
+/// Module containing the engine configuration system
+pub mod config;
+/// Module containing the time management (delta time)
+pub mod time;
 mod vertex;
-mod wgpu_utils;
 
-pub use crate::buffer::*;
-pub use crate::camera::*;
-pub use crate::cube::*;
 pub use crate::game::*;
 pub use crate::gfx::*;
-pub use crate::model::*;
-pub use crate::pipeline::*;
 pub use crate::vertex::*;

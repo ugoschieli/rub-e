@@ -176,7 +176,7 @@ impl Camera {
             }
         };
 
-        return OPENGL_TO_WGPU_MATRIX * proj * view;
+        OPENGL_TO_WGPU_MATRIX * proj * view
     }
 }
 

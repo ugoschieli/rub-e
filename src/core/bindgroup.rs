@@ -49,7 +49,7 @@ impl BindGroup {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 /// Fluent builder for BindGroup
 pub struct BindGroupBuilder {
     resources: HashMap<u32, WrappedResource>,

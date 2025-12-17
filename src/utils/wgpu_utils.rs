@@ -1,3 +1,4 @@
+/// Create a wgpu::Instance with default parameters
 pub fn create_instance() -> wgpu::Instance {
     wgpu::Instance::new(&wgpu::InstanceDescriptor {
         backends: wgpu::Backends::PRIMARY,
@@ -5,6 +6,7 @@ pub fn create_instance() -> wgpu::Instance {
     })
 }
 
+/// Create a wgpu::Adapter with default parameters
 pub fn create_adapter(
     instance: &wgpu::Instance,
     surface: &wgpu::Surface<'_>,
@@ -27,6 +29,7 @@ pub fn create_adapter(
     adapter
 }
 
+/// Return the wgpu::Device and wgpu::Queue from the adapter
 pub fn create_device(
     adapter: &wgpu::Adapter,
 ) -> impl Future<Output = Result<(wgpu::Device, wgpu::Queue), wgpu::RequestDeviceError>> {
@@ -37,6 +40,7 @@ pub fn create_device(
     })
 }
 
+/// Configure the window surface must be called on resize
 pub fn configure_surface(
     adapter: &wgpu::Adapter,
     device: &wgpu::Device,
@@ -83,6 +87,7 @@ pub fn configure_surface(
     config
 }
 
+/// Create the gbuffer texture
 pub fn create_gbuffer_texture(
     device: &wgpu::Device,
     width: u32,
@@ -110,6 +115,7 @@ pub fn create_gbuffer_texture(
     (texture, view)
 }
 
+/// Create the depth buffer texture
 pub fn create_depth_texture(
     device: &wgpu::Device,
     width: u32,

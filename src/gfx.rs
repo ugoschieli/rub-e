@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use winit::{dpi::PhysicalSize, window::Window};
 
-use crate::wgpu_utils;
+use crate::utils::wgpu_utils;
 
 /// A wrapper around muliple wgpu structs that holds the graphics state of the app
 pub struct Gfx {
@@ -24,7 +24,7 @@ impl Gfx {
     /// Create a new wgpu Instance and initialize the Gfx struct.
     /// Need to be called only once at the initialization of an app.
     pub fn new(window: Arc<Window>) -> Gfx {
-        let config = crate::core::config::EngineConfig::load_from_file("config.json");
+        let config = crate::config::EngineConfig::load_from_file("config.json");
 
         let window_size = window.inner_size();
 
@@ -104,9 +104,9 @@ impl Gfx {
     }
 
     /// Helper function to create a default wgpu::RenderPassDescriptor from a wgpu::TextureView
-    pub fn color_attachments_from_view<'tex>(
-        view: &'tex wgpu::TextureView,
-    ) -> wgpu::RenderPassColorAttachment<'tex> {
+    pub fn color_attachments_from_view(
+        view: &'_ wgpu::TextureView,
+    ) -> wgpu::RenderPassColorAttachment<'_> {
         wgpu::RenderPassColorAttachment {
             view,
             resolve_target: None,

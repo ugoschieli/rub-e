@@ -3,6 +3,7 @@ use cgmath::Zero;
 use crate::Vertex;
 
 /// Represents a cube instance with transformation and color information
+#[derive(Debug)]
 pub struct Cube {
     /// The 4x4 transformation matrix for positioning, rotating, and scaling the cube
     pub model: cgmath::Matrix4<f32>,
@@ -27,6 +28,12 @@ impl Into<CubeRaw> for Cube {
             model: self.model.into(),
             color: self.color.into(),
         }
+    }
+}
+
+impl Default for Cube {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -65,7 +72,7 @@ impl Cube {
     /// A `wgpu::VertexBufferLayout` describing the instance data structure
     pub fn desc() -> wgpu::VertexBufferLayout<'static> {
         wgpu::VertexBufferLayout {
-            array_stride: std::mem::size_of::<CubeRaw>() as u64,
+            array_stride: size_of::<CubeRaw>() as u64,
             step_mode: wgpu::VertexStepMode::Instance,
             attributes: &[
                 // Model matrix (4x vec4)

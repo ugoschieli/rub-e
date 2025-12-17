@@ -1,14 +1,14 @@
 use winit::{application::ApplicationHandler, error::EventLoopError, event_loop::EventLoop};
 
 use crate::Gfx;
-use crate::core::time::TimeState;
+use crate::time::TimeState;
 
 /// The primary Trait provided by the library your primary game state struct must implement this
 pub trait Game: ApplicationHandler {
-    /// The function called at the initialization of the engine
+    // The function called at the initialization of the engine
     // fn init(&mut self, event_loop: &winit::event_loop::ActiveEventLoop);
 
-    /// The function called each frame by the engine
+    // The function called each frame by the engine
     // fn render(&mut self);
 
     /// Getter for a mutable etib::Gfx struct

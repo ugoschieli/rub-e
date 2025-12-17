@@ -1,4 +1,5 @@
-use crate::{buffer::VertexBuffer, core::shader::Shader};
+use super::buffer::VertexBuffer;
+use super::shader::Shader;
 
 /// The render pipeline
 pub struct Pipeline {
@@ -19,7 +20,7 @@ impl Pipeline {
     ) -> Pipeline {
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
-            bind_group_layouts: bind_group_layouts,
+            bind_group_layouts,
             push_constant_ranges: &[],
         });
 
@@ -75,7 +76,7 @@ impl Pipeline {
     ) -> Pipeline {
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
-            bind_group_layouts: bind_group_layouts,
+            bind_group_layouts,
             push_constant_ranges: &[],
         });
 
