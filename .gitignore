@@ -1,7 +1,7 @@
 .DS_Store
 .claude
 .idea
-/target
+target/
 *.model
 TODO.md
 config.json
