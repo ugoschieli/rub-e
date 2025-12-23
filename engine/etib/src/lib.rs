@@ -14,6 +14,8 @@ pub mod utils;
 // mod raytracing;
 /// Module containing the engine configuration system
 pub mod config;
+/// An HDR pipeline implementation
+pub mod hdr;
 /// Module containing the time management (delta time)
 pub mod time;
 mod vertex;

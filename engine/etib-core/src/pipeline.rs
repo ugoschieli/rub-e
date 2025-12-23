@@ -121,4 +121,66 @@ impl Pipeline {
             pipeline,
         }
     }
+
+    /// Create a new pipeline with optional backface culling and depth testing
+    pub fn new_v2(
+        device: &wgpu::Device,
+        bind_group_layouts: &[&wgpu::BindGroupLayout],
+        vertex_buffers: &[wgpu::VertexBufferLayout],
+        shader: &Shader,
+        surface_format: wgpu::TextureFormat,
+        depth_format: Option<wgpu::TextureFormat>,
+        topology: wgpu::PrimitiveTopology,
+        label: Option<&str>,
+    ) -> Pipeline {
+        let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: None,
+            bind_group_layouts,
+            push_constant_ranges: &[],
+        });
+
+        let mut descriptor = wgpu::RenderPipelineDescriptor {
+            label,
+            layout: Some(&layout),
+            vertex: wgpu::VertexState {
+                module: &shader.module,
+                entry_point: Some("vs_main"),
+                buffers: vertex_buffers,
+                compilation_options: Default::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader.module,
+                entry_point: Some("fs_main"),
+                targets: &[Some(surface_format.into())],
+                compilation_options: Default::default(),
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology,
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw,
+                cull_mode: Some(wgpu::Face::Back),
+                polygon_mode: wgpu::PolygonMode::Fill,
+                unclipped_depth: false,
+                conservative: false,
+            },
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+            multiview: None,
+            cache: None,
+        };
+
+        if let Some(depth_format) = depth_format {
+            descriptor.depth_stencil = Some(wgpu::DepthStencilState {
+                format: depth_format,
+                depth_write_enabled: true,
+                depth_compare: wgpu::CompareFunction::LessEqual,
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState::default(),
+            });
+        }
+
+        let pipeline = device.create_render_pipeline(&descriptor);
+
+        Pipeline { layout, pipeline }
+    }
 }

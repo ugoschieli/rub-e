@@ -27,6 +27,7 @@ struct MyGame<'vertex> {
 struct MyGfx<'vertex> {
     camera: etib::camera::Camera,
     pipeline: etib_core::pipeline::Pipeline,
+    hdr: etib::hdr::HdrPipeline,
     sky_pipeline: etib_core::pipeline::Pipeline,
     vertex_buffer: etib_core::buffer::VertexBuffer<'vertex, etib::Vertex>,
     index_buffer: wgpu::Buffer,
@@ -104,33 +105,42 @@ impl MyGame<'_> {
         });
 
         // Create pipeline with both vertex and instance buffer layouts
-        let pipeline = etib_core::pipeline::Pipeline::new_with_layouts(
+        let pipeline = etib_core::pipeline::Pipeline::new_v2(
             &device,
             &[&camera.bind_group.layout], // Only camera uniform now
-            &shader,
-            &gfx.surface_config,
             &[
                 etib::Vertex::desc(),     // Vertex buffer layout
                 etib::cube::Cube::desc(), // Instance buffer layout
             ],
+            &shader,
+            wgpu::TextureFormat::Rgba16Float, // For HDR support
+            Some(wgpu::TextureFormat::Depth24PlusStencil8),
+            wgpu::PrimitiveTopology::TriangleList,
+            Some("Cubes Pipeline"),
         );
+
+        let hdr = etib::hdr::HdrPipeline::new(&device, &gfx.surface_config);
 
         // Sky pipeline setup
         let sky_shader_str = include_str!("../src/shaders/sky.wgsl");
         let sky_shader = etib_core::shader::Shader::new(sky_shader_str, &device, None);
 
         // Sky pipeline doesn't need vertex buffers (uses vertex pulling) or uniforms (for now)
-        let sky_pipeline = etib_core::pipeline::Pipeline::new_with_layouts(
+        let sky_pipeline = etib_core::pipeline::Pipeline::new_v2(
             &device,
             &[], // No uniforms
-            &sky_shader,
-            &gfx.surface_config,
             &[], // No vertex buffers
+            &sky_shader,
+            wgpu::TextureFormat::Rgba16Float, // HDR
+            Some(wgpu::TextureFormat::Depth24PlusStencil8),
+            wgpu::PrimitiveTopology::TriangleList,
+            Some("Sky Pipeline"),
         );
 
         let my_gfx = MyGfx {
             camera,
             pipeline,
+            hdr,
             sky_pipeline,
             vertex_buffer,
             index_buffer,
@@ -178,7 +188,10 @@ impl MyGame<'_> {
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
         {
-            let color_attachments = [Some(etib::Gfx::color_attachments_from_view(&view))];
+            // Render first on HDR texture
+            let color_attachments = [Some(etib::Gfx::color_attachments_from_view(
+                &my_gfx.hdr.view(),
+            ))];
             let mut render_pass = encoder.begin_render_pass(&gfx.render_pass(&color_attachments));
 
             // Render Sky (Fullscreen Triangle)
@@ -200,6 +213,8 @@ impl MyGame<'_> {
                 0..my_gfx.instance_count,
             );
         }
+        // Tonemap the HDR Rgba16Float Texture to the original Rgba8UnormSRGB Texture
+        my_gfx.hdr.process(&mut encoder, &view);
 
         gfx.queue.submit(Some(encoder.finish()));
         frame.present();
@@ -282,6 +297,8 @@ impl ApplicationHandler for MyGame<'_> {
                             0,
                             bytemuck::cast_slice(&[Into::<[[f32; 4]; 4]>::into(new_matrix)]),
                         );
+
+                        my_gfx.hdr.resize(gfx.device(), size.width, size.height);
                     }
 
                     if let Some(window) = &self.window {
