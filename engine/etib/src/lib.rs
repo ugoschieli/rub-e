@@ -4,8 +4,6 @@
 
 /// Module containing the camera implementation
 pub mod camera;
-/// Core module containing wrapper for wgpu and time management
-pub mod core;
 /// Module containing the cube data (Vertex + Instance) and model loading
 pub mod cube;
 mod game;

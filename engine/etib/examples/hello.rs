@@ -1,6 +1,6 @@
 use cgmath::InnerSpace;
 use etib::Game;
-use etib::core::buffer::BufferExt;
+use etib_core::buffer::BufferExt;
 use log::info;
 use std::sync::Arc;
 use wgpu::util::DeviceExt;
@@ -26,9 +26,9 @@ struct MyGame<'vertex> {
 
 struct MyGfx<'vertex> {
     camera: etib::camera::Camera,
-    pipeline: etib::core::pipeline::Pipeline,
-    sky_pipeline: etib::core::pipeline::Pipeline,
-    vertex_buffer: etib::core::buffer::VertexBuffer<'vertex, etib::Vertex>,
+    pipeline: etib_core::pipeline::Pipeline,
+    sky_pipeline: etib_core::pipeline::Pipeline,
+    vertex_buffer: etib_core::buffer::VertexBuffer<'vertex, etib::Vertex>,
     index_buffer: wgpu::Buffer,
     instance_buffer: wgpu::Buffer,
     instance_count: u32,
@@ -94,7 +94,7 @@ impl MyGame<'_> {
         });
 
         let shader_str = include_str!("../src/shaders/shader.wgsl");
-        let shader = etib::core::shader::Shader::new(shader_str, &device, None);
+        let shader = etib_core::shader::Shader::new(shader_str, &device, None);
         let vertex_buffer = device.create_vertex_buffer(etib::cube::VERTICES, etib::Vertex::desc());
 
         let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -104,7 +104,7 @@ impl MyGame<'_> {
         });
 
         // Create pipeline with both vertex and instance buffer layouts
-        let pipeline = etib::core::pipeline::Pipeline::new_with_layouts(
+        let pipeline = etib_core::pipeline::Pipeline::new_with_layouts(
             &device,
             &[&camera.bind_group.layout], // Only camera uniform now
             &shader,
@@ -117,10 +117,10 @@ impl MyGame<'_> {
 
         // Sky pipeline setup
         let sky_shader_str = include_str!("../src/shaders/sky.wgsl");
-        let sky_shader = etib::core::shader::Shader::new(sky_shader_str, &device, None);
+        let sky_shader = etib_core::shader::Shader::new(sky_shader_str, &device, None);
 
         // Sky pipeline doesn't need vertex buffers (uses vertex pulling) or uniforms (for now)
-        let sky_pipeline = etib::core::pipeline::Pipeline::new_with_layouts(
+        let sky_pipeline = etib_core::pipeline::Pipeline::new_with_layouts(
             &device,
             &[], // No uniforms
             &sky_shader,

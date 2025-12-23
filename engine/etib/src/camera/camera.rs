@@ -2,7 +2,7 @@ use cgmath::InnerSpace;
 use winit::event::{ElementState, KeyEvent, MouseScrollDelta};
 use winit::keyboard::{KeyCode, PhysicalKey};
 
-use crate::core::bindgroup::{BindGroup, BindGroupBuilder};
+use etib_core::bindgroup::{BindGroup, BindGroupBuilder};
 
 /// Enum representing the different camera modes
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -49,12 +49,15 @@ pub fn configure_surface(
     vsync: bool,
 ) -> wgpu::SurfaceConfiguration {
     let surface_caps = surface.get_capabilities(&adapter);
+    log::info!("FOUND SWAPCHAIN FORMATS: {:?}", surface_caps.formats);
+
     let surface_format = surface_caps
         .formats
         .iter()
         .copied()
         .find(|f| f.is_srgb())
         .unwrap_or(surface_caps.formats[0]);
+    log::info!("SELECTED SWAPCHAIN FORMAT: {:?}", surface_format);
 
     let present_mode = if vsync {
         wgpu::PresentMode::Fifo

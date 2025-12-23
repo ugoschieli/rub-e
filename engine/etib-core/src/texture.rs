@@ -11,7 +11,8 @@ impl Texture {
     /// Create a new texture
     pub fn new(
         device: &wgpu::Device,
-        size: winit::dpi::PhysicalSize<u32>,
+        width: u32,
+        height: u32,
         format: wgpu::TextureFormat,
         usages: wgpu::TextureUsages,
         label: Option<&str>,
@@ -19,8 +20,8 @@ impl Texture {
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label,
             size: wgpu::Extent3d {
-                width: size.width,
-                height: size.height,
+                width,
+                height,
                 depth_or_array_layers: 1,
             },
             mip_level_count: 1,

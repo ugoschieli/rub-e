@@ -1,6 +1,6 @@
-use crate::core::buffer::VertexBuffer;
-use crate::core::{bindgroup::BindGroup, shader::Shader};
 use crate::utils::wgpu_utils::*;
+use etib_core::buffer::VertexBuffer;
+use etib_core::{bindgroup::BindGroup, shader::Shader};
 
 pub struct GBuffer {
     pub position_texture: wgpu::Texture,
