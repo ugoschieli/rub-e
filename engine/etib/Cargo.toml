@@ -9,8 +9,8 @@ bytemuck = { workspace = true }
 cgmath = "0.18"
 env_logger = "0.11"
 etib-core = { path = "../etib-core" }
+image = { version = "0.25.9", features = ["hdr"] }
 log = { workspace = true }
-naga = { workspace = true }
 pollster = "0.4"
 wgpu = { workspace = true }
 winit = "0.30"

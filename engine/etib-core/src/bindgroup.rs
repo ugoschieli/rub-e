@@ -120,6 +120,31 @@ impl BindGroupBuilder {
         self
     }
 
+    /// Add a cube texture view to the bind group
+    pub fn add_cube_texture(
+        mut self,
+        binding: u32,
+        view: wgpu::TextureView,
+        visibility: wgpu::ShaderStages,
+        sample_type: wgpu::TextureSampleType,
+    ) -> Self {
+        // Note: We take ownership of the view here
+        self.resources
+            .insert(binding, WrappedResource::TextureView(view));
+
+        self.layout_entries.push(wgpu::BindGroupLayoutEntry {
+            binding,
+            visibility,
+            ty: wgpu::BindingType::Texture {
+                multisampled: false,
+                view_dimension: wgpu::TextureViewDimension::Cube,
+                sample_type,
+            },
+            count: None,
+        });
+        self
+    }
+
     /// Add a sampler to the bind group
     pub fn add_sampler(
         mut self,

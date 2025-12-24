@@ -1,4 +1,4 @@
-use cgmath::InnerSpace;
+use cgmath::{InnerSpace, Matrix, SquareMatrix, Zero};
 use winit::event::{ElementState, KeyEvent, MouseScrollDelta};
 use winit::keyboard::{KeyCode, PhysicalKey};
 
@@ -50,6 +50,14 @@ pub struct Camera {
     pub bind_group: BindGroup,
 }
 
+#[repr(C)]
+#[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct CameraRaw {
+    pub view_proj: [[f32; 4]; 4],
+    pub inv_view: [[f32; 4]; 4],
+    pub inv_proj: [[f32; 4]; 4],
+}
+
 /// Camera controller for FPS-style keyboard and mouse input
 ///
 /// # Example
@@ -94,16 +102,6 @@ pub struct CameraController {
     zoom: f32,
 }
 
-#[rustfmt::skip]
-/// The cgmath crate use the OpenGL matrix format multiplying the camera matrix by this one convert
-/// it to the WebGPU matrix format (same as DX12 and Vulkan)
-pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::from_cols(
-    cgmath::Vector4::new(1.0, 0.0, 0.0, 0.0),
-    cgmath::Vector4::new(0.0, 1.0, 0.0, 0.0),
-    cgmath::Vector4::new(0.0, 0.0, 0.5, 0.0),
-    cgmath::Vector4::new(0.0, 0.0, 0.5, 1.0),
-);
-
 impl Camera {
     /// Create a new camera object
     pub fn new(
@@ -129,20 +127,20 @@ impl Camera {
                 cgmath::ortho(left, right, bottom, top, znear, zfar)
             }
         };
-        let matrix = OPENGL_TO_WGPU_MATRIX * proj * view;
+        let matrix = proj * view;
 
-        // let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        //     label: Some("Camera Buffer"),
-        //     contents: bytemuck::cast_slice(&[Into::<[[f32; 4]; 4]>::into(matrix)]),
-        //     usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        // });
+        let camera_raw = CameraRaw {
+            view_proj: matrix.into(),
+            inv_view: view.transpose().into(),
+            inv_proj: proj.invert().unwrap().into(),
+        };
 
         let bind_group = BindGroupBuilder::new()
             .add_uniform_buffer(
                 device,
                 0,
-                bytemuck::cast_slice(&[Into::<[[f32; 4]; 4]>::into(matrix)]),
-                wgpu::ShaderStages::VERTEX,
+                bytemuck::bytes_of(&camera_raw),
+                wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
             )
             .build(device, Some("Camera Bind Group"));
 
@@ -155,13 +153,12 @@ impl Camera {
             znear,
             zfar,
             matrix,
-            // buffer,
             bind_group,
         }
     }
 
     /// Update the camera matrix with the new camera position
-    pub fn update_matrix(&self) -> cgmath::Matrix4<f32> {
+    pub fn update_matrix(&self, queue: &wgpu::Queue) -> cgmath::Matrix4<f32> {
         let view = cgmath::Matrix4::look_at_rh(self.eye, self.target, self.up);
         let proj = match self.projection {
             Projection::Perspective { fovy } => {
@@ -176,7 +173,17 @@ impl Camera {
             }
         };
 
-        OPENGL_TO_WGPU_MATRIX * proj * view
+        let view_proj = proj * view;
+
+        let camera_raw = CameraRaw {
+            view_proj: view_proj.into(),
+            inv_proj: proj.invert().unwrap().into(),
+            inv_view: view.transpose().into(),
+        };
+        self.bind_group
+            .write_buffer(&queue, 0, bytemuck::bytes_of(&camera_raw));
+
+        view_proj
     }
 }
 
@@ -269,7 +276,7 @@ impl CameraController {
     }
 
     /// Update camera position and target based on controller state
-    pub fn update_camera(&mut self, camera: &mut Camera, dt: f32) {
+    pub fn update_camera(&mut self, queue: &wgpu::Queue, camera: &mut Camera, dt: f32) {
         match self.mode {
             CameraMode::FirstPerson => {
                 // Calculate forward direction from yaw and pitch (FPS-style looking)
@@ -315,5 +322,7 @@ impl CameraController {
                 }
             }
         }
+
+        camera.update_matrix(queue);
     }
 }

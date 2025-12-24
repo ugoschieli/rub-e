@@ -1,14 +1,17 @@
-use cgmath::InnerSpace;
-use etib::Game;
-use etib_core::buffer::BufferExt;
-use log::info;
 use std::sync::Arc;
+
+use cgmath::InnerSpace;
+use log::info;
 use wgpu::util::DeviceExt;
 use winit::application::ApplicationHandler;
 use winit::event::{DeviceEvent, DeviceId, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::Window;
+
+use etib::Game;
+use etib_core::bindgroup::BindGroupBuilder;
+use etib_core::buffer::BufferExt;
 
 struct MyGame<'vertex> {
     window: Option<Arc<Window>>,
@@ -28,7 +31,8 @@ struct MyGfx<'vertex> {
     camera: etib::camera::Camera,
     pipeline: etib_core::pipeline::Pipeline,
     hdr: etib::hdr::HdrPipeline,
-    sky_pipeline: etib_core::pipeline::Pipeline,
+    skybox_pipeline: etib_core::pipeline::Pipeline,
+    skybox: etib_core::bindgroup::BindGroup,
     vertex_buffer: etib_core::buffer::VertexBuffer<'vertex, etib::Vertex>,
     index_buffer: wgpu::Buffer,
     instance_buffer: wgpu::Buffer,
@@ -44,6 +48,12 @@ impl MyGame<'_> {
 
         let gfx = etib::Gfx::new(window.clone());
         let device = gfx.device();
+
+        let hdr_loader = etib::hdr::HdrLoader::new(&device);
+        let sky_bytes = std::fs::read(std::path::Path::new("./sky.hdr")).unwrap();
+        let sky_texture = hdr_loader
+            .from_equirectangular_bytes(&device, &gfx.queue, &sky_bytes, 1080, Some("Sky Texture"))
+            .unwrap();
 
         let camera = if self.is_isometric {
             etib::camera::Camera::new(
@@ -121,27 +131,41 @@ impl MyGame<'_> {
 
         let hdr = etib::hdr::HdrPipeline::new(&device, &gfx.surface_config);
 
-        // Sky pipeline setup
-        let sky_shader_str = include_str!("../src/shaders/sky.wgsl");
-        let sky_shader = etib_core::shader::Shader::new(sky_shader_str, &device, None);
-
-        // Sky pipeline doesn't need vertex buffers (uses vertex pulling) or uniforms (for now)
-        let sky_pipeline = etib_core::pipeline::Pipeline::new_v2(
+        // Skybox pipeline
+        let skybox_shader_str = include_str!("../src/shaders/skybox.wgsl");
+        let skybox_shader =
+            etib_core::shader::Shader::new(skybox_shader_str, &device, Some("Skybox shader"));
+        let skybox = BindGroupBuilder::new()
+            .add_cube_texture(
+                0,
+                sky_texture.view().clone(),
+                wgpu::ShaderStages::FRAGMENT,
+                wgpu::TextureSampleType::Float { filterable: false },
+            )
+            .add_sampler(
+                1,
+                sky_texture.sampler().clone(),
+                wgpu::SamplerBindingType::NonFiltering,
+                wgpu::ShaderStages::FRAGMENT,
+            )
+            .build(device, Some("Skybox bind group"));
+        let skybox_pipeline = etib_core::pipeline::Pipeline::new_v2(
             &device,
-            &[], // No uniforms
-            &[], // No vertex buffers
-            &sky_shader,
-            wgpu::TextureFormat::Rgba16Float, // HDR
+            &[&camera.bind_group.layout, &skybox.layout],
+            &[],
+            &skybox_shader,
+            hdr.format(),
             Some(wgpu::TextureFormat::Depth24PlusStencil8),
             wgpu::PrimitiveTopology::TriangleList,
-            Some("Sky Pipeline"),
+            Some("Skybox pipeline"),
         );
 
         let my_gfx = MyGfx {
             camera,
             pipeline,
             hdr,
-            sky_pipeline,
+            skybox_pipeline,
+            skybox,
             vertex_buffer,
             index_buffer,
             instance_buffer,
@@ -176,13 +200,7 @@ impl MyGame<'_> {
 
         // Update camera based on controller input
         self.camera_controller
-            .update_camera(&mut my_gfx.camera, self.time.dt);
-        let new_matrix = my_gfx.camera.update_matrix();
-        my_gfx.camera.bind_group.write_buffer(
-            &gfx.queue,
-            0,
-            bytemuck::cast_slice(&[Into::<[[f32; 4]; 4]>::into(new_matrix)]),
-        );
+            .update_camera(&gfx.queue, &mut my_gfx.camera, self.time.dt);
 
         let mut encoder = gfx
             .device
@@ -193,11 +211,6 @@ impl MyGame<'_> {
                 &my_gfx.hdr.view(),
             ))];
             let mut render_pass = encoder.begin_render_pass(&gfx.render_pass(&color_attachments));
-
-            // Render Sky (Fullscreen Triangle)
-            // No vertex buffers or index buffers needed for the sky
-            render_pass.set_pipeline(&my_gfx.sky_pipeline.pipeline);
-            render_pass.draw(0..3, 0..1);
 
             // Render Scene
             render_pass.set_pipeline(&my_gfx.pipeline.pipeline);
@@ -212,6 +225,11 @@ impl MyGame<'_> {
                 0,
                 0..my_gfx.instance_count,
             );
+
+            render_pass.set_pipeline(&my_gfx.skybox_pipeline.pipeline);
+            render_pass.set_bind_group(0, &my_gfx.camera.bind_group.bind_group, &[]);
+            render_pass.set_bind_group(1, &my_gfx.skybox.bind_group, &[]);
+            render_pass.draw(0..3, 0..1);
         }
         // Tonemap the HDR Rgba16Float Texture to the original Rgba8UnormSRGB Texture
         my_gfx.hdr.process(&mut encoder, &view);
@@ -291,12 +309,7 @@ impl ApplicationHandler for MyGame<'_> {
                     // Update camera aspect ratio
                     if let Some(my_gfx) = &mut self.my_gfx {
                         my_gfx.camera.aspect = size.width as f32 / size.height as f32;
-                        let new_matrix = my_gfx.camera.update_matrix();
-                        my_gfx.camera.bind_group.write_buffer(
-                            &gfx.queue,
-                            0,
-                            bytemuck::cast_slice(&[Into::<[[f32; 4]; 4]>::into(new_matrix)]),
-                        );
+                        my_gfx.camera.update_matrix(&gfx.queue);
 
                         my_gfx.hdr.resize(gfx.device(), size.width, size.height);
                     }
