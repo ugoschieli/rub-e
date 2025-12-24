@@ -183,4 +183,66 @@ impl Pipeline {
 
         Pipeline { layout, pipeline }
     }
+
+    /// Create a skybox pipeline with proper depth and culling settings
+    /// - No vertex buffers (fullscreen triangle generated in shader)
+    /// - Depth test enabled but depth write disabled
+    /// - No backface culling (inside the skybox)
+    /// - Renders at far plane depth
+    pub fn new_skybox(
+        device: &wgpu::Device,
+        bind_group_layouts: &[&wgpu::BindGroupLayout],
+        shader: &Shader,
+        surface_format: wgpu::TextureFormat,
+        depth_format: wgpu::TextureFormat,
+        label: Option<&str>,
+    ) -> Pipeline {
+        let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label,
+            bind_group_layouts,
+            push_constant_ranges: &[],
+        });
+
+        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label,
+            layout: Some(&layout),
+            vertex: wgpu::VertexState {
+                module: &shader.module,
+                entry_point: Some("vs_main"),
+                buffers: &[], // No vertex buffers needed
+                compilation_options: Default::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader.module,
+                entry_point: Some("fs_main"),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: surface_format,
+                    blend: None,
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+                compilation_options: Default::default(),
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw,
+                cull_mode: None, // No culling for skybox
+                polygon_mode: wgpu::PolygonMode::Fill,
+                unclipped_depth: false,
+                conservative: false,
+            },
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: depth_format,
+                depth_write_enabled: false, // Don't write to depth buffer
+                depth_compare: wgpu::CompareFunction::LessEqual, // Only draw where nothing was drawn
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState::default(),
+            }),
+            multisample: wgpu::MultisampleState::default(),
+            multiview: None,
+            cache: None,
+        });
+
+        Pipeline { layout, pipeline }
+    }
 }

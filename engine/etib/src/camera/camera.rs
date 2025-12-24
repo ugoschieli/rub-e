@@ -1,4 +1,4 @@
-use cgmath::{InnerSpace, Matrix, SquareMatrix, Zero};
+use cgmath::{InnerSpace, Matrix, SquareMatrix};
 use winit::event::{ElementState, KeyEvent, MouseScrollDelta};
 use winit::keyboard::{KeyCode, PhysicalKey};
 
@@ -131,7 +131,7 @@ impl Camera {
 
         let camera_raw = CameraRaw {
             view_proj: matrix.into(),
-            inv_view: view.transpose().into(),
+            inv_view: view.transpose().into(), // The view matrix is orthonormal its invert is equal to the transpose
             inv_proj: proj.invert().unwrap().into(),
         };
 
@@ -178,7 +178,7 @@ impl Camera {
         let camera_raw = CameraRaw {
             view_proj: view_proj.into(),
             inv_proj: proj.invert().unwrap().into(),
-            inv_view: view.transpose().into(),
+            inv_view: view.transpose().into(), // The view matrix is orthonormal its invert is equal to the transpose
         };
         self.bind_group
             .write_buffer(&queue, 0, bytemuck::bytes_of(&camera_raw));

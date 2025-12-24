@@ -149,14 +149,12 @@ impl MyGame<'_> {
                 wgpu::ShaderStages::FRAGMENT,
             )
             .build(device, Some("Skybox bind group"));
-        let skybox_pipeline = etib_core::pipeline::Pipeline::new_v2(
+        let skybox_pipeline = etib_core::pipeline::Pipeline::new_skybox(
             &device,
             &[&camera.bind_group.layout, &skybox.layout],
-            &[],
             &skybox_shader,
             hdr.format(),
-            Some(wgpu::TextureFormat::Depth24PlusStencil8),
-            wgpu::PrimitiveTopology::TriangleList,
+            wgpu::TextureFormat::Depth24PlusStencil8,
             Some("Skybox pipeline"),
         );
 

@@ -1,7 +1,7 @@
 use std::io::Cursor;
 
+use image::DynamicImage;
 use image::codecs::hdr::HdrDecoder;
-use image::{DynamicImage, ImageDecoder};
 use wgpu::Operations;
 
 use etib_core::bindgroup;
@@ -242,7 +242,7 @@ impl HdrLoader {
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
-            &bytemuck::cast_slice(&pixels),
+            bytemuck::cast_slice(pixels),
             wgpu::TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(src.texture.size().width * size_of::<[f32; 4]>() as u32),
