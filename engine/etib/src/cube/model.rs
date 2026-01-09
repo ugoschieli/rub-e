@@ -46,7 +46,7 @@ pub struct ModelCube {
 ///
 /// # Example
 /// ```no_run
-/// use etib::model::load_model;
+/// use etib::cube::load_model;
 ///
 /// let cubes = load_model("models/cat.model").expect("Failed to load model");
 /// println!("Loaded {} cubes", cubes.len());

@@ -62,7 +62,7 @@ pub struct CameraRaw {
 ///
 /// # Example
 /// ```no_run
-/// use etib::{CameraController, CameraMode};
+/// use etib::camera::{CameraController, CameraMode};
 ///
 /// // Create a controller with speed=10.0 units/sec and sensitivity=0.003
 /// let mut controller = CameraController::new(10.0, 0.003);
