@@ -18,6 +18,8 @@ pub struct Gfx {
     pub queue: wgpu::Queue,
     /// The Depth Buffer Texture View
     pub depth_texture_view: wgpu::TextureView,
+    /// Whether HDR rendering is active
+    pub is_hdr_active: bool,
 }
 
 impl Gfx {
@@ -33,8 +35,13 @@ impl Gfx {
         let adapter = wgpu_utils::create_adapter(&instance, &surface).unwrap();
         let (device, queue) = pollster::block_on(wgpu_utils::create_device(&adapter)).unwrap();
 
-        let surface_config =
-            wgpu_utils::configure_surface(&adapter, &device, &surface, window_size, config.vsync);
+        let (surface_config, is_hdr_active) =
+            wgpu_utils::configure_surface(&adapter, &device, &surface, window_size, &config);
+
+        log::info!(
+            "HDR rendering: {}",
+            if is_hdr_active { "ACTIVE" } else { "INACTIVE" }
+        );
 
         if config.experimental_raytracing_pipeline {
         } else {
@@ -64,6 +71,7 @@ impl Gfx {
             device,
             queue,
             depth_texture_view,
+            is_hdr_active,
         }
     }
 

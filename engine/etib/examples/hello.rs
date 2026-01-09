@@ -129,7 +129,19 @@ impl MyGame<'_> {
             Some("Cubes Pipeline"),
         );
 
-        let hdr = etib::hdr::HdrPipeline::new(&device, &gfx.surface_config);
+        // Configure HDR pipeline based on swapchain format
+        let config = etib::config::EngineConfig::load_from_file("config.json");
+        let tonemap_mode = if gfx.is_hdr_active {
+            etib::hdr::TonemappingMode::Hdr
+        } else {
+            etib::hdr::TonemappingMode::Sdr
+        };
+        let hdr = etib::hdr::HdrPipeline::new(
+            &device,
+            &gfx.surface_config,
+            tonemap_mode,
+            config.peak_brightness_nits,
+        );
 
         // Skybox pipeline
         let skybox_shader_str = include_str!("../src/shaders/skybox.wgsl");

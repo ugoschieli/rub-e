@@ -9,18 +9,44 @@ use etib_core::pipeline;
 use etib_core::shader;
 use etib_core::texture;
 
+/// Tonemapping mode for HDR pipeline
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TonemappingMode {
+    /// SDR mode with ACES tonemapping
+    Sdr,
+    /// HDR mode with PQ tonemapping
+    Hdr,
+}
+
+/// Uniform data for tonemapping shader
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+struct TonemapUniforms {
+    peak_brightness_nits: f32,
+    mode: u32,  // 0 = SDR, 1 = HDR
+    _padding: [f32; 2],
+}
+
 /// Owns the render texture and controls tonemapping
 pub struct HdrPipeline {
     pipeline: pipeline::Pipeline,
     bind_group: bindgroup::BindGroup,
     texture: texture::Texture,
+    tonemap_uniforms: wgpu::Buffer,
+    tonemap_bind_group: bindgroup::BindGroup,
     width: u32,
     height: u32,
     format: wgpu::TextureFormat,
+    mode: TonemappingMode,
 }
 
 impl HdrPipeline {
-    pub fn new(device: &wgpu::Device, config: &wgpu::SurfaceConfiguration) -> Self {
+    pub fn new(
+        device: &wgpu::Device,
+        config: &wgpu::SurfaceConfiguration,
+        mode: TonemappingMode,
+        peak_brightness_nits: f32,
+    ) -> Self {
         let width = config.width;
         let height = config.height;
 
@@ -52,12 +78,42 @@ impl HdrPipeline {
             )
             .build(device, Some("HDR layout"));
 
+        // Create uniform buffer for tonemapping parameters
+        let uniforms = TonemapUniforms {
+            peak_brightness_nits,
+            mode: if mode == TonemappingMode::Hdr { 1 } else { 0 },
+            _padding: [0.0; 2],
+        };
+
+        let tonemap_uniforms = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Tonemap Uniforms"),
+            size: std::mem::size_of::<TonemapUniforms>() as u64,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: true,
+        });
+
+        {
+            let mut buffer_view = tonemap_uniforms.slice(..).get_mapped_range_mut();
+            buffer_view.copy_from_slice(bytemuck::bytes_of(&uniforms));
+        }
+        tonemap_uniforms.unmap();
+
+        // Create bind group for tonemapping uniforms (group 1)
+        let tonemap_bind_group = bindgroup::BindGroupBuilder::new()
+            .add_uniform_buffer(
+                device,
+                0,
+                bytemuck::bytes_of(&uniforms),
+                wgpu::ShaderStages::FRAGMENT,
+            )
+            .build(device, Some("Tonemap Uniforms"));
+
         let shader_str = include_str!("./shaders/hdr.wgsl");
         let shader = shader::Shader::new(shader_str, device, Some("HDR shader"));
 
         let pipeline = pipeline::Pipeline::new_v2(
             device,
-            &[&bind_group.layout],
+            &[&bind_group.layout, &tonemap_bind_group.layout],
             // We'll use some math to generate the vertex data in
             // the shader, so we don't need any vertex buffers
             &[],
@@ -72,9 +128,12 @@ impl HdrPipeline {
             pipeline,
             bind_group,
             texture,
+            tonemap_uniforms,
+            tonemap_bind_group,
             width,
             height,
             format,
+            mode,
         }
     }
 
@@ -110,6 +169,16 @@ impl HdrPipeline {
         self.height = height;
     }
 
+    /// Update tonemapping parameters
+    pub fn update_tonemap_params(&self, queue: &wgpu::Queue, mode: TonemappingMode, peak_brightness_nits: f32) {
+        let uniforms = TonemapUniforms {
+            peak_brightness_nits,
+            mode: if mode == TonemappingMode::Hdr { 1 } else { 0 },
+            _padding: [0.0; 2],
+        };
+        queue.write_buffer(&self.tonemap_uniforms, 0, bytemuck::bytes_of(&uniforms));
+    }
+
     /// Exposes the HDR texture
     pub fn view(&self) -> &wgpu::TextureView {
         &self.texture.view
@@ -139,6 +208,7 @@ impl HdrPipeline {
         });
         pass.set_pipeline(&self.pipeline.pipeline);
         pass.set_bind_group(0, &self.bind_group.bind_group, &[]);
+        pass.set_bind_group(1, &self.tonemap_bind_group.bind_group, &[]);
         pass.draw(0..3, 0..1);
     }
 }

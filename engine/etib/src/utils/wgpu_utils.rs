@@ -40,26 +40,68 @@ pub fn create_device(
     })
 }
 
+/// Detect if HDR format is supported by the surface
+pub fn detect_hdr_support(caps: &wgpu::SurfaceCapabilities) -> Option<wgpu::TextureFormat> {
+    // Prefer Rgba16Float (Metal/macOS), fallback to Rgb10a2Unorm (DX12/Windows)
+    caps.formats
+        .iter()
+        .find(|f| {
+            matches!(
+                f,
+                wgpu::TextureFormat::Rgba16Float | wgpu::TextureFormat::Rgb10a2Unorm
+            )
+        })
+        .copied()
+}
+
+/// Select SDR format (sRGB preferred)
+fn select_sdr_format(caps: &wgpu::SurfaceCapabilities) -> wgpu::TextureFormat {
+    caps.formats
+        .iter()
+        .copied()
+        .find(|f| f.is_srgb())
+        .unwrap_or(caps.formats[0])
+}
+
 /// Configure the window surface must be called on resize
+/// Returns (SurfaceConfiguration, is_hdr_active)
 pub fn configure_surface(
     adapter: &wgpu::Adapter,
     device: &wgpu::Device,
     surface: &wgpu::Surface<'_>,
     size: winit::dpi::PhysicalSize<u32>,
-    vsync: bool,
-) -> wgpu::SurfaceConfiguration {
+    config: &crate::config::EngineConfig,
+) -> (wgpu::SurfaceConfiguration, bool) {
     let surface_caps = surface.get_capabilities(&adapter);
     log::info!("FOUND SWAPCHAIN FORMATS: {:?}", surface_caps.formats);
 
-    let surface_format = surface_caps
-        .formats
-        .iter()
-        .copied()
-        .find(|f| f.is_srgb())
-        .unwrap_or(surface_caps.formats[0]);
+    // Select format based on HDR mode
+    let (surface_format, is_hdr) = match config.hdr_mode {
+        crate::config::HdrMode::Disabled => {
+            (select_sdr_format(&surface_caps), false)
+        }
+        crate::config::HdrMode::Enabled => {
+            if let Some(fmt) = detect_hdr_support(&surface_caps) {
+                log::info!("HDR enabled: using format {:?}", fmt);
+                (fmt, true)
+            } else {
+                log::warn!("HDR requested but not supported by display, falling back to SDR");
+                (select_sdr_format(&surface_caps), false)
+            }
+        }
+        crate::config::HdrMode::Auto => {
+            if let Some(fmt) = detect_hdr_support(&surface_caps) {
+                log::info!("HDR auto-detected and enabled: using format {:?}", fmt);
+                (fmt, true)
+            } else {
+                log::info!("HDR not available, using SDR");
+                (select_sdr_format(&surface_caps), false)
+            }
+        }
+    };
     log::info!("SELECTED SWAPCHAIN FORMAT: {:?}", surface_format);
 
-    let present_mode = if vsync {
+    let present_mode = if config.vsync {
         wgpu::PresentMode::Fifo
     } else if surface_caps
         .present_modes
@@ -75,7 +117,7 @@ pub fn configure_surface(
         surface_caps.present_modes[0]
     };
 
-    let config = wgpu::SurfaceConfiguration {
+    let surface_config = wgpu::SurfaceConfiguration {
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         format: surface_format,
         width: size.width,
@@ -85,9 +127,9 @@ pub fn configure_surface(
         view_formats: vec![surface_format],
         desired_maximum_frame_latency: 2,
     };
-    surface.configure(&device, &config);
+    surface.configure(&device, &surface_config);
 
-    config
+    (surface_config, is_hdr)
 }
 
 /// Create the gbuffer texture
