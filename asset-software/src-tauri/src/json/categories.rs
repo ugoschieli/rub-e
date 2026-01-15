@@ -1,60 +1,61 @@
-use std::fs;
+use std::{fs};
 use std::path::Path;
 use super::model::AssetCategory;
 
 
-const DIR_CONFIG: &str = "../config";
-const FILE_CATEGORIES: &str = "../config/data_categories.json";
-
-pub fn get_categories() -> Vec<AssetCategory> {
-    let path = Path::new(FILE_CATEGORIES);
+pub fn get_categories(path: &Path) -> Vec<AssetCategory> {
     if !path.exists() { return Vec::new(); }
-
+    
     let data = fs::read_to_string(path).unwrap_or_else(|_| "[]".to_string());
     serde_json::from_str(&data).unwrap_or_else(|_| Vec::new())
 }
 
-pub fn add_category(name: &str) {
-    let mut items = get_categories();
+pub fn add_category(path: &Path, name: &str) {
+    let mut items = get_categories(path);
 
     // find the current max ID and add 1. If the list is empty, return 1.
     let next_id = items.iter().map(|p| p.id).max().unwrap_or(0) + 1;
     items.push(AssetCategory::new(next_id, name));
-    save(&items);
+    save(path, &items);
 }
 
-pub fn remove_category(name: &str) {
-    let mut items = get_categories();
+pub fn remove_category(path: &Path, name: &str) {
+    let mut items = get_categories(path);
     items.retain(|i| i.name != name);
-    save(&items);
+    save(path, &items);
 }
 
-fn save(items: &Vec<AssetCategory>) {
-    if !Path::new(DIR_CONFIG).exists() {
-        let _ = fs::create_dir_all(DIR_CONFIG);
+fn save(path: &Path, items: &Vec<AssetCategory>) {
+    if let Some(parent) = path.parent() {
+        let _ = fs::create_dir_all(parent);
     }
 
-    let path = Path::new(FILE_CATEGORIES);
     let data = serde_json::to_string_pretty(items).expect("unable to serialize");
     fs::write(path, data).expect("unable to write file");
 }
 
-pub fn init() {
-    let path = Path::new(FILE_CATEGORIES);
+pub fn init(path: &Path) {
     if !path.exists() {
-        let default_items = vec![AssetCategory::new(1, "Général")];
-        save(&default_items);
-        println!("Fichier categories créé avec une valeur par défaut.");
+        let default_items = vec![AssetCategory::new(1, "Catégorie Exemple")];
+        save(path, &default_items);
+        println!("Fichier categories créé avec une valeur par défaut à : {:?}", path);
     }
 }
 
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
     use super::*;
 
+    // Helper to get a unique test path
+    fn get_test_path() -> PathBuf {
+        PathBuf::from("test_data_categories.json")
+    }
+
+    // Helper to clean up after each test
     fn cleanup() {
-        let path = Path::new(FILE_CATEGORIES);
+        let path = get_test_path();
         if path.exists() {
             let _ = fs::remove_file(path);
         }
@@ -64,10 +65,10 @@ mod tests {
     fn test_add_category() {
         cleanup();
         
-        add_category("Textures");
-        add_category("Modèles 3D");
+        add_category(&get_test_path(), "Textures");
+        add_category(&get_test_path(), "Modèles 3D");
         
-        let cats = get_categories();
+        let cats = get_categories(&get_test_path());
         assert_eq!(cats.len(), 2);
         assert_eq!(cats[0].name, "Textures");
         
@@ -78,10 +79,10 @@ mod tests {
     fn test_remove_category() {
         cleanup();
         
-        add_category("A Supprimer");
-        remove_category("A Supprimer");
+        add_category(&get_test_path(), "A Supprimer");
+        remove_category(&get_test_path(), "A Supprimer");
         
-        let cats = get_categories();
+        let cats = get_categories(&get_test_path());
         assert!(cats.is_empty(), "La liste devrait être vide après suppression");
         
         cleanup();
