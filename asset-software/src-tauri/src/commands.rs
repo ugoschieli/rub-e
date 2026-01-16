@@ -2,7 +2,7 @@ use crate::json::{self, model::AssetCategory};
 use crate::json::model::Project;
 use tauri::{AppHandle};
 use std::path::PathBuf;
-use std::fs;
+use crate::handlefile;
 
 // --- Assets Commands ---
 #[tauri::command]
@@ -119,22 +119,9 @@ pub fn add_asset(app: AppHandle, name: String, project_id: u32) -> Result<(), St
     let target_project = json::projects::get_project_by_id(&projects_db_path, project_id)
         .ok_or_else(|| "Projet introuvable".to_string())?;
 
-    // Préparer le dossier de destination : assets/NomDuProjet
-    let mut dest_folder = get_folder_assets_path(&app);
-    
-    // TODO : Penser à "nettoyer" le nom s'il contient des caractères spéciaux
-    dest_folder.push(&target_project.name);
+    let assets_root = get_folder_assets_path(&app);
 
-    fs::create_dir_all(&dest_folder)
-        .map_err(|e| format!("Erreur création dossier : {}", e))?;
-
-    // Construire le chemin du nouveau fichier
-    let filename = format!("{}.aaa", name); 
-    let destination_path = dest_folder.join(filename);
-
-    let default_content = ""; 
-    fs::write(&destination_path, default_content)
-        .map_err(|e| format!("Erreur lors de la création du fichier : {}", e))?;
+    let _created_path = handlefile::create_asset_file(&assets_root, &target_project.name, &name)?;
 
     json::assets::add_asset(&assets_db_path, &name);
     json::assets::add_projet_to_asset(&assets_db_path, &name, target_project);
@@ -148,6 +135,7 @@ pub fn add_asset(app: AppHandle, name: String, project_id: u32) -> Result<(), St
 mod tests {
     use super::*;
     use std::path::PathBuf;
+    use std::fs;
 
     fn get_test_path(filename: &str) -> PathBuf {
         let mut path = std::env::current_dir().unwrap();

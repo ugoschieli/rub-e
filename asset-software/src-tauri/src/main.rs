@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 mod json;
 mod commands;
+mod handlefile;
 
 fn main() {
   tauri::Builder::default()
