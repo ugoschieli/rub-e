@@ -46,7 +46,7 @@ export default function ProjectPage() {
       <div className="flex flex-wrap gap-4">
         {assets.length > 0 ? (
           assets.map((asset, i) => (
-            <Link key={i} href="/editor">
+            <Link key={i} href={`/editor/${asset.id}`}>
               <AssetCard asset={asset} />
             </Link>
           ))

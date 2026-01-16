@@ -39,7 +39,7 @@ export default function TagPage() {
     <div className="flex flex-wrap p-4 gap-4">
       {assets.length > 0 ? (
         assets.map((asset, i) =>
-          <Link key={i} href="/editor">
+          <Link key={i} href={`/editor/${asset.id}`}>
             <AssetCard asset={asset} />
           </Link>)
       ) : (
