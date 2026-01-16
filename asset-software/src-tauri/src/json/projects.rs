@@ -10,6 +10,11 @@ pub fn get_projects(path: &Path) -> Vec<Project> {
     serde_json::from_str(&data).unwrap_or_else(|_| Vec::new())
 }
 
+pub fn get_project_by_id(path: &Path, id: u32) -> Option<Project> {
+    let items = get_projects(path);
+    items.into_iter().find(|p| p.id == id)
+}
+
 pub fn add_project(path: &Path, name: &str) {
     let mut items = get_projects(path);
 
