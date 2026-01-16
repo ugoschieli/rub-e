@@ -14,9 +14,9 @@ import {
   SidebarHeader,
   SidebarRail,
 } from "@/components/ui/sidebar"
-import data_assets from "@/config/data_assets.json";
-import data_projects from "@/config/data_projects.json";
-import data_categories from "@/config/data_categories.json";
+import data_assets from "@/../config/data_assets.json";
+import data_projects from "@/../config/data_projects.json";
+import data_categories from "@/../config/data_categories.json";
 import data from "@/app/data.json";
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   return (
@@ -31,7 +31,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       <SidebarFooter>
         {/* <NavUser user={data.user} /> */}
       </SidebarFooter>
-      <SidebarRail/>
+      <SidebarRail />
     </Sidebar>
   )
 }

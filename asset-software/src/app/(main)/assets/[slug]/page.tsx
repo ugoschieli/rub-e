@@ -5,8 +5,8 @@ import { useParams } from "next/navigation"
 import data from "@/app/data.json"
 import AssetCard from "@/components/asset-card"
 import { Asset } from "@/types/types"
-import data_assets from "@/config/data_assets.json";
-import data_categories from "@/config/data_categories.json";
+import data_assets from "@/../config/data_assets.json";
+import data_categories from "@/../config/data_categories.json";
 import Link from "next/dist/client/link"
 
 function slugify(text: string) {
@@ -16,12 +16,12 @@ function slugify(text: string) {
 export default function TagPage() {
   const params = useParams()
   const slug = params.slug as string  // <-- ici, c'était 'tag' et non 'slug'
- 
+
   const category = React.useMemo(
     () => data_categories.find((c) => slugify(c.name) === slug),
     [slug]
   )
-    const assets: Asset[] = React.useMemo(() => {
+  const assets: Asset[] = React.useMemo(() => {
     if (!category) return []
 
     return data_assets
@@ -38,10 +38,10 @@ export default function TagPage() {
   return (
     <div className="flex flex-wrap p-4 gap-4">
       {assets.length > 0 ? (
-        assets.map((asset, i) => 
-        <Link key={i} href="/editor">
+        assets.map((asset, i) =>
+          <Link key={i} href="/editor">
             <AssetCard asset={asset} />
-        </Link>)
+          </Link>)
       ) : (
         <p className="text-muted-foreground">
           No assets found for "{slug}"

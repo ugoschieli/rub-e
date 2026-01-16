@@ -1,6 +1,6 @@
 import React from "react"
 import { Asset } from "@/types/types"
-import data_categories from "@/config/data_categories.json";
+import data_categories from "@/../config/data_categories.json";
 import Image from "next/image"
 
 function getCategoryName(id: number) {
@@ -8,7 +8,7 @@ function getCategoryName(id: number) {
   return category ? category.name : "";
 }
 export default function AssetCard({ asset }: { asset: Asset }) {
-  
+
 
   return (
     <div className="flex-none w-[270px] h-[350px] m-4 border rounded-xl bg-card shadow-sm hover:shadow-md transition cursor-pointer">
