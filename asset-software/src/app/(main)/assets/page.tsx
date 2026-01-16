@@ -25,9 +25,9 @@ export default function Page() {
   return (
     <div className="flex flex-wrap p-4 gap-4">
       {assets.map((asset, index) => (
-        <Link key={index} href="/editor">
-          <AssetCard asset={asset} />
-        </Link>
+          <Link key={index} href="/editor">
+            <AssetCard asset={asset}/>
+          </Link>
       ))}
     </div>
   )

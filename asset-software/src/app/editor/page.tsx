@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import "../globals.css";
-import Navbar from "@/components/navbar";
 import { AppSidebar } from "@/components/app-sidebar";
 import {
   SidebarInset,

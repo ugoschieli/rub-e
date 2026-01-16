@@ -1,6 +1,15 @@
 "use client"
 
-import * as React from "react"
+import {
+  ChevronRight, Icon,
+} from "lucide-react"
+
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible"
+
 import {
   SidebarGroup,
   SidebarGroupLabel,
@@ -8,18 +17,13 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
   SidebarMenuSub,
-  SidebarMenuSubItem,
   SidebarMenuSubButton,
+  SidebarMenuSubItem,
 } from "@/components/ui/sidebar"
 import AddCategory from "@/components/add-categorie"
 import { Asset, Category } from "@/types/types"
+import Link from "next/dist/client/link";
 
-// ------------------------
-// Utils slugify
-// ------------------------
-function slugify(text: string) {
-  return text.toLowerCase().replace(/\s+/g, "-")
-}
 
 // ------------------------
 // Composant
@@ -32,27 +36,31 @@ export function NavAssets({ assets, categories }: { assets: Asset[]; categories:
       <SidebarGroupLabel>Manage your assets</SidebarGroupLabel>
 
       <SidebarMenu>
-        <SidebarMenuItem>
-          <SidebarMenuButton asChild>
-            <a href="/assets">
-              <span>Assets</span>
-            </a>
-          </SidebarMenuButton>
+        <Collapsible asChild defaultOpen={true} className="group/collapsible">
+          <SidebarMenuItem>
+            <CollapsibleTrigger asChild>
+              <SidebarMenuButton tooltip="Categories">
 
-          <SidebarMenuSub>
-            {categories.map((cat) => (
-              <SidebarMenuSubItem key={cat.id}>
-                <SidebarMenuSubButton asChild>
-                  <a href={`/assets/${slugify(cat.name)}`}>
-                    <span>{cat.name}</span>
-                  </a>
-                </SidebarMenuSubButton>
-              </SidebarMenuSubItem>
-            ))}
-
-            <AddCategory />
-          </SidebarMenuSub>
-        </SidebarMenuItem>
+                <span>Categories</span>
+                <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
+              </SidebarMenuButton>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <SidebarMenuSub>
+                {categories.map((category) => (
+                  <SidebarMenuSubItem key={category.id}>
+                    <SidebarMenuSubButton asChild>
+                      <Link href={`/assets/${category.id}`}>
+                        <span>{category.name}</span>
+                      </Link>
+                    </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
+                ))}
+              </SidebarMenuSub>
+              <AddCategory/>
+            </CollapsibleContent>
+          </SidebarMenuItem>
+        </Collapsible>
       </SidebarMenu>
     </SidebarGroup>
   )

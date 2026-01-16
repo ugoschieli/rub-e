@@ -8,9 +8,7 @@ import { Asset } from "@/types/types"
 import AssetCard from "@/components/asset-card"
 import Link from "next/dist/client/link"
 
-function slugify(text: string) {
-  return text.toLowerCase().replace(/\s+/g, "-")
-}
+
 export default function ProjectPage() {
   const params = useParams()
   const slug = Number(params.slug)
@@ -23,7 +21,7 @@ export default function ProjectPage() {
     if (!project) return []
 
     return data_assets
-      .filter((asset) => asset.project_id.includes(project.id))
+      .filter((asset) => asset.project_id == project.id)
       .map((asset) => ({
         id: asset.id,
         name: asset.name,

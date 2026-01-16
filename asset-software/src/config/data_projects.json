@@ -1,0 +1,21 @@
+[
+  {
+    "id": 1,
+    "name": "Mon Premier Projet"
+  },
+  {
+    "id": 2,
+    "name": "Design Engineering",
+    "url": "/projects/design-engineering"
+  },
+  {
+    "id": 3,
+    "name": "Marketing",
+    "url": "/projects/marketing"
+  },
+  {
+    "id": 4,
+    "name": "Job Application",
+    "url": "/projects/job-application"
+  }
+]

@@ -1,0 +1,43 @@
+[
+  {
+    "id": 1,
+    "name": "Exemple Asset",
+    "category_id": [1],
+    "project_id": 1
+  },
+  {
+    "id": 2,
+    "name": "Rock",
+    "url": "/assets/Rock",
+    "category_id": [1, 2, 3],
+    "project_id": 1
+  },
+  {
+    "id": 3,
+    "name": "Wood",
+    "url": "/assets/Wood",
+    "category_id": [2, 3],
+    "project_id": 1
+  },
+  {
+    "id": 4,
+    "name": "Squard",
+    "url": "/assets/Squard",
+    "category_id": [2, 3],
+    "project_id": 2
+  },
+  {
+    "id": 5,
+    "name": "a",
+    "url": "/assets/a",
+    "category_id": [3],
+    "project_id": 4
+  },
+  {
+    "id": 6,
+    "name": "test",
+    "url": "/assets/test",
+    "category_id": [4],
+    "project_id": 3
+  }
+]
