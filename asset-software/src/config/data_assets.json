@@ -1,8 +1,21 @@
 [
   {
     "id": 1,
-    "name": "Exemple Asset",
-    "category_id": [],
-    "project_id": []
+    "name": "Rock",
+    "category_id": [1],
+    "project_id": [1]
+  },
+  {
+    "id": 2,
+    "name": "Wood",
+    "category_id": [2],
+    "project_id": [1]
+  },
+  {
+    "id": 3,
+    "name": "Squard",
+    "category_id": [3],
+    "project_id": [2]
   }
 ]
+

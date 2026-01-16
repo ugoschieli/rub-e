@@ -1,92 +1,44 @@
 "use client"
 
-import { ChevronRight, type LucideIcon } from "lucide-react"
-
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible"
+import * as React from "react"
 import {
   SidebarGroup,
   SidebarGroupLabel,
   SidebarMenu,
-  SidebarMenuButton,
   SidebarMenuItem,
-  SidebarMenuSub,
-  SidebarMenuSubButton,
-  SidebarMenuSubItem,
+  SidebarMenuButton,
 } from "@/components/ui/sidebar"
-import { it } from "node:test"
-import AddProjet from "@/components/add-project";
+import { Project, Asset } from "@/types/types"
+import AddProject from "@/components/add-project"
 
-export function NavProjects({
-  items,
-}: {
-  items: {
-    title: string
-    url: string
-    icon?: LucideIcon
-    isActive?: boolean
-    items?: {
-      title: string
-      url: string
-    }[]
-  }[]
-}) {
+// ------------------------
+// Utils slugify
+// ------------------------
+function slugify(text: string) {
+  return text.toLowerCase().replace(/\s+/g, "-")
+}
+
+export function NavProjects({ projects }: { projects: Project[] }) {
+  if (!projects) return null
+
   return (
     <SidebarGroup>
       <SidebarGroupLabel>Manage your projects</SidebarGroupLabel>
+
       <SidebarMenu>
-        {items.map((item) => {
-          if (item.items && item.items.length > 0) {
-            return (
-              <Collapsible
-                key={item.title}
-                asChild
-                defaultOpen={item.isActive}
-                className="group/collapsible"
-              >
-                <SidebarMenuItem>
-                  <CollapsibleTrigger asChild>
-                    <SidebarMenuButton tooltip={item.title}>
-                      {item.icon && <item.icon />}
-                      <span>{item.title}</span>
-                      <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
-                    </SidebarMenuButton>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <SidebarMenuSub>
-                      {item.items?.map((subItem) => (
-                        <SidebarMenuSubItem key={subItem.title}>
-                          <SidebarMenuSubButton asChild>
-                            <a href={subItem.url}>
-                              <span>{subItem.title}</span>
-                            </a>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                      ))}
-                      <AddProjet/>
-                    </SidebarMenuSub>
-                  </CollapsibleContent>
-                </SidebarMenuItem>
-              </Collapsible>
-            )
-          }
-          return (
-            <SidebarMenuItem key={item.title}>
-              <SidebarMenuButton tooltip={item.title} asChild>
-                <a href={item.url}>
-                  {item.icon && <item.icon />}
-                  <span>{item.title}</span>
-                </a>
-              </SidebarMenuButton>
-              <AddProjet/>
-            </SidebarMenuItem>
-          )
-        }
-        )
-        }
+        {projects.map((project) => (
+          <SidebarMenuItem key={project.id}>
+            <SidebarMenuButton asChild>
+              <a href={`/projects/${project.id}`}>
+                <span>{project.name}</span>
+              </a>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        ))}
+
+        <SidebarMenuItem className="pl-2">
+          <AddProject />
+        </SidebarMenuItem>
       </SidebarMenu>
     </SidebarGroup>
   )

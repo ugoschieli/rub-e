@@ -2,24 +2,22 @@
 
 import React from "react"
 import data from "@/app/data.json"
-import AssetCard, { Asset } from "@/components/asset-card"
+import data_assets from "@/config/data_assets.json"
+import { Asset } from "@/types/types"
+import AssetCard from "@/components/asset-card"
 import Link from "next/dist/client/link"
 
 export default function Page() {
   // Transformer les items du JSON en assets pour AssetCard
   const assets: Asset[] = React.useMemo(() => {
     const allAssets: Asset[] = []
-    data.assets.forEach((group) => {
-      group.items?.forEach((item) => {
+    data_assets.forEach((asset) => {
         allAssets.push({
-          title: item.title,
-          tag: item.tag ?? [],
-          url: item.url,
-          type: "Asset", // par défaut si tu n'as pas de type spécifique
-          image: "/STG_02.png", // ou mettre un placeholder si besoin
-          param: [], // vide pour l'instant, tu peux remplir si tu veux
+          id: asset.id,
+          name: asset.name,
+          category_id: asset.category_id,
+          project_id: asset.project_id,
         })
-      })
     })
     return allAssets
   }, [])

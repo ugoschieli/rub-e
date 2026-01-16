@@ -1,6 +1,14 @@
 [
   {
     "id": 1,
-    "name": "Général"
+    "name": "Character"
+  },
+  {
+    "id": 2,
+    "name": "Hero"
+  },
+  {
+    "id": 3,
+    "name": "test"
   }
 ]
