@@ -9,16 +9,13 @@ import data_assets from "@/../config/data_assets.json";
 import data_categories from "@/../config/data_categories.json";
 import Link from "next/dist/client/link"
 
-function slugify(text: string) {
-  return text.toLowerCase().replace(/\s+/g, "-")
-}
 
 export default function TagPage() {
   const params = useParams()
-  const slug = params.slug as string  // <-- ici, c'était 'tag' et non 'slug'
+  const slug = Number(params.slug)  // <-- ici, c'était 'tag' et non 'slug'
 
   const category = React.useMemo(
-    () => data_categories.find((c) => slugify(c.name) === slug),
+    () => data_categories.find((c) => c.id === slug),
     [slug]
   )
   const assets: Asset[] = React.useMemo(() => {

@@ -5,7 +5,6 @@ import * as React from "react"
 
 import { NavAssets } from "@/components/nav-assets"
 import { NavProjects } from "@/components/nav-projects"
-import { NavUser } from "@/components/nav-user"
 import { TeamSwitcher } from "@/components/team-switcher"
 import {
   Sidebar,
@@ -17,7 +16,8 @@ import {
 import data_assets from "@/../config/data_assets.json";
 import data_projects from "@/../config/data_projects.json";
 import data_categories from "@/../config/data_categories.json";
-import data from "@/app/data.json";
+
+
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   return (
     <Sidebar collapsible="icon" {...props}>

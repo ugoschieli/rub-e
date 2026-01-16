@@ -42,7 +42,7 @@
   "productName": "asset-software",
   "mainBinaryName": "asset-software",
   "version": "0.1.0",
-  "identifier": "com.tauri.dev",
+  "identifier": "com.tauri.dev-asset",
   "plugins": {},
   "app": {
     "windows": [

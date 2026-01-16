@@ -1,42 +1,32 @@
 "use client";
-import { useState } from "react";
+import {FormEvent, useState} from "react";
 import { invoke } from '@tauri-apps/api/core';
 
 export default function AddProjet() {
-    const [open, setOpen] = useState(false);
     const [name, setName] = useState("");
 
-    const handleSubmit = async (e) => {
+    const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         let name = e.target[0].value
-        await invoke('add_project', {name: name});
+        await invoke('add_projet', {name: name});
     };
 
     return (
         <>
-            <div className="flex bg-grey">
-                <nav className="navbar mr-2">
-                    <button onClick={() => setOpen(true)} className="add-btn">+</button>
-                </nav>
+            <div className=" bg-grey">
 
-                {open && (
-                    <div className="modal-backdrop">
-                        <div className="modal">
-                            <form onSubmit={handleSubmit}>
-                                <input
-                                    type="text"
-                                    placeholder="Nom du projet"
-                                    value={name}
-                                    onChange={(e) => setName(e.target.value)}
-                                    required
-                                />
-                                    <button type="submit">✔️</button>
-                                    <button type="button" onClick={() => setOpen(false)}>
-                                        ❌
-                                    </button>
-                            </form>
-                        </div>
-                    </div>
+                { (
+                    <form onSubmit={handleSubmit} className="flex">
+                        <input
+                            className="flex-1 w-42 ms-8 mt-1"
+                            type="text"
+                            placeholder="Nouveau projet"
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
+                            required
+                        />
+                            <button type="submit" className="flex-1 w-12 ms-2 cursor-pointer">+</button>
+                    </form>
                 )}
             </div>
         </>
