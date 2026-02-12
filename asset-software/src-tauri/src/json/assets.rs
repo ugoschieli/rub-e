@@ -12,13 +12,13 @@ pub fn get_assets(path: &Path) -> Vec<Asset> {
 }
 
 
-pub fn add_asset(path: &Path, name: &str) {
-    let mut items = get_assets(path);
+pub fn add_asset(path_db: &Path, name: &str, asset_path: &str) {
+    let mut items = get_assets(path_db);
 
-    // find the current max ID and add 1. If the list is empty, return 1.
     let next_id = items.iter().map(|p| p.id).max().unwrap_or(0) + 1;
-    items.push(Asset::new(next_id, name));
-    save(path, &items);
+    // On passe le path au constructeur
+    items.push(Asset::new(next_id, name, asset_path)); 
+    save(path_db, &items);
 }
 
 pub fn remove_asset(path: &Path, name: &str) {
@@ -36,10 +36,10 @@ pub fn add_category_to_asset(path: &Path, asset_name: &str, category: AssetCateg
     }
 }
 
-pub fn add_projet_to_asset(path: &Path, asset_name: &str, projet: Project) {
+pub fn add_project_to_asset(path: &Path, asset_name: &str, project: Project) {
     let mut items = get_assets(path);
     if let Some(asset) = items.iter_mut().find(|a| a.name == asset_name) {
-        asset.project_id.push(projet);
+        asset.project_id.push(project);
         save(path, &items);
     }
 }
@@ -54,7 +54,7 @@ fn save(path: &Path, items: &Vec<Asset>) {
 
 pub fn init(path: &Path) {
     if !path.exists() {
-        let default_items = vec![Asset::new(1, "Exemple Asset")];
+        let default_items = vec![Asset::new(1, "Exemple Asset", "assets/Exemple/Exemple.aaa")];
         save(path, &default_items);
         println!("Fichier assets créé avec une valeur par défaut.");
     }
@@ -85,8 +85,8 @@ mod tests {
         cleanup();
         
         // creation
-        add_asset(&get_test_path(), "Hero Character");
-        add_asset(&get_test_path(), "Villain Character");
+        add_asset(&get_test_path(), "Hero Character", "assets/projet1/Hero.aaa");
+        add_asset(&get_test_path(), "Villain Character", "assets/projet1/Villain.aaa");
         let assets = get_assets(&get_test_path());
         println!("Assets: {:?}", assets);
         assert_eq!(assets.len(), 2);
@@ -106,7 +106,7 @@ mod tests {
         cleanup();
         
         // add an asset
-        add_asset(&get_test_path(), "Mur de briques");
+        add_asset(&get_test_path(), "Mur de briques", "assets/projet1/Mur.aaa");
         
         // create a category
         let cat = AssetCategory { id: 100, name: "Matériaux".to_string() };
@@ -131,13 +131,13 @@ mod tests {
         cleanup();
         
         // add an asset
-        add_asset(&get_test_path(), "Texture de sol");
+        add_asset(&get_test_path(), "Texture de sol", "assets/projet2/Sol.aaa");
         
         // create a project
         let proj = Project { id: 200, name: "Projet Alpha".to_string() };
         
         // Link the project to the asset
-        add_projet_to_asset(&get_test_path(), "Texture de sol", proj);
+        add_project_to_asset(&get_test_path(), "Texture de sol", proj);
         
         // Verify
         let assets = get_assets(&get_test_path());

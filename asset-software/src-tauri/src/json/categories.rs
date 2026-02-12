@@ -10,13 +10,17 @@ pub fn get_categories(path: &Path) -> Vec<AssetCategory> {
     serde_json::from_str(&data).unwrap_or_else(|_| Vec::new())
 }
 
-pub fn add_category(path: &Path, name: &str) {
+pub fn add_category(path: &Path, name: &str) -> Result<(), String> {
     let mut items = get_categories(path);
+    if items.iter().any(|c| c.name == name) {
+        return Err(format!("La catégorie '{}' existe déjà.", name));
+    }
 
-    // find the current max ID and add 1. If the list is empty, return 1.
     let next_id = items.iter().map(|p| p.id).max().unwrap_or(0) + 1;
     items.push(AssetCategory::new(next_id, name));
     save(path, &items);
+
+    Ok(())
 }
 
 pub fn remove_category(path: &Path, name: &str) {
@@ -65,8 +69,8 @@ mod tests {
     fn test_add_category() {
         cleanup();
         
-        add_category(&get_test_path(), "Textures");
-        add_category(&get_test_path(), "Modèles 3D");
+        add_category(&get_test_path(), "Textures").unwrap();
+        add_category(&get_test_path(), "Modèles 3D").unwrap();
         
         let cats = get_categories(&get_test_path());
         assert_eq!(cats.len(), 2);
@@ -79,7 +83,7 @@ mod tests {
     fn test_remove_category() {
         cleanup();
         
-        add_category(&get_test_path(), "A Supprimer");
+        add_category(&get_test_path(), "A Supprimer").unwrap();
         remove_category(&get_test_path(), "A Supprimer");
         
         let cats = get_categories(&get_test_path());

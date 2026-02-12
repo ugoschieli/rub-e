@@ -11,6 +11,28 @@ pub fn get_all_assets(app: AppHandle) -> Vec<json::model::Asset> {
     json::assets::get_assets(&path)
 }
 
+#[tauri::command]
+pub fn add_asset(app: AppHandle, name: String, project_id: u32) -> Result<(), String> {
+    let assets_db_path = get_db_path(&app, "data_assets.json");
+    let projects_db_path = get_db_path(&app, "data_projects.json");
+
+    let target_project = json::projects::get_project_by_id(&projects_db_path, project_id)
+        .ok_or_else(|| "Projet introuvable".to_string())?;
+
+    let assets_root = get_folder_assets_path(&app);
+    let created_path_buf = handlefile::create_asset_file(&assets_root, &target_project.name, &name)
+        .map_err(|e| format!("Erreur lors de la création du fichier asset : {}", e))?;
+    let created_path_buf = created_path_buf.strip_prefix(&assets_root)
+        .map_err(|e| format!("Erreur lors du traitement du chemin de l'asset : {}", e))?
+        .to_path_buf();
+    let path_str = created_path_buf.to_string_lossy().to_string(); 
+
+    json::assets::add_asset(&assets_db_path, &name, &path_str);
+    json::assets::add_project_to_asset(&assets_db_path, &name, target_project);
+
+    Ok(())
+}
+
 
 #[tauri::command]
 pub fn delete_asset(app: AppHandle, name: String) {
@@ -25,9 +47,9 @@ pub fn add_category_to_asset(app: AppHandle, asset_name: String, category: Asset
 }
 
 #[tauri::command]
-pub fn add_projet_to_asset(app: AppHandle, asset_name: String, projet: Project) {
+pub fn add_project_to_asset(app: AppHandle, asset_name: String, project: Project) {
     let path = get_db_path(&app, "data_assets.json");
-    json::assets::add_projet_to_asset(&path, &asset_name, projet);
+    json::assets::add_project_to_asset(&path, &asset_name, project);
 }
 
 // --- Categories Commands ---
@@ -38,9 +60,9 @@ pub fn get_all_categories(app: AppHandle) -> Vec<json::model::AssetCategory> {
 }
 
 #[tauri::command]
-pub fn add_category(app: AppHandle, name: String) {
+pub fn add_category(app: AppHandle, name: String) -> Result<(), String> { 
     let path = get_db_path(&app, "data_categories.json");
-    json::categories::add_category(&path, &name);
+    json::categories::add_category(&path, &name)
 }
 
 #[tauri::command]
@@ -49,21 +71,21 @@ pub fn delete_category(app: AppHandle, name: String) {
     json::categories::remove_category(&path, &name);
 }
 
-// --- Projets Commands ---
+// --- Projects Commands ---
 #[tauri::command]
-pub fn get_all_projets(app: AppHandle) -> Vec<json::model::Project> {
+pub fn get_all_projects(app: AppHandle) -> Vec<json::model::Project> {
     let path = get_db_path(&app, "data_projects.json");
     json::projects::get_projects(&path)
 }
 
 #[tauri::command]
-pub fn add_projet(app: AppHandle, name: String) {
+pub fn add_project(app: AppHandle, name: String) -> Result<(), String> { 
     let path = get_db_path(&app, "data_projects.json");
-    json::projects::add_project(&path, &name);
+    json::projects::add_project(&path, &name)
 }
 
 #[tauri::command]
-pub fn delete_projet(app: AppHandle, name: String) {
+pub fn delete_project(app: AppHandle, name: String) {
     let path = get_db_path(&app, "data_projects.json");
     json::projects::remove_project(&path, &name);
 }
@@ -111,24 +133,6 @@ pub fn get_folder_assets_path(_app: &AppHandle) -> PathBuf {
 }
 
 
-#[tauri::command]
-pub fn add_asset(app: AppHandle, name: String, project_id: u32) -> Result<(), String> {
-    let assets_db_path = get_db_path(&app, "data_assets.json");
-    let projects_db_path = get_db_path(&app, "data_projects.json");
-
-    let target_project = json::projects::get_project_by_id(&projects_db_path, project_id)
-        .ok_or_else(|| "Projet introuvable".to_string())?;
-
-    let assets_root = get_folder_assets_path(&app);
-
-    let _created_path = handlefile::create_asset_file(&assets_root, &target_project.name, &name)?;
-
-    json::assets::add_asset(&assets_db_path, &name);
-    json::assets::add_projet_to_asset(&assets_db_path, &name, target_project);
-
-    Ok(())
-}
-
 
 
 #[cfg(test)]
@@ -156,7 +160,7 @@ mod tests {
         cleanup(test_filename);
         let path = get_test_path(test_filename);
 
-        json::assets::add_asset(&path, "Test Asset");
+        json::assets::add_asset(&path, "Test Asset", "assets/projet1/test.aaa");
 
         let assets = json::assets::get_assets(&path);
         assert_eq!(assets.len(), 1);

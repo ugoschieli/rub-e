@@ -15,13 +15,18 @@ pub fn get_project_by_id(path: &Path, id: u32) -> Option<Project> {
     items.into_iter().find(|p| p.id == id)
 }
 
-pub fn add_project(path: &Path, name: &str) {
-    let mut items = get_projects(path);
 
-    // find the current max ID and add 1. If the list is empty, return 1.
+pub fn add_project(path: &Path, name: &str) -> Result<(), String> {
+    let mut items = get_projects(path);
+    if items.iter().any(|p| p.name == name) {
+        return Err(format!("Le projet '{}' existe déjà.", name));
+    }
+
     let next_id = items.iter().map(|p| p.id).max().unwrap_or(0) + 1;
     items.push(Project::new(next_id, name));
     save(path, &items);
+
+    Ok(())
 }
 
 pub fn remove_project(path: &Path, name: &str) {
@@ -71,7 +76,7 @@ mod tests {
         let path = get_test_path();
         
         // Test adding a project
-        add_project(&path, "Projet Alpha");
+        add_project(&path, "Projet Alpha").unwrap();
         
         let projects = get_projects(&path);
         println!("Projects: {:?}", projects);
@@ -89,8 +94,8 @@ mod tests {
         cleanup();
         let path = get_test_path();
         
-        add_project(&path, "Projet A");
-        add_project(&path, "Projet B");
+        add_project(&path, "Projet A").unwrap();
+        add_project(&path, "Projet B").unwrap();
         
         remove_project(&path, "Projet A");
         
@@ -109,7 +114,7 @@ mod tests {
         let path = get_test_path();
         
         // Create and save a project
-        add_project(&path, "Persistent Project");
+        add_project(&path, "Persistent Project").unwrap();
         assert!(path.exists(), "Le fichier JSON doit être créé");
         
         // Load projects from file
