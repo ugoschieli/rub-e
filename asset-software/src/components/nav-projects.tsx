@@ -5,6 +5,7 @@ import {
   MoreHorizontal,
   Share,
   Trash2,
+  File,
 } from "lucide-react"
 
 import {
@@ -28,7 +29,7 @@ import { Project, Asset } from "@/types/types"
 import Link from "next/link"
 import AddProject from "@/components/add-project"
 import AddProjet from "@/components/add-project";
-
+import { handleDeleteProject } from "@/components/services";
 
 export function NavProjects({ projects }: { projects: Project[] }) {
   if (!projects) return null
@@ -56,16 +57,16 @@ export function NavProjects({ projects }: { projects: Project[] }) {
               <DropdownMenuContent
                 className="w-48 rounded-lg"
               >
-                <DropdownMenuItem>
+                {/* <DropdownMenuItem>
                   <Folder className="text-muted-foreground" />
                   <span>View Project</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem>
+                </DropdownMenuItem> */}
+                {/* <DropdownMenuItem>
                   <Share className="text-muted-foreground" />
                   <span>Share Project</span>
-                </DropdownMenuItem>
+                </DropdownMenuItem> */}
                 <DropdownMenuSeparator />
-                <DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleDeleteProject(project.name)}>
                   <Trash2 className="text-muted-foreground" />
                   <span>Delete Project</span>
                 </DropdownMenuItem>

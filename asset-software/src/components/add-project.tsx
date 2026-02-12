@@ -1,6 +1,7 @@
 "use client";
 import {FormEvent, useState} from "react";
 import { invoke } from '@tauri-apps/api/core';
+import { handleAddProject } from "./services";
 
 export default function AddProjet() {
     const [name, setName] = useState("");
@@ -8,7 +9,8 @@ export default function AddProjet() {
     const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         let name = e.target[0].value
-        await invoke('add_projet', {name: name});
+        await handleAddProject(name);
+        setName("");
     };
 
     return (
@@ -18,14 +20,14 @@ export default function AddProjet() {
                 { (
                     <form onSubmit={handleSubmit} className="flex">
                         <input
-                            className="flex-1 w-42 ms-8 mt-1"
+                            className="flex-1 w-26 ms-8 text-sm"
                             type="text"
-                            placeholder="Nouveau projet"
+                            placeholder="New project"
                             value={name}
                             onChange={(e) => setName(e.target.value)}
                             required
                         />
-                            <button type="submit" className="flex-1 w-12 ms-2 cursor-pointer">+</button>
+                            <button type="submit" className="flex-1  cursor-pointer">+</button>
                     </form>
                 )}
             </div>
