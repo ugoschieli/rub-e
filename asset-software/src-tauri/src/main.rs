@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 mod json;
 mod commands;
+mod handlefile;
 
 fn main() {
   tauri::Builder::default()
@@ -10,6 +11,7 @@ fn main() {
         let projects_path = commands::get_db_path(&handle, "data_projects.json");
         let cats_path = commands::get_db_path(&handle, "data_categories.json");
         json::init_all(&assets_path, &projects_path, &cats_path);
+        handlefile::check_global(&handle);
         Ok(())
     })
     .invoke_handler(tauri::generate_handler![
@@ -18,17 +20,17 @@ fn main() {
         commands::add_asset,
         commands::delete_asset,
         commands::add_category_to_asset,
-        commands::add_projet_to_asset,
+        commands::add_project_to_asset,
         
         // Categories Commands
         commands::get_all_categories,
         commands::add_category,
         commands::delete_category,
         
-        // Projets Commands
-        commands::get_all_projets,
-        commands::add_projet,
-        commands::delete_projet,
+        // Projects Commands
+        commands::get_all_projects,
+        commands::add_project,
+        commands::delete_project,
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");

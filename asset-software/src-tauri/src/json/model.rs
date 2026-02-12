@@ -36,15 +36,17 @@ pub struct Asset {
     pub name: String,
     pub category_id: Vec<AssetCategory>,
     pub project_id: Vec<Project>,
+    pub path: String,
 }
 
 impl Asset {
-    pub fn new(id: u32, name: &str) -> Self {
+    pub fn new(id: u32, name: &str, path: &str) -> Self {
         Self {
             id,
             name: name.to_string(),
             category_id: Vec::new(),
             project_id: Vec::new(),
+            path: path.to_string(),
         }
     }
 }
