@@ -23,7 +23,7 @@ pub enum TonemappingMode {
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 struct TonemapUniforms {
     peak_brightness_nits: f32,
-    mode: u32,  // 0 = SDR, 1 = HDR
+    mode: u32, // 0 = SDR, 1 = HDR
     _padding: [f32; 2],
 }
 
@@ -170,7 +170,12 @@ impl HdrPipeline {
     }
 
     /// Update tonemapping parameters
-    pub fn update_tonemap_params(&self, queue: &wgpu::Queue, mode: TonemappingMode, peak_brightness_nits: f32) {
+    pub fn update_tonemap_params(
+        &self,
+        queue: &wgpu::Queue,
+        mode: TonemappingMode,
+        peak_brightness_nits: f32,
+    ) {
         let uniforms = TonemapUniforms {
             peak_brightness_nits,
             mode: if mode == TonemappingMode::Hdr { 1 } else { 0 },

@@ -16,6 +16,8 @@ pub struct Gfx {
     pub device: wgpu::Device,
     /// The wgpu Queue
     pub queue: wgpu::Queue,
+    /// The Depth Buffer Texture
+    pub depth_texture: wgpu::Texture,
     /// The Depth Buffer Texture View
     pub depth_texture_view: wgpu::TextureView,
     /// Whether HDR rendering is active
@@ -25,8 +27,13 @@ pub struct Gfx {
 impl Gfx {
     /// Create a new wgpu Instance and initialize the Gfx struct.
     /// Need to be called only once at the initialization of an app.
-    pub fn new(window: Arc<Window>) -> Gfx {
-        let config = crate::config::EngineConfig::load_from_file("config.json");
+    ///
+    /// # Arguments
+    /// * `window` - The window to create the graphics context for
+    /// * `config_path` - Optional path to the config file. Defaults to "config.json" if None.
+    pub fn new(window: Arc<Window>, config_path: Option<&str>) -> Gfx {
+        let config =
+            crate::config::EngineConfig::load_from_file(config_path.unwrap_or("config.json"));
 
         let window_size = window.inner_size();
 
@@ -50,8 +57,10 @@ impl Gfx {
         let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("depth_texture"),
             dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Depth24PlusStencil8,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            format: wgpu::TextureFormat::Depth32Float,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::TEXTURE_BINDING
+                | wgpu::TextureUsages::COPY_SRC,
             view_formats: &[],
             size: wgpu::Extent3d {
                 width: window_size.width,
@@ -70,6 +79,7 @@ impl Gfx {
             surface_config,
             device,
             queue,
+            depth_texture,
             depth_texture_view,
             is_hdr_active,
         }
@@ -101,7 +111,7 @@ impl Gfx {
             depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                 view: &self.depth_texture_view,
                 depth_ops: Some(wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(1.0),
+                    load: wgpu::LoadOp::Clear(1.0), // Far plane is 1.0 (reversed Z would use 0.0)
                     store: wgpu::StoreOp::Store,
                 }),
                 stencil_ops: None,
@@ -134,11 +144,13 @@ impl Gfx {
         self.surface.configure(&self.device, &self.surface_config);
 
         // Recreate depth buffer with new size
-        let depth_texture = self.device.create_texture(&wgpu::TextureDescriptor {
+        self.depth_texture = self.device.create_texture(&wgpu::TextureDescriptor {
             label: Some("depth_texture"),
             dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Depth24PlusStencil8,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            format: wgpu::TextureFormat::Depth32Float,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::TEXTURE_BINDING
+                | wgpu::TextureUsages::COPY_SRC,
             view_formats: &[],
             size: wgpu::Extent3d {
                 width: size.width,
@@ -149,7 +161,8 @@ impl Gfx {
             sample_count: 1,
         });
 
-        self.depth_texture_view =
-            depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
+        self.depth_texture_view = self
+            .depth_texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
     }
 }

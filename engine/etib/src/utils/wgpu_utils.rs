@@ -77,9 +77,7 @@ pub fn configure_surface(
 
     // Select format based on HDR mode
     let (surface_format, is_hdr) = match config.hdr_mode {
-        crate::config::HdrMode::Disabled => {
-            (select_sdr_format(&surface_caps), false)
-        }
+        crate::config::HdrMode::Disabled => (select_sdr_format(&surface_caps), false),
         crate::config::HdrMode::Enabled => {
             if let Some(fmt) = detect_hdr_support(&surface_caps) {
                 log::info!("HDR enabled: using format {:?}", fmt);

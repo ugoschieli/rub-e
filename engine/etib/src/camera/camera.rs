@@ -46,6 +46,8 @@ pub struct Camera {
     pub zfar: f32,
     /// The camera matrix (projection * view)
     pub matrix: cgmath::Matrix4<f32>,
+    /// The previous camera matrix (for occlusion culling reprojection)
+    pub prev_matrix: cgmath::Matrix4<f32>,
     /// The bind group associated with the matrix
     pub bind_group: BindGroup,
 }
@@ -56,6 +58,7 @@ pub struct CameraRaw {
     pub view_proj: [[f32; 4]; 4],
     pub inv_view: [[f32; 4]; 4],
     pub inv_proj: [[f32; 4]; 4],
+    pub prev_view_proj: [[f32; 4]; 4],
 }
 
 /// Camera controller for FPS-style keyboard and mouse input
@@ -102,6 +105,10 @@ pub struct CameraController {
     zoom: f32,
 }
 
+pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
+    1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.5, 1.0,
+);
+
 impl Camera {
     /// Create a new camera object
     pub fn new(
@@ -127,12 +134,13 @@ impl Camera {
                 cgmath::ortho(left, right, bottom, top, znear, zfar)
             }
         };
-        let matrix = proj * view;
+        let matrix = OPENGL_TO_WGPU_MATRIX * proj * view;
 
         let camera_raw = CameraRaw {
             view_proj: matrix.into(),
             inv_view: view.transpose().into(), // The view matrix is orthonormal its invert is equal to the transpose
             inv_proj: proj.invert().unwrap().into(),
+            prev_view_proj: matrix.into(), // Initialize prev with current
         };
 
         let bind_group = BindGroupBuilder::new()
@@ -140,7 +148,9 @@ impl Camera {
                 device,
                 0,
                 bytemuck::bytes_of(&camera_raw),
-                wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                wgpu::ShaderStages::VERTEX
+                    | wgpu::ShaderStages::FRAGMENT
+                    | wgpu::ShaderStages::COMPUTE,
             )
             .build(device, Some("Camera Bind Group"));
 
@@ -153,12 +163,16 @@ impl Camera {
             znear,
             zfar,
             matrix,
+            prev_matrix: matrix,
             bind_group,
         }
     }
 
     /// Update the camera matrix with the new camera position
-    pub fn update_matrix(&self, queue: &wgpu::Queue) -> cgmath::Matrix4<f32> {
+    pub fn update_matrix(&mut self, queue: &wgpu::Queue) -> cgmath::Matrix4<f32> {
+        // Store current matrix as previous before updating
+        self.prev_matrix = self.matrix;
+
         let view = cgmath::Matrix4::look_at_rh(self.eye, self.target, self.up);
         let proj = match self.projection {
             Projection::Perspective { fovy } => {
@@ -173,12 +187,14 @@ impl Camera {
             }
         };
 
-        let view_proj = proj * view;
+        let view_proj = OPENGL_TO_WGPU_MATRIX * proj * view;
+        self.matrix = view_proj;
 
         let camera_raw = CameraRaw {
             view_proj: view_proj.into(),
             inv_proj: proj.invert().unwrap().into(),
             inv_view: view.transpose().into(), // The view matrix is orthonormal its invert is equal to the transpose
+            prev_view_proj: self.prev_matrix.into(),
         };
         self.bind_group
             .write_buffer(&queue, 0, bytemuck::bytes_of(&camera_raw));
