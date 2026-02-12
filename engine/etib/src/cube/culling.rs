@@ -44,17 +44,6 @@ impl CullingPass {
                     },
                     count: None,
                 },
-                // Hi-Z Texture (Read Only Texture)
-                wgpu::BindGroupLayoutEntry {
-                    binding: 3,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: false },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
-                    },
-                    count: None,
-                },
             ],
         });
 
@@ -94,7 +83,6 @@ impl CullingPass {
         all_instances: &wgpu::Buffer,
         visible_instances: &wgpu::Buffer,
         indirect_buffer: &wgpu::Buffer,
-        hiz_view: &wgpu::TextureView,
     ) -> wgpu::BindGroup {
         device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Culling Bind Group"),
@@ -111,10 +99,6 @@ impl CullingPass {
                 wgpu::BindGroupEntry {
                     binding: 2,
                     resource: indirect_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: wgpu::BindingResource::TextureView(hiz_view),
                 },
             ],
         })

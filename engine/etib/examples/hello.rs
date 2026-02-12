@@ -45,15 +45,7 @@ struct MyGfx<'vertex> {
     visible_instances_buffer: wgpu::Buffer, // Contains visible instances (output from cull shader)
     indirect_buffer: wgpu::Buffer,      // Contains draw calls parameters
 
-    // Occlusion Culling resources
-    hiz_buffer: etib::cube::HiZBuffer,
-    occlusion_pass: etib::cube::OcclusionPass,
-    last_frame_depth: wgpu::Texture,
-    last_frame_depth_view: wgpu::TextureView,
-
     total_instance_count: u32,
-    last_camera_eye: cgmath::Point3<f32>,
-    last_camera_target: cgmath::Point3<f32>,
 }
 
 impl MyGame<'_> {
@@ -126,7 +118,7 @@ impl MyGame<'_> {
         // Create buffer for visible instances (Storage for compute output, Vertex for rendering)
         let visible_instances_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Visible Instances Buffer"),
-            size: (instance_data.len() * std::mem::size_of::<etib::cube::CubeRaw>()) as u64,
+            size: (instance_data.len() * size_of::<etib::cube::CubeRaw>()) as u64,
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::STORAGE,
             mapped_at_creation: false,
         });
@@ -168,8 +160,9 @@ impl MyGame<'_> {
         );
 
         // Configure HDR pipeline based on swapchain format
-        let config =
-            etib::config::EngineConfig::load_from_file(self.config_path.as_deref().unwrap_or("config.json"));
+        let config = etib::config::EngineConfig::load_from_file(
+            self.config_path.as_deref().unwrap_or("config.json"),
+        );
         let tonemap_mode = if gfx.is_hdr_active {
             etib::hdr::TonemappingMode::Hdr
         } else {
@@ -209,20 +202,8 @@ impl MyGame<'_> {
             Some("Skybox pipeline"),
         );
 
-        // Store initial camera position for movement detection
-        let initial_eye = camera.eye;
-        let initial_target = camera.target;
-
         // Initialize GPU Culling Pass
         let cull_pass = etib::cube::CullingPass::new(&device, &camera.bind_group.layout);
-
-        // Initialize Hi-Z Buffer and Occlusion Pass
-        let hiz_buffer = etib::cube::HiZBuffer::new(
-            &device,
-            window_size.width.next_power_of_two(),
-            window_size.height.next_power_of_two(),
-        );
-        let occlusion_pass = etib::cube::OcclusionPass::new(&device);
 
         // Create texture to store previous frame's depth
         let last_frame_depth = device.create_texture(&wgpu::TextureDescriptor {
@@ -275,7 +256,6 @@ impl MyGame<'_> {
             &all_instances_buffer,
             &visible_instances_buffer,
             &indirect_buffer,
-            &hiz_buffer.full_view,
         );
 
         let my_gfx = MyGfx {
@@ -291,13 +271,7 @@ impl MyGame<'_> {
             all_instances_buffer,
             visible_instances_buffer,
             indirect_buffer,
-            hiz_buffer,
-            occlusion_pass,
-            last_frame_depth,
-            last_frame_depth_view,
             total_instance_count: instance_count,
-            last_camera_eye: initial_eye,
-            last_camera_target: initial_target,
         };
 
         self.window = Some(window);
@@ -345,22 +319,9 @@ impl MyGame<'_> {
 
         // GPU Culling
         if self.enable_culling {
-            // 1. Generate Hi-Z Buffer from last frame's depth
-            /*
-            my_gfx.occlusion_pass.generate(
-                &gfx.device,
-                &mut encoder,
-                &my_gfx.hiz_buffer,
-                &my_gfx.last_frame_depth_view,
-            );
-            */
-
-            // 2. Reset instance count in indirect buffer to 0
-            // Offset 4 is where instance_count is located in DrawIndexedIndirectArgs
             gfx.queue
                 .write_buffer(&my_gfx.indirect_buffer, 4, &[0, 0, 0, 0]);
 
-            // 3. Dispatch Culling Compute Shader
             my_gfx.cull_pass.cull(
                 &mut encoder,
                 &my_gfx.camera.bind_group.bind_group,
@@ -401,31 +362,6 @@ impl MyGame<'_> {
             render_pass.set_bind_group(1, &my_gfx.skybox.bind_group, &[]);
             render_pass.draw(0..3, 0..1);
         }
-
-        // Copy current depth to last_frame_depth for next frame
-        /*
-        if self.enable_culling {
-            encoder.copy_texture_to_texture(
-                wgpu::TexelCopyTextureInfo {
-                    texture: &gfx.depth_texture,
-                    mip_level: 0,
-                    origin: wgpu::Origin3d::ZERO,
-                    aspect: wgpu::TextureAspect::DepthOnly,
-                },
-                wgpu::TexelCopyTextureInfo {
-                    texture: &my_gfx.last_frame_depth,
-                    mip_level: 0,
-                    origin: wgpu::Origin3d::ZERO,
-                    aspect: wgpu::TextureAspect::All,
-                },
-                wgpu::Extent3d {
-                    width: gfx.surface_config.width,
-                    height: gfx.surface_config.height,
-                    depth_or_array_layers: 1,
-                },
-            );
-        }
-        */
 
         // Tonemap the HDR Rgba16Float Texture to the original Rgba8UnormSRGB Texture
         my_gfx.hdr.process(&mut encoder, &view);
@@ -516,41 +452,12 @@ impl ApplicationHandler for MyGame<'_> {
 
                         my_gfx.hdr.resize(gfx.device(), size.width, size.height);
 
-                        // Recreate Hi-Z and Last Frame Depth
-                        my_gfx.hiz_buffer = etib::cube::HiZBuffer::new(
-                            gfx.device(),
-                            size.width.next_power_of_two(),
-                            size.height.next_power_of_two(),
-                        );
-
-                        my_gfx.last_frame_depth =
-                            gfx.device().create_texture(&wgpu::TextureDescriptor {
-                                label: Some("Last Frame Depth"),
-                                size: wgpu::Extent3d {
-                                    width: size.width,
-                                    height: size.height,
-                                    depth_or_array_layers: 1,
-                                },
-                                mip_level_count: 1,
-                                sample_count: 1,
-                                dimension: wgpu::TextureDimension::D2,
-                                format: wgpu::TextureFormat::Depth32Float,
-                                usage: wgpu::TextureUsages::TEXTURE_BINDING
-                                    | wgpu::TextureUsages::COPY_DST
-                                    | wgpu::TextureUsages::RENDER_ATTACHMENT,
-                                view_formats: &[],
-                            });
-                        my_gfx.last_frame_depth_view = my_gfx
-                            .last_frame_depth
-                            .create_view(&wgpu::TextureViewDescriptor::default());
-
                         // Recreate culling bind group with new Hi-Z view
                         my_gfx.culling_bind_group = my_gfx.cull_pass.create_bind_group(
                             gfx.device(),
                             &my_gfx.all_instances_buffer,
                             &my_gfx.visible_instances_buffer,
                             &my_gfx.indirect_buffer,
-                            &my_gfx.hiz_buffer.full_view,
                         );
                     }
 
@@ -592,9 +499,15 @@ fn main() -> anyhow::Result<()> {
 
     let args: Vec<String> = std::env::args().collect();
     if args.len() < 2 {
-        eprintln!("Usage: {} <model_file> [--isometric] [--config <path>]", args[0]);
+        eprintln!(
+            "Usage: {} <model_file> [--isometric] [--config <path>]",
+            args[0]
+        );
         eprintln!("Example: {} examples/models/cat.model", args[0]);
-        eprintln!("Example: {} examples/models/cat.model --config my_config.json", args[0]);
+        eprintln!(
+            "Example: {} examples/models/cat.model --config my_config.json",
+            args[0]
+        );
         std::process::exit(1);
     }
     let model_path = args[1].clone();

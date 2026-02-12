@@ -7,7 +7,6 @@ pub mod camera;
 /// Module containing the cube data (Vertex + Instance) and model loading
 pub mod cube;
 mod game;
-mod gbuffer;
 mod gfx;
 /// Utility module
 pub mod utils;
