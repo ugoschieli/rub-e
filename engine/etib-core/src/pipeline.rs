@@ -17,15 +17,16 @@ impl Pipeline {
         shader: &Shader,
         surface_config: &wgpu::SurfaceConfiguration,
         vertex_buffer: &VertexBuffer<T>,
+        label: &str,
     ) -> Pipeline {
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: None,
+            label: Some(label),
             bind_group_layouts,
             push_constant_ranges: &[],
         });
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: None,
+            label: Some(label),
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader.module,
@@ -73,15 +74,16 @@ impl Pipeline {
         shader: &Shader,
         surface_config: &wgpu::SurfaceConfiguration,
         vertex_buffer_layouts: &[wgpu::VertexBufferLayout],
+        label: &str,
     ) -> Pipeline {
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: None,
+            label: Some(label),
             bind_group_layouts,
             push_constant_ranges: &[],
         });
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: None,
+            label: Some(label),
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader.module,
@@ -134,7 +136,7 @@ impl Pipeline {
         label: Option<&str>,
     ) -> Pipeline {
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: None,
+            label,
             bind_group_layouts,
             push_constant_ranges: &[],
         });

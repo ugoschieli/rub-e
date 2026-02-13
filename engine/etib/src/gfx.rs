@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
-use winit::{dpi::PhysicalSize, window::Window};
-
+use crate::config::EngineConfig;
 use crate::utils::wgpu_utils;
+use winit::{dpi::PhysicalSize, window::Window};
 
 /// A wrapper around muliple wgpu structs that holds the graphics state of the app
 pub struct Gfx {
@@ -31,10 +31,7 @@ impl Gfx {
     /// # Arguments
     /// * `window` - The window to create the graphics context for
     /// * `config_path` - Optional path to the config file. Defaults to "config.json" if None.
-    pub fn new(window: Arc<Window>, config_path: Option<&str>) -> Gfx {
-        let config =
-            crate::config::EngineConfig::load_from_file(config_path.unwrap_or("config.json"));
-
+    pub fn new(window: Arc<Window>, config: &EngineConfig) -> Gfx {
         let window_size = window.inner_size();
 
         let instance = wgpu_utils::create_instance();
@@ -104,9 +101,10 @@ impl Gfx {
     pub fn render_pass<'gfx: 'tex, 'tex>(
         &'gfx self,
         color_attachments: &'tex [Option<wgpu::RenderPassColorAttachment<'tex>>],
+        label: &'tex str,
     ) -> wgpu::RenderPassDescriptor<'tex> {
         wgpu::RenderPassDescriptor {
-            label: None,
+            label: Some(label),
             color_attachments,
             depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                 view: &self.depth_texture_view,

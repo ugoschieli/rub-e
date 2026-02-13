@@ -65,7 +65,7 @@ impl<G: Game> ApplicationHandler for EngineRunner<G> {
                 .create_window(WindowAttributes::default())
                 .unwrap(),
         );
-        let gfx = Gfx::new(window.clone(), None);
+        let gfx = Gfx::new(window.clone(), &self.config);
         let mut ctx = EngineContext {
             gfx,
             time: TimeState::new(),

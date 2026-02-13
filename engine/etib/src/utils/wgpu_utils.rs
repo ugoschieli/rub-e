@@ -35,7 +35,7 @@ pub fn create_device(
 ) -> impl Future<Output = Result<(wgpu::Device, wgpu::Queue), wgpu::RequestDeviceError>> {
     adapter.request_device(&wgpu::DeviceDescriptor {
         required_features: wgpu::Features::empty(),
-        label: None,
+        label: Some("ETIB: device"),
         ..Default::default()
     })
 }

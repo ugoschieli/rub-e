@@ -256,7 +256,7 @@ impl HdrLoader {
         });
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: None,
+            label: Some("HdrLoader::pipeline_layout"),
             bind_group_layouts: &[&equirect_layout],
             push_constant_ranges: &[],
         });

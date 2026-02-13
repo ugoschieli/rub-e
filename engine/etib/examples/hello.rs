@@ -281,7 +281,9 @@ impl Game for MyGame<'_> {
 
         let mut encoder = gfx
             .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("ETIB command encoder"),
+            });
 
         // GPU Culling
         if self.enable_culling {
@@ -301,7 +303,8 @@ impl Game for MyGame<'_> {
             let color_attachments = [Some(etib::Gfx::color_attachments_from_view(
                 &my_gfx.hdr.view(),
             ))];
-            let mut render_pass = encoder.begin_render_pass(&gfx.render_pass(&color_attachments));
+            let mut render_pass = encoder
+                .begin_render_pass(&gfx.render_pass(&color_attachments, "ETIB: render pass"));
 
             // Render Scene
             render_pass.set_pipeline(&my_gfx.pipeline.pipeline);
