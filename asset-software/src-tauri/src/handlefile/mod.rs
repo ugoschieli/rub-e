@@ -4,7 +4,7 @@ use crate::commands::get_db_path;
 pub use file::create_asset_file; 
 
 mod folder;
-mod file;
+pub mod file;
 
 // check si tout les dossier de projet sont la 
 // et aussi qu'on est bien tous les fichiers d'asset 

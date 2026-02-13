@@ -35,9 +35,19 @@ pub fn add_asset(app: AppHandle, name: String, project_id: u32) -> Result<(), St
 
 
 #[tauri::command]
-pub fn delete_asset(app: AppHandle, name: String) {
-    let path = get_db_path(&app, "data_assets.json");
-    json::assets::remove_asset(&path, &name);
+pub fn delete_asset(app: AppHandle, name: String) -> Result<(), String> {
+    let assets_db_path = get_db_path(&app, "data_assets.json");
+    let assets_root = get_folder_assets_path(&app);
+    let assets = json::assets::get_assets(&assets_db_path);
+    if let Some(asset) = assets.iter().find(|a| a.name == name) {
+        let full_path = assets_root.join(&asset.path);
+        if full_path.exists() {
+            std::fs::remove_file(&full_path)
+                .map_err(|e| format!("Erreur suppression fichier asset : {}", e))?;
+        }
+    }
+    json::assets::remove_asset(&assets_db_path, &name);
+    Ok(())
 }
 
 #[tauri::command]
@@ -85,9 +95,25 @@ pub fn add_project(app: AppHandle, name: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn delete_project(app: AppHandle, name: String) {
-    let path = get_db_path(&app, "data_projects.json");
-    json::projects::remove_project(&path, &name);
+pub fn delete_project(app: AppHandle, name: String) -> Result<(), String> {
+    let assets_root = get_folder_assets_path(&app);
+    let project_path = assets_root.join(&name);
+
+    // supp dossier 
+    if project_path.exists() {
+        std::fs::remove_dir_all(&project_path)
+            .map_err(|e| format!("Erreur lors de la suppression du dossier projet '{}' : {}", name, e))?;
+    }
+
+    // supp du projet dans le json
+    let projects_db_path = get_db_path(&app, "data_projects.json");
+    json::projects::remove_project(&projects_db_path, &name);
+
+    // sync des assets (supp les assets qui n'ont plus de projet)
+    let assets_db_path = get_db_path(&app, "data_assets.json");
+    handlefile::file::clean_missing_assets(&assets_root, &assets_db_path);
+
+    Ok(())
 }
 
 

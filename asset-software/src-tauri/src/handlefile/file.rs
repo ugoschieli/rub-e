@@ -1,8 +1,8 @@
 use crate::json::projects::get_projects; 
 use crate::json::assets::{get_assets, add_asset, add_project_to_asset, remove_asset}; 
 use crate::json::model::Project; 
-use std::path::{Path, PathBuf}; // Ajout de PathBuf
-use std::fs; // Ajout de fs pour l'écriture des fichiers
+use std::path::{Path, PathBuf};
+use std::fs;
 
 /// Synchronise les fichiers locaux (disque) vers le JSON.
 pub fn sync_local_assets(assets_root: &Path, assets_db_path: &Path, projects_db_path: &Path) {
