@@ -1,8 +1,29 @@
 use crate::json::{self, model::AssetCategory}; 
 use crate::json::model::Project;
-use tauri::{AppHandle};
+use tauri::{AppHandle, Builder, Wry};
 use std::path::PathBuf;
 use crate::handlefile;
+
+pub fn register_handlers(builder: Builder<Wry>) -> Builder<Wry> {
+    builder.invoke_handler(tauri::generate_handler![
+        // Assets
+        get_all_assets,
+        add_asset,
+        delete_asset,
+        add_category_to_asset,
+        add_project_to_asset,
+
+        // Categories
+        get_all_categories,
+        add_category,
+        delete_category,
+
+        // Projects
+        get_all_projects,
+        add_project,
+        delete_project,
+    ])
+}
 
 // --- Assets Commands ---
 #[tauri::command]
@@ -90,6 +111,14 @@ pub fn get_all_projects(app: AppHandle) -> Vec<json::model::Project> {
 
 #[tauri::command]
 pub fn add_project(app: AppHandle, name: String) -> Result<(), String> { 
+    // Création du dossier projet
+    let assets_root = get_folder_assets_path(&app);
+    let project_folder = assets_root.join(&name);
+    
+    if !project_folder.exists() {
+        std::fs::create_dir_all(&project_folder)
+            .map_err(|e| format!("Erreur lors de la création du dossier projet : {}", e))?;
+    }
     let path = get_db_path(&app, "data_projects.json");
     json::projects::add_project(&path, &name)
 }
