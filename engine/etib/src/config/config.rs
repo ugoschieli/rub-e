@@ -19,9 +19,6 @@ pub struct EngineConfig {
     /// Whether VSync is enabled
     #[serde(default = "default_vsync")]
     pub vsync: bool,
-    /// Whether the experimental raytracing pipeline is enabled
-    #[serde(default = "default_experimental_raytracing_pipeline")]
-    pub experimental_raytracing_pipeline: bool,
     /// HDR rendering mode (auto, enabled, disabled)
     #[serde(default = "default_hdr_mode")]
     pub hdr_mode: HdrMode,
@@ -35,10 +32,6 @@ pub struct EngineConfig {
 
 fn default_vsync() -> bool {
     true
-}
-
-fn default_experimental_raytracing_pipeline() -> bool {
-    false
 }
 
 fn default_hdr_mode() -> HdrMode {
@@ -57,7 +50,6 @@ impl Default for EngineConfig {
     fn default() -> Self {
         Self {
             vsync: true,
-            experimental_raytracing_pipeline: false,
             hdr_mode: HdrMode::Auto,
             peak_brightness_nits: 1000.0,
             culling: true,

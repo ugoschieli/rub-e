@@ -13,6 +13,7 @@ use winit::{application::ApplicationHandler, error::EventLoopError, event_loop::
 pub struct EngineContext {
     pub gfx: Gfx,
     pub time: TimeState,
+    pub config: Arc<EngineConfig>,
     // window is NOT exposed directly — engine handles it
     window: Arc<Window>,
 }
@@ -54,7 +55,7 @@ struct EngineRunner<G: Game> {
     window: Option<Arc<Window>>,
     ctx: Option<EngineContext>,
     game: Option<G>,
-    config: EngineConfig,
+    config: Arc<EngineConfig>,
     params: Option<G::InitParams>,
 }
 
@@ -69,6 +70,7 @@ impl<G: Game> ApplicationHandler for EngineRunner<G> {
         let mut ctx = EngineContext {
             gfx,
             time: TimeState::new(),
+            config: self.config.clone(),
             window: window.clone(),
         };
         let params = self.params.take().unwrap();
@@ -129,7 +131,7 @@ pub fn run<G: Game>(
         window: None,
         ctx: None,
         game: None,
-        config,
+        config: Arc::new(config),
         params,
     };
     event_loop.run_app(&mut runner)

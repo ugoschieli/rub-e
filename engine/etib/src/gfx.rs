@@ -47,10 +47,6 @@ impl Gfx {
             if is_hdr_active { "ACTIVE" } else { "INACTIVE" }
         );
 
-        if config.experimental_raytracing_pipeline {
-        } else {
-        }
-
         let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("depth_texture"),
             dimension: wgpu::TextureDimension::D2,

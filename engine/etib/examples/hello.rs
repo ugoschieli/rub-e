@@ -1,18 +1,33 @@
 use cgmath::InnerSpace;
+use clap::Parser;
 use log::info;
 use wgpu::util::DeviceExt;
 use winit::dpi::PhysicalSize;
 use winit::event::{DeviceEvent, WindowEvent};
 use winit::keyboard::{KeyCode, PhysicalKey};
 
+use etib::config::EngineConfig;
 use etib::{EngineContext, Game};
 use etib_core::bindgroup::BindGroupBuilder;
 use etib_core::buffer::BufferExt;
 
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Args {
+    /// Engine configuration file
+    #[arg(short, long, value_name = "FILE")]
+    config: Option<String>,
+
+    #[arg(long)]
+    isometric: bool,
+
+    /// Path of the model to render
+    model_path: String,
+}
+
 struct MyParams {
     model_path: String,
     is_isometric: bool,
-    config_path: Option<String>,
 }
 
 struct MyGame<'vertex> {
@@ -47,7 +62,6 @@ impl Game for MyGame<'_> {
     type InitParams = MyParams;
 
     fn init(ctx: &mut EngineContext, params: Self::InitParams) -> Self {
-        // Check if the model file exists
         // Calculate initial camera angles for FPS camera
         // Camera starts at (0, 30, 80) looking at (0, 10, 0) - zoomed out view
         let initial_eye = cgmath::Point3::new(0.0_f32, 30.0, 80.0);
@@ -168,9 +182,6 @@ impl Game for MyGame<'_> {
         );
 
         // Configure HDR pipeline based on swapchain format
-        let config = etib::config::EngineConfig::load_from_file(
-            params.config_path.as_deref().unwrap_or("config.json"),
-        );
         let tonemap_mode = if gfx.is_hdr_active {
             etib::hdr::TonemappingMode::Hdr
         } else {
@@ -180,7 +191,7 @@ impl Game for MyGame<'_> {
             &device,
             &gfx.surface_config,
             tonemap_mode,
-            config.peak_brightness_nits,
+            ctx.config.peak_brightness_nits,
         );
 
         // Skybox pipeline
@@ -242,7 +253,7 @@ impl Game for MyGame<'_> {
             cursor_grabbed: false,
             frame_count: 0,
             fps_update_timer: 0.0,
-            enable_culling: config.culling,
+            enable_culling: ctx.config.culling,
         }
     }
 
@@ -410,42 +421,15 @@ impl Game for MyGame<'_> {
 
 fn main() -> anyhow::Result<()> {
     env_logger::init();
+    let args = Args::parse();
+
     info!("Initializing ETIB");
 
-    let args: Vec<String> = std::env::args().collect();
-    if args.len() < 2 {
-        eprintln!(
-            "Usage: {} <model_file> [--isometric] [--config <path>]",
-            args[0]
-        );
-        eprintln!("Example: {} examples/models/cat.model", args[0]);
-        eprintln!(
-            "Example: {} examples/models/cat.model --config my_config.json",
-            args[0]
-        );
-        std::process::exit(1);
-    }
-    let model_path = args[1].clone();
-    let is_isometric = args.contains(&"--isometric".to_string());
-
-    // Parse --config argument
-    let config_path = args
-        .iter()
-        .position(|arg| arg == "--config")
-        .and_then(|i| args.get(i + 1).cloned());
-
-    if !std::path::Path::new(&model_path).exists() {
-        eprintln!("Error: Model file '{}' does not exist", model_path);
-        std::process::exit(1);
-    }
-
-    let config =
-        etib::config::EngineConfig::load_from_file(config_path.as_deref().unwrap_or("config.json"));
+    let config = EngineConfig::load_from_file(args.config.as_deref().unwrap_or("config.json"));
 
     let params = MyParams {
-        is_isometric,
-        model_path,
-        config_path,
+        is_isometric: args.isometric,
+        model_path: args.model_path,
     };
 
     etib::run::<MyGame>(config, Some(params))?;
