@@ -22,7 +22,7 @@ export default function TagPage() {
     if (!category) return []
 
     return data_assets
-      .filter((asset) => asset.category_id.includes(category.id))
+      .filter((asset) => asset.category_id.some((cat) => cat.id === category.id))
       .map((asset) => ({
         id: asset.id,
         name: asset.name,
@@ -35,8 +35,8 @@ export default function TagPage() {
   return (
     <div className="flex flex-wrap p-4 gap-4">
       {assets.length > 0 ? (
-        assets.map((asset, i) =>
-          <Link key={i} href={`/editor/${asset.id}`}>
+        assets.map((asset) =>
+          <Link key={asset.id} href={`/editor/${asset.id}`}>
             <AssetCard asset={asset} />
           </Link>)
       ) : (
