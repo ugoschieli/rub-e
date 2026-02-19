@@ -57,14 +57,8 @@ mod tests {
     use super::*;
     use std::path::PathBuf;
 
-    // Helper to get a unique test path
-    fn get_test_path() -> PathBuf {
-        PathBuf::from("test_data_projects.json")
-    }
-
-    // Helper to clean up after each test
-    fn cleanup() {
-        let path = get_test_path();
+    fn cleanup(filename: &str) {
+        let path = PathBuf::from(filename);
         if path.exists() {
             let _ = fs::remove_file(path);
         }
@@ -72,27 +66,26 @@ mod tests {
 
     #[test]
     fn test_add_and_get_project() {
-        cleanup();
-        let path = get_test_path();
+        let filename = "test_projects_add.json"; 
+        cleanup(filename);
+        let path = PathBuf::from(filename);
         
-        // Test adding a project
         add_project(&path, "Projet Alpha").unwrap();
         
         let projects = get_projects(&path);
-        println!("Projects: {:?}", projects);
-        
         assert_eq!(projects.len(), 1);
         assert_eq!(projects[0].name, "Projet Alpha");
         assert_eq!(projects[0].id, 1);
         
-        cleanup();
+        cleanup(filename);
     }
     
 
     #[test]
     fn test_remove_project() {
-        cleanup();
-        let path = get_test_path();
+        let filename = "test_projects_remove.json";
+        cleanup(filename);
+        let path = PathBuf::from(filename);
         
         add_project(&path, "Projet A").unwrap();
         add_project(&path, "Projet B").unwrap();
@@ -100,38 +93,35 @@ mod tests {
         remove_project(&path, "Projet A");
         
         let projects = get_projects(&path);
-        println!("Projects after removal: {:?}", projects);
-        
         assert_eq!(projects.len(), 1);
-        assert_eq!(projects[0].name, "Projet B"); // Only B should remain
+        assert_eq!(projects[0].name, "Projet B");
         
-        cleanup();
+        cleanup(filename);
     }
 
     #[test]
     fn test_persistence() {
-        cleanup();
-        let path = get_test_path();
+        let filename = "test_projects_persist.json"; 
+        cleanup(filename);
+        let path = PathBuf::from(filename);
         
-        // Create and save a project
         add_project(&path, "Persistent Project").unwrap();
-        assert!(path.exists(), "Le fichier JSON doit être créé");
+        assert!(path.exists());
         
-        // Load projects from file
         let loaded_projects = get_projects(&path);
         assert_eq!(loaded_projects[0].name, "Persistent Project");
-        assert_eq!(loaded_projects[0].id, 1);
         
-        cleanup();
+        cleanup(filename);
     }
     
     #[test]
     fn test_init() {
-        cleanup();
-        let path = get_test_path();
+        let filename = "test_projects_init.json";
+        cleanup(filename);
+        let path = PathBuf::from(filename);
+        
         assert!(!path.exists());
 
-        // Initialize the projects file
         init(&path);
         assert!(path.exists());
 
@@ -139,6 +129,6 @@ mod tests {
         assert_eq!(projects.len(), 1);
         assert_eq!(projects[0].name, "Mon Premier Projet");
 
-        cleanup();
+        cleanup(filename);
     }
 }

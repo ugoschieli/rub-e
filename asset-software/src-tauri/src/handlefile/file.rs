@@ -4,7 +4,7 @@ use crate::json::model::Project;
 use std::path::{Path, PathBuf};
 use std::fs;
 
-/// Synchronise les fichiers locaux (disque) vers le JSON.
+/// Sync assets on disk with the JSON database, adding new ones and removing missing ones
 pub fn sync_local_assets(assets_root: &Path, assets_db_path: &Path, projects_db_path: &Path) {
     let projects = get_projects(projects_db_path);
     let current_assets = get_assets(assets_db_path);
@@ -58,7 +58,7 @@ fn scan_folder(
     }
 }
 
-/// Nettoie les entrées du JSON qui ne correspondent plus à aucun fichier réel.
+/// Clean assets in JSON are missing on disk
 pub fn clean_missing_assets(assets_root: &Path, assets_db_path: &Path) {
     let current_assets = get_assets(assets_db_path);
     for asset in current_assets {
@@ -70,11 +70,7 @@ pub fn clean_missing_assets(assets_root: &Path, assets_db_path: &Path) {
     }
 }
 
-pub fn create_asset_file(
-    root_path: &Path, 
-    project_name: &str, 
-    asset_name: &str
-) -> Result<PathBuf, String> {
+pub fn create_asset_file(root_path: &Path, project_name: &str, asset_name: &str) -> Result<PathBuf, String> {
     let safe_project_name = sanitize_filename(project_name);
     let safe_asset_name = sanitize_filename(asset_name);
 
@@ -102,4 +98,33 @@ fn sanitize_filename(name: &str) -> String {
     name.replace(['/', '\\', ':', '*', '?', '"', '<', '>', '|'], "_")
         .trim() 
         .to_string()
+}
+
+#[cfg(test)]
+mod tests { 
+    use super::*;
+    use std::fs;
+
+    fn cleanup_folder(folder: &str) {
+        let path = PathBuf::from(folder);
+        if path.exists() {
+            let _ = fs::remove_dir_all(path);
+        }
+    }
+
+    #[test]
+    fn test_create_asset_file() {
+        let test_root = "test_assets_root";
+        cleanup_folder(test_root);
+
+        let result = create_asset_file(Path::new(test_root), "TestProject", "TestAsset");
+        assert!(result.is_ok());
+
+        let created_file = result.unwrap();
+        assert!(created_file.exists());
+        assert_eq!(created_file.file_name().unwrap(), "TestAsset.aaa");
+
+        // Cleanup after test
+        cleanup_folder(test_root);
+    }
 }

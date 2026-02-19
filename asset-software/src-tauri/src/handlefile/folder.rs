@@ -1,4 +1,4 @@
-use crate::json::projects::{get_projects, add_project, remove_project}; // Ajout de remove_project
+use crate::json::projects::{get_projects, add_project, remove_project};
 use std::path::{Path};
 
 
@@ -16,8 +16,8 @@ pub fn check_projet_folder(root_path: &Path, json_path: &Path) {
     clean_missing_projects(root_path, json_path);
 }
 
-/// Ajoute les dossiers physiques manquant dans le JSON
-pub fn sync_local_projects(root_path: &Path, json_path: &Path) {
+// add new projects found on disk to JSON, and remove from JSON projects whose folder has been deleted
+fn sync_local_projects(root_path: &Path, json_path: &Path) {
     let current_projects = get_projects(json_path);
     
     if let Ok(entries) = std::fs::read_dir(root_path) {
@@ -39,7 +39,7 @@ pub fn sync_local_projects(root_path: &Path, json_path: &Path) {
     }
 }
 
-/// Supprime du JSON les projets dont le dossier n'existe plus
+/// Remove from JSON projects whose folder no longer exists
 fn clean_missing_projects(root_path: &Path, json_path: &Path) {
     let projects = get_projects(json_path);
     for project in projects {
@@ -48,5 +48,42 @@ fn clean_missing_projects(root_path: &Path, json_path: &Path) {
             println!("Projet fantôme détecté (dossier supprimé) : {}. Suppression du JSON...", project.name);
             remove_project(json_path, &project.name);
         }
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    fn cleanup(filename: &str) {
+        let path = PathBuf::from(filename);
+        if path.exists() {
+            let _ = std::fs::remove_file(path);
+        }
+    }
+
+    #[test]
+    fn test_sync_local_projects() {
+        let filename = "test_sync_projects.json";
+        cleanup(filename);
+        let path = PathBuf::from(filename);
+        
+        // Simulate local folders
+        let test_root = PathBuf::from("test_assets");
+        let _ = std::fs::create_dir_all(test_root.join("ProjetA"));
+        let _ = std::fs::create_dir_all(test_root.join("ProjetB"));
+        
+        // Sync with JSON
+        check_projet_folder(&test_root, &path);
+        
+        let projects = get_projects(&path);
+        assert!(projects.iter().any(|p| p.name == "ProjetA"));
+        assert!(projects.iter().any(|p| p.name == "ProjetB"));
+        
+        // Cleanup
+        let _ = std::fs::remove_dir_all(test_root);
+        cleanup(filename);
     }
 }
