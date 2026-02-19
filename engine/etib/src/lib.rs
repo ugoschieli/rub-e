@@ -8,6 +8,8 @@ pub mod camera;
 pub mod cube;
 mod game;
 mod gfx;
+/// High-level scene renderer (static + dynamic models, culling, draw calls)
+pub mod scene;
 /// Utility module
 pub mod utils;
 // mod raytracing;
@@ -21,4 +23,5 @@ mod vertex;
 
 pub use crate::game::*;
 pub use crate::gfx::*;
+pub use crate::scene::Scene;
 pub use crate::vertex::*;

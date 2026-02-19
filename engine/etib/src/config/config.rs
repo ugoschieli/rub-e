@@ -25,9 +25,6 @@ pub struct EngineConfig {
     /// Peak brightness in nits for HDR displays (typical range: 400-10000)
     #[serde(default = "default_peak_brightness_nits")]
     pub peak_brightness_nits: f32,
-    /// Whether frustum culling is enabled
-    #[serde(default = "default_culling")]
-    pub culling: bool,
 }
 
 fn default_vsync() -> bool {
@@ -42,17 +39,12 @@ fn default_peak_brightness_nits() -> f32 {
     1000.0
 }
 
-fn default_culling() -> bool {
-    true
-}
-
 impl Default for EngineConfig {
     fn default() -> Self {
         Self {
             vsync: true,
             hdr_mode: HdrMode::Auto,
             peak_brightness_nits: 1000.0,
-            culling: true,
         }
     }
 }
