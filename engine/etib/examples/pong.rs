@@ -7,7 +7,7 @@ use winit::keyboard::{KeyCode, PhysicalKey};
 
 use etib::camera::{Camera, Projection};
 use etib::config::EngineConfig;
-use etib::cube::{DynamicModel, ModelCube, AABB};
+use etib::cube::{DynamicModel, ModelCube};
 use etib::{EngineContext, Game, Scene};
 
 // ---------------------------------------------------------------------------
@@ -51,15 +51,13 @@ fn unit_cube(x: f32, y: f32, z: f32, r: f32, g: f32, b: f32) -> ModelCube {
     ModelCube {
         position: Vector3::new(x, y, z),
         color: Vector3::new(r, g, b),
-        bounds: AABB::from_center_half_extents(
-            cgmath::Point3::new(x, y, z),
-            Vector3::new(0.5, 0.5, 0.5),
-        ),
     }
 }
 
 fn make_paddle(r: f32, g: f32, b: f32) -> DynamicModel {
-    let cubes = (-2..=2).map(|i| unit_cube(0.0, i as f32, 0.0, r, g, b)).collect();
+    let cubes = (-2..=2)
+        .map(|i| unit_cube(0.0, i as f32, 0.0, r, g, b))
+        .collect();
     DynamicModel::from_cubes(cubes)
 }
 
@@ -139,7 +137,11 @@ impl PongGame {
     fn reset_ball(&mut self, toward_right: bool) {
         self.ball_x = 0.0;
         self.ball_y = 0.0;
-        let vx = if toward_right { BALL_SPEED_INIT } else { -BALL_SPEED_INIT };
+        let vx = if toward_right {
+            BALL_SPEED_INIT
+        } else {
+            -BALL_SPEED_INIT
+        };
         self.ball_vel_x = vx;
         self.ball_vel_y = BALL_SPEED_INIT * 0.4;
     }
@@ -169,8 +171,7 @@ impl Game for PongGame {
         let right_paddle = make_paddle(1.0, 0.45, 0.1); // orange
         let ball = make_ball();
 
-        let max_dyn =
-            left_paddle.cube_count() + right_paddle.cube_count() + ball.cube_count();
+        let max_dyn = left_paddle.cube_count() + right_paddle.cube_count() + ball.cube_count();
 
         let mut scene = Scene::new(
             gfx,
@@ -312,13 +313,18 @@ impl Game for PongGame {
             self.fps_timer = 0.0;
         }
 
-        let mut encoder = gfx.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("Pong encoder"),
-        });
+        let mut encoder = gfx
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Pong encoder"),
+            });
 
-        my_gfx
-            .scene
-            .render(&mut encoder, gfx, &view, &my_gfx.camera.bind_group.bind_group);
+        my_gfx.scene.render(
+            &mut encoder,
+            gfx,
+            &view,
+            &my_gfx.camera.bind_group.bind_group,
+        );
 
         gfx.queue.submit(Some(encoder.finish()));
         frame.present();
@@ -329,7 +335,9 @@ impl Game for PongGame {
         let my_gfx = self.my_gfx.as_mut().unwrap();
         my_gfx.camera.aspect = size.width as f32 / size.height as f32;
         my_gfx.camera.update_matrix(&ctx.gfx.queue);
-        my_gfx.scene.resize(ctx.gfx.device(), size.width, size.height);
+        my_gfx
+            .scene
+            .resize(ctx.gfx.device(), size.width, size.height);
     }
 
     fn input(&mut self, _ctx: &mut EngineContext, event: &WindowEvent) {

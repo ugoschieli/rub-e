@@ -5,8 +5,6 @@
 
 use std::fs;
 
-use super::bounds::AABB;
-
 /// Represents a cube in a model with position and color
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ModelCube {
@@ -14,8 +12,6 @@ pub struct ModelCube {
     pub position: cgmath::Vector3<f32>,
     /// The RGB color of the cube (values in range [0.0, 1.0])
     pub color: cgmath::Vector3<f32>,
-    /// World-space AABB for frustum culling
-    pub bounds: AABB,
 }
 
 /// Load cubes from a model file
@@ -78,10 +74,6 @@ pub fn load_model(path: &str) -> anyhow::Result<Vec<ModelCube>> {
                 ModelCube {
                     position,
                     color: cgmath::Vector3::new(1.0, 1.0, 1.0),
-                    bounds: AABB::from_center_half_extents(
-                        cgmath::Point3::new(x, y, z),
-                        cgmath::Vector3::new(0.5, 0.5, 0.5),
-                    ),
                 }
             }
             6 => {
@@ -96,10 +88,6 @@ pub fn load_model(path: &str) -> anyhow::Result<Vec<ModelCube>> {
                 ModelCube {
                     position,
                     color: cgmath::Vector3::new(r, g, b),
-                    bounds: AABB::from_center_half_extents(
-                        cgmath::Point3::new(x, y, z),
-                        cgmath::Vector3::new(0.5, 0.5, 0.5),
-                    ),
                 }
             }
             _ => continue, // Skip invalid lines
