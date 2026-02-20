@@ -23,6 +23,9 @@ const PADDLE_X: f32 = 18.0;
 /// Half-height of a paddle in cube units (5 cubes → ±2.5).
 const PADDLE_HALF_H: f32 = 2.5;
 const PADDLE_SPEED: f32 = 12.0;
+const SPEED_BOOST_MULTIPLIER: f32 = 2.0;
+const SPEED_BOOST_DURATION: f32 = 2.0;
+const SPEED_BOOST_COOLDOWN: f32 = 15.0;
 /// Maximum paddle center Y so the paddle never clips through a wall.
 /// Wall inner face: FIELD_HALF_H − 0.5. Outermost paddle cube face: center + PADDLE_HALF_H + 0.5.
 const PADDLE_MAX_Y: f32 = FIELD_HALF_H - PADDLE_HALF_H - 1.0;
@@ -33,13 +36,16 @@ const PADDLE_MAX_Y: f32 = FIELD_HALF_H - PADDLE_HALF_H - 1.0;
 const BALL_SPEED_INIT: f32 = 10.0;
 const BALL_SPEED_MAX: f32 = 40.0;
 const BALL_SPEED_INC: f32 = 1.5;
+const BALL_GRAVITY: f32 = 50.0;
+const BALL_LOB_SPEED: f32 = 30.0;
+const BALL_LOB_X_FACTOR: f32 = 0.9;
 /// Ball center Y limit so it never clips into a wall (wall face − ball radius).
 const WALL_LIMIT: f32 = FIELD_HALF_H - 1.0;
 
 // ---------------------------------------------------------------------------
 // Camera  — perspective from a low angle to reveal cube depth
 // ---------------------------------------------------------------------------
-const CAM_EYE: (f32, f32, f32) = (0.0, -14.0, 30.0);
+const CAM_EYE: (f32, f32, f32) = (0.0, -30.0, 20.0);
 const CAM_TARGET: (f32, f32, f32) = (0.0, 1.0, 0.0);
 const CAM_FOVY: f32 = 55.0;
 
@@ -104,15 +110,39 @@ struct PongGame {
     ball_vel_x: f32,
     ball_vel_y: f32,
 
-    // Paddle centre Y positions
+    // Paddle centre positions
+    left_x: f32,
     left_y: f32,
+    right_x: f32,
     right_y: f32,
+
+    // Ball Z-axis mapping (lobbing)
+    ball_z: f32,
+    ball_vel_z: f32,
 
     // Held movement keys
     left_up: bool,
     left_down: bool,
+    left_forward: bool,
+    left_backward: bool,
     right_up: bool,
     right_down: bool,
+    right_forward: bool,
+    right_backward: bool,
+
+    // Lob modifiers
+    left_lob: bool,
+    right_lob: bool,
+
+    // Speed boost state
+    left_boost_trigger: bool,
+    right_boost_trigger: bool,
+    left_boost_active: bool,
+    right_boost_active: bool,
+    left_boost_timer: f32,
+    right_boost_timer: f32,
+    left_cooldown_timer: f32,
+    right_cooldown_timer: f32,
 
     // Score
     left_score: u32,
@@ -151,6 +181,7 @@ impl Game for PongGame {
     type InitParams = ();
 
     fn init(ctx: &mut EngineContext, _params: ()) -> Self {
+        ctx.set_window_title("Pong 3D");
         let gfx = &ctx.gfx;
         let device = gfx.device();
 
@@ -194,12 +225,30 @@ impl Game for PongGame {
             ball_y: 0.0,
             ball_vel_x: BALL_SPEED_INIT,
             ball_vel_y: BALL_SPEED_INIT * 0.4,
+            left_x: -PADDLE_X,
             left_y: 0.0,
+            right_x: PADDLE_X,
             right_y: 0.0,
+            ball_z: 0.0,
+            ball_vel_z: 0.0,
             left_up: false,
             left_down: false,
+            left_forward: false,
+            left_backward: false,
             right_up: false,
             right_down: false,
+            right_forward: false,
+            right_backward: false,
+            left_lob: false,
+            right_lob: false,
+            left_boost_trigger: false,
+            right_boost_trigger: false,
+            left_boost_active: false,
+            right_boost_active: false,
+            left_boost_timer: 0.0,
+            right_boost_timer: 0.0,
+            left_cooldown_timer: 0.0,
+            right_cooldown_timer: 0.0,
             left_score: 0,
             right_score: 0,
             ball_id,
@@ -213,23 +262,96 @@ impl Game for PongGame {
     fn update(&mut self, ctx: &mut EngineContext) {
         let dt = ctx.time.dt;
 
+        // --- Speed Boost Logic ---
+        if self.left_cooldown_timer > 0.0 {
+            self.left_cooldown_timer -= dt;
+        }
+        if self.right_cooldown_timer > 0.0 {
+            self.right_cooldown_timer -= dt;
+        }
+
+        if self.left_boost_timer > 0.0 {
+            self.left_boost_timer -= dt;
+            if self.left_boost_timer <= 0.0 {
+                self.left_boost_active = false;
+            }
+        }
+        if self.right_boost_timer > 0.0 {
+            self.right_boost_timer -= dt;
+            if self.right_boost_timer <= 0.0 {
+                self.right_boost_active = false;
+            }
+        }
+
+        if self.left_boost_trigger && self.left_cooldown_timer <= 0.0 {
+            self.left_boost_active = true;
+            self.left_boost_timer = SPEED_BOOST_DURATION;
+            self.left_cooldown_timer = SPEED_BOOST_COOLDOWN;
+        }
+        if self.right_boost_trigger && self.right_cooldown_timer <= 0.0 {
+            self.right_boost_active = true;
+            self.right_boost_timer = SPEED_BOOST_DURATION;
+            self.right_cooldown_timer = SPEED_BOOST_COOLDOWN;
+        }
+
+        let left_speed = if self.left_boost_active {
+            PADDLE_SPEED * SPEED_BOOST_MULTIPLIER
+        } else {
+            PADDLE_SPEED
+        };
+        let right_speed = if self.right_boost_active {
+            PADDLE_SPEED * SPEED_BOOST_MULTIPLIER
+        } else {
+            PADDLE_SPEED
+        };
+
         // --- Paddle movement ---
+        // Left paddle (W/S for Y, A/D for X)
         if self.left_up {
-            self.left_y = (self.left_y + PADDLE_SPEED * dt).min(PADDLE_MAX_Y);
+            self.left_y = (self.left_y + left_speed * dt).min(PADDLE_MAX_Y);
         }
         if self.left_down {
-            self.left_y = (self.left_y - PADDLE_SPEED * dt).max(-PADDLE_MAX_Y);
+            self.left_y = (self.left_y - left_speed * dt).max(-PADDLE_MAX_Y);
         }
+        if self.left_forward {
+            self.left_x = (self.left_x + left_speed * dt).min(-2.0); // Don't cross centre
+        }
+        if self.left_backward {
+            self.left_x = (self.left_x - left_speed * dt).max(-FIELD_HALF_W + PADDLE_HALF_H);
+        }
+
+        // Right paddle (Up/Down for Y, Left/Right for X)
         if self.right_up {
-            self.right_y = (self.right_y + PADDLE_SPEED * dt).min(PADDLE_MAX_Y);
+            self.right_y = (self.right_y + right_speed * dt).min(PADDLE_MAX_Y);
         }
         if self.right_down {
-            self.right_y = (self.right_y - PADDLE_SPEED * dt).max(-PADDLE_MAX_Y);
+            self.right_y = (self.right_y - right_speed * dt).max(-PADDLE_MAX_Y);
+        }
+        if self.right_forward {
+            self.right_x = (self.right_x - right_speed * dt).max(2.0); // Don't cross centre
+        }
+        if self.right_backward {
+            self.right_x = (self.right_x + right_speed * dt).min(FIELD_HALF_W - PADDLE_HALF_H);
         }
 
         // --- Ball movement ---
         self.ball_x += self.ball_vel_x * dt;
         self.ball_y += self.ball_vel_y * dt;
+        self.ball_z += self.ball_vel_z * dt;
+
+        // Apply gravity
+        self.ball_vel_z -= BALL_GRAVITY * dt;
+
+        // Floor bounce / clamp
+        if self.ball_z <= 0.0 {
+            self.ball_z = 0.0;
+            // Simple bounce if falling fast, or land
+            if self.ball_vel_z < -5.0 {
+                self.ball_vel_z *= -0.5;
+            } else {
+                self.ball_vel_z = 0.0;
+            }
+        }
 
         // --- Top / bottom wall bounce ---
         if self.ball_y > WALL_LIMIT {
@@ -240,39 +362,51 @@ impl Game for PongGame {
             self.ball_vel_y = self.ball_vel_y.abs();
         }
 
-        // --- Left paddle collision ---
-        // Left paddle right face X : -PADDLE_X + 0.5
-        // Ball left face X         : ball_x − 0.5
-        // Touching when ball_x − 0.5 ≤ −PADDLE_X + 0.5  →  ball_x ≤ −PADDLE_X + 1.0
-        let left_contact = -PADDLE_X + 1.0;
-        if self.ball_vel_x < 0.0
+        // --- Collision logic ---
+        // Ball can only hit paddles if it is low enough (e.g. not lobbed over them)
+        let ball_is_hittable = self.ball_z < 3.0;
+
+        // Left paddle collision
+        let left_contact = self.left_x + 1.0;
+        if ball_is_hittable
+            && self.ball_vel_x < 0.0
             && self.ball_x <= left_contact
-            && self.ball_x > -PADDLE_X - 2.0 // prevent tunneling
+            && self.ball_x > self.left_x - 2.0 // prevent tunneling
             && (self.ball_y - self.left_y).abs() < PADDLE_HALF_H + 0.5
         {
             self.ball_x = left_contact;
             let new_speed = (self.current_speed() + BALL_SPEED_INC).min(BALL_SPEED_MAX);
             let offset = ((self.ball_y - self.left_y) / PADDLE_HALF_H).clamp(-1.0, 1.0);
             let angle = offset * FRAC_PI_4;
-            self.ball_vel_x = new_speed * angle.cos(); // always > 0 (bounces right)
+
+            if self.left_lob {
+                self.ball_vel_z = BALL_LOB_SPEED; // lob it
+                self.ball_vel_x = (new_speed * BALL_LOB_X_FACTOR) * angle.cos(); // slower x
+            } else {
+                self.ball_vel_x = new_speed * angle.cos();
+            }
             self.ball_vel_y = new_speed * angle.sin();
         }
 
-        // --- Right paddle collision ---
-        // Right paddle left face X : PADDLE_X − 0.5
-        // Ball right face X        : ball_x + 0.5
-        // Touching when ball_x + 0.5 ≥ PADDLE_X − 0.5  →  ball_x ≥ PADDLE_X − 1.0
-        let right_contact = PADDLE_X - 1.0;
-        if self.ball_vel_x > 0.0
+        // Right paddle collision
+        let right_contact = self.right_x - 1.0;
+        if ball_is_hittable
+            && self.ball_vel_x > 0.0
             && self.ball_x >= right_contact
-            && self.ball_x < PADDLE_X + 2.0 // prevent tunneling
+            && self.ball_x < self.right_x + 2.0 // prevent tunneling
             && (self.ball_y - self.right_y).abs() < PADDLE_HALF_H + 0.5
         {
             self.ball_x = right_contact;
             let new_speed = (self.current_speed() + BALL_SPEED_INC).min(BALL_SPEED_MAX);
             let offset = ((self.ball_y - self.right_y) / PADDLE_HALF_H).clamp(-1.0, 1.0);
             let angle = offset * FRAC_PI_4;
-            self.ball_vel_x = -new_speed * angle.cos(); // always < 0 (bounces left)
+
+            if self.right_lob {
+                self.ball_vel_z = BALL_LOB_SPEED;
+                self.ball_vel_x = -(new_speed * BALL_LOB_X_FACTOR) * angle.cos();
+            } else {
+                self.ball_vel_x = -new_speed * angle.cos();
+            }
             self.ball_vel_y = new_speed * angle.sin();
         }
 
@@ -289,11 +423,11 @@ impl Game for PongGame {
         // --- Sync GPU transforms ---
         let scene = &mut self.my_gfx.as_mut().unwrap().scene;
         scene.get_dynamic_mut(self.ball_id).unwrap().position =
-            Vector3::new(self.ball_x, self.ball_y, 0.0);
+            Vector3::new(self.ball_x, self.ball_y, self.ball_z);
         scene.get_dynamic_mut(self.left_id).unwrap().position =
-            Vector3::new(-PADDLE_X, self.left_y, 0.0);
+            Vector3::new(self.left_x, self.left_y, 0.0);
         scene.get_dynamic_mut(self.right_id).unwrap().position =
-            Vector3::new(PADDLE_X, self.right_y, 0.0);
+            Vector3::new(self.right_x, self.right_y, 0.0);
     }
 
     fn ui(&mut self, _ctx: &mut EngineContext, ui_ctx: &etib::egui::Context) {
@@ -321,6 +455,17 @@ impl Game for PongGame {
                     ui.heading("Scores:");
                     ui.label(format!("Left: {}", self.left_score));
                     ui.label(format!("Right: {}", self.right_score));
+
+                    ui.separator();
+                    ui.heading("Boosts:");
+                    ui.label(format!(
+                        "Left Cooldown: {:.1}s",
+                        self.left_cooldown_timer.max(0.0)
+                    ));
+                    ui.label(format!(
+                        "Right Cooldown: {:.1}s",
+                        self.right_cooldown_timer.max(0.0)
+                    ));
 
                     ui.separator();
                     ui.heading("Ball Info:");
@@ -385,8 +530,17 @@ impl Game for PongGame {
             match event.physical_key {
                 PhysicalKey::Code(KeyCode::KeyW) => self.left_up = pressed,
                 PhysicalKey::Code(KeyCode::KeyS) => self.left_down = pressed,
+                PhysicalKey::Code(KeyCode::KeyA) => self.left_backward = pressed,
+                PhysicalKey::Code(KeyCode::KeyD) => self.left_forward = pressed,
+                PhysicalKey::Code(KeyCode::ShiftLeft) => self.left_lob = pressed,
+                PhysicalKey::Code(KeyCode::ControlLeft) => self.left_boost_trigger = pressed,
+
                 PhysicalKey::Code(KeyCode::ArrowUp) => self.right_up = pressed,
                 PhysicalKey::Code(KeyCode::ArrowDown) => self.right_down = pressed,
+                PhysicalKey::Code(KeyCode::ArrowLeft) => self.right_forward = pressed,
+                PhysicalKey::Code(KeyCode::ArrowRight) => self.right_backward = pressed,
+                PhysicalKey::Code(KeyCode::ShiftRight) => self.right_lob = pressed,
+                PhysicalKey::Code(KeyCode::Enter) => self.right_boost_trigger = pressed,
                 _ => {}
             }
         }
