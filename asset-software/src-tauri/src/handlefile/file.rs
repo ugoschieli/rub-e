@@ -83,7 +83,7 @@ pub fn create_asset_file(root_path: &Path, project_name: &str, asset_name: &str)
     let filename = if safe_asset_name.ends_with(".aaa") {
         safe_asset_name
     } else {
-        format!("{}.aaa", safe_asset_name)
+        format!("{}.model", safe_asset_name)
     };
     
     let file_path = dest_folder.join(filename);

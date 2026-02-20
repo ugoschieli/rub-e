@@ -11,9 +11,9 @@ export async function handleGetAllAssets() {
   }
 }
 
-export async function handleAddAsset(name: string) {
+export async function handleAddAsset(name: string, project_id: number) {
   try {
-    await invoke("add_asset", { name: name }); // or use 'project_id' if your backend expects an ID
+    await invoke("add_asset", { name: name, projectId: project_id }); // or use 'project_id' if your backend expects an ID
     // Optionally, refresh UI or remove project from state
     console.log("Asset added:", name);
   } catch (err) {
@@ -86,10 +86,11 @@ export async function handleDeleteCategory(name: string) {
 
 export async function handleGetAllProjects() {
   try {
-    const projects = await invoke("get_all_projets");
-    console.log("All projects:", projects);
+    const projects = await invoke("get_all_projects"); 
+    return projects; 
   } catch (err) {
     console.error("Failed to get all projects:", err);
+    return []; 
   }
 }
 
