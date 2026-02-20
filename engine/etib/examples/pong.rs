@@ -1,4 +1,7 @@
+use clap::Parser;
 use std::f32::consts::FRAC_PI_4;
+use std::net::UdpSocket;
+use std::time::Duration;
 
 use cgmath::Vector3;
 use winit::dpi::PhysicalSize;
@@ -196,6 +199,11 @@ struct PongGame {
     // FPS counter
     frame_count: u32,
     fps_timer: f32,
+
+    // Networking
+    client_socket: Option<UdpSocket>,
+    server_addr: Option<String>,
+    seq_num: u32,
 }
 
 impl PongGame {
@@ -244,6 +252,17 @@ impl Game for PongGame {
         let left_paddle = make_paddle(left_color.x, left_color.y, left_color.z);
         let right_paddle = make_paddle(right_color.x, right_color.y, right_color.z);
         let ball = make_ball();
+
+        let args = Args::parse();
+        let (client_socket, server_addr) = if let Some(ip) = args.client {
+            let socket = UdpSocket::bind("0.0.0.0:0").expect("Failed to bind client UDP port");
+            socket.set_nonblocking(true).unwrap();
+            let s_addr = format!("{}:{}", ip, args.port);
+            log::info!("Pong Client initialized. Target: {}", s_addr);
+            (Some(socket), Some(s_addr))
+        } else {
+            (None, None)
+        };
 
         // 3D Scoreboards
         let left_score_model = make_score_model(0, -10.0, left_color);
@@ -298,6 +317,9 @@ impl Game for PongGame {
             right_score_id: Some(right_score_id),
             frame_count: 0,
             fps_timer: 0.0,
+            client_socket,
+            server_addr,
+            seq_num: 0,
         }
     }
 
@@ -381,85 +403,88 @@ impl Game for PongGame {
         self.ball_y += self.ball_vel_y * dt;
         self.ball_z += self.ball_vel_z * dt;
 
-        // Apply gravity
-        self.ball_vel_z -= BALL_GRAVITY * dt;
+        // Apply local logic if NOT connected to a server
+        if self.client_socket.is_none() {
+            // Apply gravity
+            self.ball_vel_z -= BALL_GRAVITY * dt;
 
-        // Floor bounce / clamp
-        if self.ball_z <= 0.0 {
-            self.ball_z = 0.0;
-            // Simple bounce if falling fast, or land
-            if self.ball_vel_z < -5.0 {
-                self.ball_vel_z *= -0.5;
-            } else {
-                self.ball_vel_z = 0.0;
+            // Floor bounce / clamp
+            if self.ball_z <= 0.0 {
+                self.ball_z = 0.0;
+                // Simple bounce if falling fast, or land
+                if self.ball_vel_z < -5.0 {
+                    self.ball_vel_z *= -0.5;
+                } else {
+                    self.ball_vel_z = 0.0;
+                }
             }
-        }
 
-        // --- Top / bottom wall bounce ---
-        if self.ball_y > WALL_LIMIT {
-            self.ball_y = WALL_LIMIT;
-            self.ball_vel_y = -self.ball_vel_y.abs();
-        } else if self.ball_y < -WALL_LIMIT {
-            self.ball_y = -WALL_LIMIT;
-            self.ball_vel_y = self.ball_vel_y.abs();
-        }
-
-        // --- Collision logic ---
-        // Ball can only hit paddles if it is low enough (e.g. not lobbed over them)
-        let ball_is_hittable = self.ball_z < 3.0;
-
-        // Left paddle collision
-        let left_contact = self.left_x + 1.0;
-        if ball_is_hittable
-            && self.ball_vel_x < 0.0
-            && self.ball_x <= left_contact
-            && self.ball_x > self.left_x - 2.0 // prevent tunneling
-            && (self.ball_y - self.left_y).abs() < PADDLE_HALF_H + 0.5
-        {
-            self.ball_x = left_contact;
-            let new_speed = (self.current_speed() + BALL_SPEED_INC).min(BALL_SPEED_MAX);
-            let offset = ((self.ball_y - self.left_y) / PADDLE_HALF_H).clamp(-1.0, 1.0);
-            let angle = offset * FRAC_PI_4;
-
-            if ctx.input.is_key_pressed(KeyCode::ShiftLeft) {
-                self.ball_vel_z = BALL_LOB_SPEED; // lob it
-                self.ball_vel_x = (new_speed * BALL_LOB_X_FACTOR) * angle.cos(); // slower x
-            } else {
-                self.ball_vel_x = new_speed * angle.cos();
+            // --- Top / bottom wall bounce ---
+            if self.ball_y > WALL_LIMIT {
+                self.ball_y = WALL_LIMIT;
+                self.ball_vel_y = -self.ball_vel_y.abs();
+            } else if self.ball_y < -WALL_LIMIT {
+                self.ball_y = -WALL_LIMIT;
+                self.ball_vel_y = self.ball_vel_y.abs();
             }
-            self.ball_vel_y = new_speed * angle.sin();
-        }
 
-        // Right paddle collision
-        let right_contact = self.right_x - 1.0;
-        if ball_is_hittable
-            && self.ball_vel_x > 0.0
-            && self.ball_x >= right_contact
-            && self.ball_x < self.right_x + 2.0 // prevent tunneling
-            && (self.ball_y - self.right_y).abs() < PADDLE_HALF_H + 0.5
-        {
-            self.ball_x = right_contact;
-            let new_speed = (self.current_speed() + BALL_SPEED_INC).min(BALL_SPEED_MAX);
-            let offset = ((self.ball_y - self.right_y) / PADDLE_HALF_H).clamp(-1.0, 1.0);
-            let angle = offset * FRAC_PI_4;
+            // --- Collision logic ---
+            // Ball can only hit paddles if it is low enough (e.g. not lobbed over them)
+            let ball_is_hittable = self.ball_z < 3.0;
 
-            if ctx.input.is_key_pressed(KeyCode::ShiftRight) {
-                self.ball_vel_z = BALL_LOB_SPEED;
-                self.ball_vel_x = -(new_speed * BALL_LOB_X_FACTOR) * angle.cos();
-            } else {
-                self.ball_vel_x = -new_speed * angle.cos();
+            // Left paddle collision
+            let left_contact = self.left_x + 1.0;
+            if ball_is_hittable
+                && self.ball_vel_x < 0.0
+                && self.ball_x <= left_contact
+                && self.ball_x > self.left_x - 2.0 // prevent tunneling
+                && (self.ball_y - self.left_y).abs() < PADDLE_HALF_H + 0.5
+            {
+                self.ball_x = left_contact;
+                let new_speed = (self.current_speed() + BALL_SPEED_INC).min(BALL_SPEED_MAX);
+                let offset = ((self.ball_y - self.left_y) / PADDLE_HALF_H).clamp(-1.0, 1.0);
+                let angle = offset * FRAC_PI_4;
+
+                if ctx.input.is_key_pressed(KeyCode::ShiftLeft) {
+                    self.ball_vel_z = BALL_LOB_SPEED; // lob it
+                    self.ball_vel_x = (new_speed * BALL_LOB_X_FACTOR) * angle.cos(); // slower x
+                } else {
+                    self.ball_vel_x = new_speed * angle.cos();
+                }
+                self.ball_vel_y = new_speed * angle.sin();
             }
-            self.ball_vel_y = new_speed * angle.sin();
-        }
 
-        // --- Scoring ---
-        // Serve back toward the player who just missed (right side: right missed, left scored)
-        if self.ball_x > FIELD_HALF_W {
-            self.left_score += 1;
-            self.reset_ball(true); // serve toward right (they just missed)
-        } else if self.ball_x < -FIELD_HALF_W {
-            self.right_score += 1;
-            self.reset_ball(false); // serve toward left (they just missed)
+            // Right paddle collision
+            let right_contact = self.right_x - 1.0;
+            if ball_is_hittable
+                && self.ball_vel_x > 0.0
+                && self.ball_x >= right_contact
+                && self.ball_x < self.right_x + 2.0 // prevent tunneling
+                && (self.ball_y - self.right_y).abs() < PADDLE_HALF_H + 0.5
+            {
+                self.ball_x = right_contact;
+                let new_speed = (self.current_speed() + BALL_SPEED_INC).min(BALL_SPEED_MAX);
+                let offset = ((self.ball_y - self.right_y) / PADDLE_HALF_H).clamp(-1.0, 1.0);
+                let angle = offset * FRAC_PI_4;
+
+                if ctx.input.is_key_pressed(KeyCode::ShiftRight) {
+                    self.ball_vel_z = BALL_LOB_SPEED;
+                    self.ball_vel_x = -(new_speed * BALL_LOB_X_FACTOR) * angle.cos();
+                } else {
+                    self.ball_vel_x = -new_speed * angle.cos();
+                }
+                self.ball_vel_y = new_speed * angle.sin();
+            }
+
+            // --- Scoring ---
+            // Serve back toward the player who just missed (right side: right missed, left scored)
+            if self.ball_x > FIELD_HALF_W {
+                self.left_score += 1;
+                self.reset_ball(true); // serve toward right (they just missed)
+            } else if self.ball_x < -FIELD_HALF_W {
+                self.right_score += 1;
+                self.reset_ball(false); // serve toward left (they just missed)
+            }
         }
 
         // Rebuild 3D score models if they changed
@@ -492,6 +517,76 @@ impl Game for PongGame {
             Vector3::new(self.left_x, self.left_y, 0.0);
         scene.get_dynamic_mut(self.right_id).unwrap().position =
             Vector3::new(self.right_x, self.right_y, 0.0);
+
+        // --- Networking Sync ---
+        if let (Some(sock), Some(addr)) = (&self.client_socket, &self.server_addr) {
+            self.seq_num += 1;
+
+            // Collect Input
+            let mut move_y = 0.0;
+            let mut move_x = 0.0;
+            // W/S or Arrow Keys (Client just sends generic direction and Server decides Left/Right)
+            if ctx.input.is_key_pressed(KeyCode::KeyW) || ctx.input.is_key_pressed(KeyCode::ArrowUp)
+            {
+                move_y = 1.0;
+            }
+            if ctx.input.is_key_pressed(KeyCode::KeyS)
+                || ctx.input.is_key_pressed(KeyCode::ArrowDown)
+            {
+                move_y = -1.0;
+            }
+            if ctx.input.is_key_pressed(KeyCode::KeyD)
+                || ctx.input.is_key_pressed(KeyCode::ArrowRight)
+            {
+                move_x = 1.0;
+            }
+            if ctx.input.is_key_pressed(KeyCode::KeyA)
+                || ctx.input.is_key_pressed(KeyCode::ArrowLeft)
+            {
+                move_x = -1.0;
+            }
+
+            let lob_pressed = ctx.input.is_key_pressed(KeyCode::ShiftLeft)
+                || ctx.input.is_key_pressed(KeyCode::ShiftRight);
+            let boost_pressed = ctx.input.is_key_just_pressed(KeyCode::ControlLeft)
+                || ctx.input.is_key_just_pressed(KeyCode::Enter);
+
+            let payload = PlayerInput {
+                move_y,
+                move_x,
+                lob_pressed,
+                boost_pressed,
+                sequence_number: self.seq_num,
+            };
+
+            if let Ok(bytes) = bincode::serialize(&payload) {
+                let _ = sock.send_to(&bytes, addr);
+            }
+
+            // Receive State Overrides
+            let mut buf = [0u8; 1024];
+            while let Ok(size) = sock.recv(&mut buf) {
+                if let Ok(snap) = bincode::deserialize::<GameStateSnapshot>(&buf[..size]) {
+                    self.ball_x = snap.ball_pos[0];
+                    self.ball_y = snap.ball_pos[1];
+                    self.ball_z = snap.ball_pos[2];
+                    self.ball_vel_x = snap.ball_vel[0];
+                    self.ball_vel_y = snap.ball_vel[1];
+                    self.ball_vel_z = snap.ball_vel[2];
+
+                    self.left_x = snap.left_pos[0];
+                    self.left_y = snap.left_pos[1];
+                    self.right_x = snap.right_pos[0];
+                    self.right_y = snap.right_pos[1];
+
+                    self.left_boost_active = snap.left_boost_active;
+                    self.right_boost_active = snap.right_boost_active;
+
+                    self.left_score = snap.left_score;
+                    self.right_score = snap.right_score;
+                }
+            }
+        }
     }
 
     fn ui(&mut self, _ctx: &mut EngineContext, ui_ctx: &etib::egui::Context) {
@@ -587,9 +682,462 @@ impl Game for PongGame {
     fn device_input(&mut self, _ctx: &mut EngineContext, _event: &DeviceEvent) {}
 }
 
+// ---------------------------------------------------------------------------
+// Networking Protocol
+// ---------------------------------------------------------------------------
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct PlayerInput {
+    pub move_y: f32, // -1.0 to 1.0 (Down, None, Up)
+    pub move_x: f32, // -1.0 to 1.0 (Left, None, Right)
+    pub lob_pressed: bool,
+    pub boost_pressed: bool,
+    pub sequence_number: u32,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct GameStateSnapshot {
+    pub ball_pos: [f32; 3], // X, Y, Z
+    pub ball_vel: [f32; 3], // X, Y, Z - for client prediction
+    pub left_pos: [f32; 2], // X, Y
+    pub left_boost_active: bool,
+    pub right_pos: [f32; 2], // X, Y
+    pub right_boost_active: bool,
+    pub left_score: u32,
+    pub right_score: u32,
+    pub auth_sequence_left: u32,
+    pub auth_sequence_right: u32,
+}
+
+// ---------------------------------------------------------------------------
+// Server Logic
+// ---------------------------------------------------------------------------
+use std::net::SocketAddr;
+
+struct ServerPlayerState {
+    pub addr: SocketAddr,
+    pub latest_input: PlayerInput,
+    pub last_seq_processed: u32,
+    pub cooldown_timer: f32,
+    pub boost_timer: f32,
+    pub boost_active: bool,
+}
+
+struct PongServer {
+    socket: UdpSocket,
+
+    // Physics State
+    ball_x: f32,
+    ball_y: f32,
+    ball_z: f32,
+    ball_vel_x: f32,
+    ball_vel_y: f32,
+    ball_vel_z: f32,
+
+    left_x: f32,
+    left_y: f32,
+    right_x: f32,
+    right_y: f32,
+
+    left_score: u32,
+    right_score: u32,
+
+    // Networking State
+    left_player: Option<ServerPlayerState>,
+    right_player: Option<ServerPlayerState>,
+}
+
+impl PongServer {
+    fn new(port: u16) -> anyhow::Result<Self> {
+        let socket = UdpSocket::bind(format!("0.0.0.0:{}", port))?;
+        socket.set_nonblocking(true)?;
+        Ok(Self {
+            socket,
+            ball_x: 0.0,
+            ball_y: 0.0,
+            ball_z: 0.0,
+            ball_vel_x: BALL_SPEED_INIT,
+            ball_vel_y: BALL_SPEED_INIT * 0.4,
+            ball_vel_z: 0.0,
+            left_x: -PADDLE_X,
+            left_y: 0.0,
+            right_x: PADDLE_X,
+            right_y: 0.0,
+            left_score: 0,
+            right_score: 0,
+            left_player: None,
+            right_player: None,
+        })
+    }
+
+    fn current_speed(&self) -> f32 {
+        (self.ball_vel_x.powi(2) + self.ball_vel_y.powi(2)).sqrt()
+    }
+
+    fn reset_ball(&mut self, toward_right: bool) {
+        self.ball_x = 0.0;
+        self.ball_y = 0.0;
+        self.ball_z = 0.0; // reset vertical position
+        self.ball_vel_z = 0.0; // reset vertical velocity
+        let vx = if toward_right {
+            BALL_SPEED_INIT
+        } else {
+            -BALL_SPEED_INIT
+        };
+        self.ball_vel_x = vx;
+        self.ball_vel_y = BALL_SPEED_INIT * 0.4;
+    }
+
+    fn receive_inputs(&mut self) -> anyhow::Result<()> {
+        let mut buf = [0u8; 1024];
+        loop {
+            match self.socket.recv_from(&mut buf) {
+                Ok((size, src)) => {
+                    if let Ok(input) = bincode::deserialize::<PlayerInput>(&buf[..size]) {
+                        // Assignment
+                        let is_left = if let Some(p) = &self.left_player {
+                            p.addr == src
+                        } else {
+                            false
+                        };
+                        let is_right = if let Some(p) = &self.right_player {
+                            p.addr == src
+                        } else {
+                            false
+                        };
+
+                        if !is_left && !is_right {
+                            if self.left_player.is_none() {
+                                log::info!("Left player registered: {}", src);
+                                self.left_player = Some(ServerPlayerState {
+                                    addr: src,
+                                    latest_input: input.clone(),
+                                    last_seq_processed: input.sequence_number,
+                                    cooldown_timer: 0.0,
+                                    boost_timer: 0.0,
+                                    boost_active: false,
+                                });
+                            } else if self.right_player.is_none() {
+                                log::info!("Right player registered: {}", src);
+                                self.right_player = Some(ServerPlayerState {
+                                    addr: src,
+                                    latest_input: input.clone(),
+                                    last_seq_processed: input.sequence_number,
+                                    cooldown_timer: 0.0,
+                                    boost_timer: 0.0,
+                                    boost_active: false,
+                                });
+                            }
+                        } else {
+                            // Update existing
+                            if is_left {
+                                if let Some(p) = &mut self.left_player {
+                                    if input.sequence_number > p.last_seq_processed {
+                                        p.latest_input = input;
+                                    }
+                                }
+                            } else if is_right {
+                                if let Some(p) = &mut self.right_player {
+                                    if input.sequence_number > p.last_seq_processed {
+                                        p.latest_input = input;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                    break;
+                }
+                Err(e) => {
+                    log::error!("UDP Recv error: {}", e);
+                    break;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn step_physics(&mut self, dt: f32) {
+        // Boost timers & logical cooldowns
+        if let Some(p) = &mut self.left_player {
+            if p.cooldown_timer > 0.0 {
+                p.cooldown_timer -= dt;
+            }
+            if p.boost_timer > 0.0 {
+                p.boost_timer -= dt;
+                if p.boost_timer <= 0.0 {
+                    p.boost_active = false;
+                }
+            }
+            if p.latest_input.boost_pressed && p.cooldown_timer <= 0.0 {
+                p.boost_active = true;
+                p.boost_timer = SPEED_BOOST_DURATION;
+                p.cooldown_timer = SPEED_BOOST_COOLDOWN;
+            }
+        }
+        if let Some(p) = &mut self.right_player {
+            if p.cooldown_timer > 0.0 {
+                p.cooldown_timer -= dt;
+            }
+            if p.boost_timer > 0.0 {
+                p.boost_timer -= dt;
+                if p.boost_timer <= 0.0 {
+                    p.boost_active = false;
+                }
+            }
+            if p.latest_input.boost_pressed && p.cooldown_timer <= 0.0 {
+                p.boost_active = true;
+                p.boost_timer = SPEED_BOOST_DURATION;
+                p.cooldown_timer = SPEED_BOOST_COOLDOWN;
+            }
+        }
+
+        // Apply paddle movements based on latest input
+        let left_speed = if self
+            .left_player
+            .as_ref()
+            .map(|p| p.boost_active)
+            .unwrap_or(false)
+        {
+            PADDLE_SPEED * SPEED_BOOST_MULTIPLIER
+        } else {
+            PADDLE_SPEED
+        };
+        let right_speed = if self
+            .right_player
+            .as_ref()
+            .map(|p| p.boost_active)
+            .unwrap_or(false)
+        {
+            PADDLE_SPEED * SPEED_BOOST_MULTIPLIER
+        } else {
+            PADDLE_SPEED
+        };
+
+        if let Some(p) = &self.left_player {
+            let input = &p.latest_input;
+            if input.move_y > 0.0 {
+                self.left_y = (self.left_y + left_speed * dt).min(PADDLE_MAX_Y);
+            }
+            if input.move_y < 0.0 {
+                self.left_y = (self.left_y - left_speed * dt).max(-PADDLE_MAX_Y);
+            }
+            if input.move_x > 0.0 {
+                self.left_x = (self.left_x + left_speed * dt).min(-2.0);
+            }
+            if input.move_x < 0.0 {
+                self.left_x = (self.left_x - left_speed * dt).max(-FIELD_HALF_W + PADDLE_HALF_H);
+            }
+        }
+
+        if let Some(p) = &self.right_player {
+            let input = &p.latest_input;
+            if input.move_y > 0.0 {
+                self.right_y = (self.right_y + right_speed * dt).min(PADDLE_MAX_Y);
+            }
+            if input.move_y < 0.0 {
+                self.right_y = (self.right_y - right_speed * dt).max(-PADDLE_MAX_Y);
+            }
+            if input.move_x > 0.0 {
+                self.right_x = (self.right_x + right_speed * dt).min(FIELD_HALF_W - PADDLE_HALF_H);
+            }
+            if input.move_x < 0.0 {
+                self.right_x = (self.right_x - right_speed * dt).max(2.0);
+            }
+        }
+
+        // Ball movement
+        self.ball_x += self.ball_vel_x * dt;
+        self.ball_y += self.ball_vel_y * dt;
+        self.ball_z += self.ball_vel_z * dt;
+        self.ball_vel_z -= BALL_GRAVITY * dt; // Gravity
+
+        // Floor bounce
+        if self.ball_z <= 0.0 {
+            self.ball_z = 0.0;
+            if self.ball_vel_z < -5.0 {
+                self.ball_vel_z *= -0.5;
+            } else {
+                self.ball_vel_z = 0.0;
+            }
+        }
+
+        // Top/bottom bounce
+        if self.ball_y > WALL_LIMIT {
+            self.ball_y = WALL_LIMIT;
+            self.ball_vel_y = -self.ball_vel_y.abs();
+        } else if self.ball_y < -WALL_LIMIT {
+            self.ball_y = -WALL_LIMIT;
+            self.ball_vel_y = self.ball_vel_y.abs();
+        }
+
+        // Paddle Collisions (only if low enough)
+        let ball_is_hittable = self.ball_z < 3.0;
+
+        let left_contact = self.left_x + 1.0;
+        if ball_is_hittable
+            && self.ball_vel_x < 0.0
+            && self.ball_x <= left_contact
+            && self.ball_x > self.left_x - 2.0
+            && (self.ball_y - self.left_y).abs() < PADDLE_HALF_H + 0.5
+        {
+            self.ball_x = left_contact;
+            let new_speed = (self.current_speed() + BALL_SPEED_INC).min(BALL_SPEED_MAX);
+            let offset = ((self.ball_y - self.left_y) / PADDLE_HALF_H).clamp(-1.0, 1.0);
+            let angle = offset * FRAC_PI_4;
+
+            let lob_pressed = self
+                .left_player
+                .as_ref()
+                .map(|p| p.latest_input.lob_pressed)
+                .unwrap_or(false);
+            if lob_pressed {
+                self.ball_vel_z = BALL_LOB_SPEED;
+                self.ball_vel_x = (new_speed * BALL_LOB_X_FACTOR) * angle.cos();
+            } else {
+                self.ball_vel_x = new_speed * angle.cos();
+            }
+            self.ball_vel_y = new_speed * angle.sin();
+        }
+
+        let right_contact = self.right_x - 1.0;
+        if ball_is_hittable
+            && self.ball_vel_x > 0.0
+            && self.ball_x >= right_contact
+            && self.ball_x < self.right_x + 2.0
+            && (self.ball_y - self.right_y).abs() < PADDLE_HALF_H + 0.5
+        {
+            self.ball_x = right_contact;
+            let new_speed = (self.current_speed() + BALL_SPEED_INC).min(BALL_SPEED_MAX);
+            let offset = ((self.ball_y - self.right_y) / PADDLE_HALF_H).clamp(-1.0, 1.0);
+            let angle = offset * FRAC_PI_4;
+
+            let lob_pressed = self
+                .right_player
+                .as_ref()
+                .map(|p| p.latest_input.lob_pressed)
+                .unwrap_or(false);
+            if lob_pressed {
+                self.ball_vel_z = BALL_LOB_SPEED;
+                self.ball_vel_x = -(new_speed * BALL_LOB_X_FACTOR) * angle.cos();
+            } else {
+                self.ball_vel_x = -new_speed * angle.cos();
+            }
+            self.ball_vel_y = new_speed * angle.sin();
+        }
+
+        // Scoring
+        if self.ball_x > FIELD_HALF_W {
+            self.left_score += 1;
+            self.reset_ball(true);
+        } else if self.ball_x < -FIELD_HALF_W {
+            self.right_score += 1;
+            self.reset_ball(false);
+        }
+
+        // Update sequence numbers
+        if let Some(p) = &mut self.left_player {
+            p.last_seq_processed = p.latest_input.sequence_number;
+        }
+        if let Some(p) = &mut self.right_player {
+            p.last_seq_processed = p.latest_input.sequence_number;
+        }
+    }
+
+    fn broadcast_state(&mut self) -> anyhow::Result<()> {
+        let snap = GameStateSnapshot {
+            ball_pos: [self.ball_x, self.ball_y, self.ball_z],
+            ball_vel: [self.ball_vel_x, self.ball_vel_y, self.ball_vel_z],
+            left_pos: [self.left_x, self.left_y],
+            left_boost_active: self
+                .left_player
+                .as_ref()
+                .map(|p| p.boost_active)
+                .unwrap_or(false),
+            right_pos: [self.right_x, self.right_y],
+            right_boost_active: self
+                .right_player
+                .as_ref()
+                .map(|p| p.boost_active)
+                .unwrap_or(false),
+            left_score: self.left_score,
+            right_score: self.right_score,
+            auth_sequence_left: self
+                .left_player
+                .as_ref()
+                .map(|p| p.last_seq_processed)
+                .unwrap_or(0),
+            auth_sequence_right: self
+                .right_player
+                .as_ref()
+                .map(|p| p.last_seq_processed)
+                .unwrap_or(0),
+        };
+
+        let bytes = bincode::serialize(&snap)?;
+
+        if let Some(p) = &self.left_player {
+            let _ = self.socket.send_to(&bytes, p.addr);
+        }
+        if let Some(p) = &self.right_player {
+            let _ = self.socket.send_to(&bytes, p.addr);
+        }
+
+        Ok(())
+    }
+}
+
+// ---------------------------------------------------------------------------
+// CLI Argument Parsing
+// ---------------------------------------------------------------------------
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Args {
+    /// Act as authoritative server
+    #[arg(long, default_value_t = false)]
+    server: bool,
+
+    /// IP Address of server to connect to
+    #[arg(long)]
+    client: Option<String>,
+
+    /// Port to listen (server) or send (client) on
+    #[arg(long, default_value_t = 8080)]
+    port: u16,
+}
+
+// ---------------------------------------------------------------------------
+// Main
+// ---------------------------------------------------------------------------
 fn main() -> anyhow::Result<()> {
     env_logger::init();
     let config = EngineConfig::load_from_file("config.json");
-    etib::run::<PongGame>(config, Some(()))?;
+    let args = Args::parse();
+
+    if args.server {
+        run_server(args.port)?;
+    } else {
+        // NOTE: We should handle the client logic later
+        etib::run::<PongGame>(config, Some(()))?;
+    }
+
     Ok(())
+}
+
+fn run_server(port: u16) -> anyhow::Result<()> {
+    log::info!("Starting Headless Pong Server on port {}", port);
+    let mut server = PongServer::new(port)?;
+
+    // Simulate at 60Hz
+    let dt = 1.0 / 60.0;
+
+    log::info!("Listening for clients...");
+    loop {
+        server.receive_inputs()?;
+        server.step_physics(dt);
+        server.broadcast_state()?;
+        std::thread::sleep(Duration::from_millis(16));
+    }
 }
