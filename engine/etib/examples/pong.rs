@@ -2,8 +2,8 @@ use std::f32::consts::FRAC_PI_4;
 
 use cgmath::Vector3;
 use winit::dpi::PhysicalSize;
-use winit::event::{DeviceEvent, WindowEvent};
-use winit::keyboard::{KeyCode, PhysicalKey};
+use winit::event::DeviceEvent;
+use winit::keyboard::KeyCode;
 
 use etib::camera::{Camera, Projection};
 use etib::config::EngineConfig;
@@ -172,23 +172,7 @@ struct PongGame {
     ball_z: f32,
     ball_vel_z: f32,
 
-    // Held movement keys
-    left_up: bool,
-    left_down: bool,
-    left_forward: bool,
-    left_backward: bool,
-    right_up: bool,
-    right_down: bool,
-    right_forward: bool,
-    right_backward: bool,
-
-    // Lob modifiers
-    left_lob: bool,
-    right_lob: bool,
-
     // Speed boost state
-    left_boost_trigger: bool,
-    right_boost_trigger: bool,
     left_boost_active: bool,
     right_boost_active: bool,
     left_boost_timer: f32,
@@ -297,18 +281,6 @@ impl Game for PongGame {
             right_y: 0.0,
             ball_z: 0.0,
             ball_vel_z: 0.0,
-            left_up: false,
-            left_down: false,
-            left_forward: false,
-            left_backward: false,
-            right_up: false,
-            right_down: false,
-            right_forward: false,
-            right_backward: false,
-            left_lob: false,
-            right_lob: false,
-            left_boost_trigger: false,
-            right_boost_trigger: false,
             left_boost_active: false,
             right_boost_active: false,
             left_boost_timer: 0.0,
@@ -353,12 +325,12 @@ impl Game for PongGame {
             }
         }
 
-        if self.left_boost_trigger && self.left_cooldown_timer <= 0.0 {
+        if ctx.input.is_key_just_pressed(KeyCode::ControlLeft) && self.left_cooldown_timer <= 0.0 {
             self.left_boost_active = true;
             self.left_boost_timer = SPEED_BOOST_DURATION;
             self.left_cooldown_timer = SPEED_BOOST_COOLDOWN;
         }
-        if self.right_boost_trigger && self.right_cooldown_timer <= 0.0 {
+        if ctx.input.is_key_just_pressed(KeyCode::Enter) && self.right_cooldown_timer <= 0.0 {
             self.right_boost_active = true;
             self.right_boost_timer = SPEED_BOOST_DURATION;
             self.right_cooldown_timer = SPEED_BOOST_COOLDOWN;
@@ -377,30 +349,30 @@ impl Game for PongGame {
 
         // --- Paddle movement ---
         // Left paddle (W/S for Y, A/D for X)
-        if self.left_up {
+        if ctx.input.is_key_pressed(KeyCode::KeyW) {
             self.left_y = (self.left_y + left_speed * dt).min(PADDLE_MAX_Y);
         }
-        if self.left_down {
+        if ctx.input.is_key_pressed(KeyCode::KeyS) {
             self.left_y = (self.left_y - left_speed * dt).max(-PADDLE_MAX_Y);
         }
-        if self.left_forward {
+        if ctx.input.is_key_pressed(KeyCode::KeyD) {
             self.left_x = (self.left_x + left_speed * dt).min(-2.0); // Don't cross centre
         }
-        if self.left_backward {
+        if ctx.input.is_key_pressed(KeyCode::KeyA) {
             self.left_x = (self.left_x - left_speed * dt).max(-FIELD_HALF_W + PADDLE_HALF_H);
         }
 
         // Right paddle (Up/Down for Y, Left/Right for X)
-        if self.right_up {
+        if ctx.input.is_key_pressed(KeyCode::ArrowUp) {
             self.right_y = (self.right_y + right_speed * dt).min(PADDLE_MAX_Y);
         }
-        if self.right_down {
+        if ctx.input.is_key_pressed(KeyCode::ArrowDown) {
             self.right_y = (self.right_y - right_speed * dt).max(-PADDLE_MAX_Y);
         }
-        if self.right_forward {
+        if ctx.input.is_key_pressed(KeyCode::ArrowLeft) {
             self.right_x = (self.right_x - right_speed * dt).max(2.0); // Don't cross centre
         }
-        if self.right_backward {
+        if ctx.input.is_key_pressed(KeyCode::ArrowRight) {
             self.right_x = (self.right_x + right_speed * dt).min(FIELD_HALF_W - PADDLE_HALF_H);
         }
 
@@ -449,7 +421,7 @@ impl Game for PongGame {
             let offset = ((self.ball_y - self.left_y) / PADDLE_HALF_H).clamp(-1.0, 1.0);
             let angle = offset * FRAC_PI_4;
 
-            if self.left_lob {
+            if ctx.input.is_key_pressed(KeyCode::ShiftLeft) {
                 self.ball_vel_z = BALL_LOB_SPEED; // lob it
                 self.ball_vel_x = (new_speed * BALL_LOB_X_FACTOR) * angle.cos(); // slower x
             } else {
@@ -471,7 +443,7 @@ impl Game for PongGame {
             let offset = ((self.ball_y - self.right_y) / PADDLE_HALF_H).clamp(-1.0, 1.0);
             let angle = offset * FRAC_PI_4;
 
-            if self.right_lob {
+            if ctx.input.is_key_pressed(KeyCode::ShiftRight) {
                 self.ball_vel_z = BALL_LOB_SPEED;
                 self.ball_vel_x = -(new_speed * BALL_LOB_X_FACTOR) * angle.cos();
             } else {
@@ -610,28 +582,6 @@ impl Game for PongGame {
         my_gfx
             .scene
             .resize(ctx.gfx.device(), size.width, size.height);
-    }
-
-    fn input(&mut self, _ctx: &mut EngineContext, event: &WindowEvent) {
-        if let WindowEvent::KeyboardInput { event, .. } = event {
-            let pressed = event.state == winit::event::ElementState::Pressed;
-            match event.physical_key {
-                PhysicalKey::Code(KeyCode::KeyW) => self.left_up = pressed,
-                PhysicalKey::Code(KeyCode::KeyS) => self.left_down = pressed,
-                PhysicalKey::Code(KeyCode::KeyA) => self.left_backward = pressed,
-                PhysicalKey::Code(KeyCode::KeyD) => self.left_forward = pressed,
-                PhysicalKey::Code(KeyCode::ShiftLeft) => self.left_lob = pressed,
-                PhysicalKey::Code(KeyCode::ControlLeft) => self.left_boost_trigger = pressed,
-
-                PhysicalKey::Code(KeyCode::ArrowUp) => self.right_up = pressed,
-                PhysicalKey::Code(KeyCode::ArrowDown) => self.right_down = pressed,
-                PhysicalKey::Code(KeyCode::ArrowLeft) => self.right_forward = pressed,
-                PhysicalKey::Code(KeyCode::ArrowRight) => self.right_backward = pressed,
-                PhysicalKey::Code(KeyCode::ShiftRight) => self.right_lob = pressed,
-                PhysicalKey::Code(KeyCode::Enter) => self.right_boost_trigger = pressed,
-                _ => {}
-            }
-        }
     }
 
     fn device_input(&mut self, _ctx: &mut EngineContext, _event: &DeviceEvent) {}

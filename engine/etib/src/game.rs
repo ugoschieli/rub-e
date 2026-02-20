@@ -1,5 +1,6 @@
 use crate::Gfx;
 use crate::config::EngineConfig;
+use crate::input::InputState;
 use crate::time::TimeState;
 use std::sync::Arc;
 use winit::dpi::PhysicalSize;
@@ -13,6 +14,7 @@ use winit::{application::ApplicationHandler, error::EventLoopError, event_loop::
 pub struct EngineContext {
     pub gfx: Gfx,
     pub time: TimeState,
+    pub input: InputState,
     pub config: Arc<EngineConfig>,
     // window is NOT exposed directly — engine handles it
     window: Arc<Window>,
@@ -152,6 +154,7 @@ impl<G: Game> ApplicationHandler for EngineRunner<G> {
         let mut ctx = EngineContext {
             gfx,
             time: TimeState::new(),
+            input: InputState::default(),
             config: self.config.clone(),
             window: window.clone(),
             egui_ctx,
@@ -182,6 +185,15 @@ impl<G: Game> ApplicationHandler for EngineRunner<G> {
         }
 
         match event {
+            WindowEvent::KeyboardInput {
+                event: ref kb_event,
+                ..
+            } => {
+                ctx.input.process_keyboard_event(kb_event);
+                if !response.consumed {
+                    game.input(ctx, &event);
+                }
+            }
             WindowEvent::Resized(size) => {
                 /* engine handles surface + depth resize, then */
                 game.resize(ctx, size);
@@ -200,6 +212,8 @@ impl<G: Game> ApplicationHandler for EngineRunner<G> {
                 game.update(ctx);
                 game.render(ctx);
                 ctx.time.tick();
+                ctx.input.clear_frame_state();
+
                 if let Some(window) = &self.window {
                     window.request_redraw();
                 }

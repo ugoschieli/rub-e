@@ -17,6 +17,7 @@ pub mod utils;
 pub mod config;
 /// An HDR pipeline implementation
 pub mod hdr;
+pub mod input;
 /// Module containing the time management (delta time)
 pub mod time;
 mod vertex;
