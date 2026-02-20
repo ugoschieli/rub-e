@@ -93,6 +93,58 @@ fn make_static_geometry() -> Vec<ModelCube> {
 }
 
 // ---------------------------------------------------------------------------
+// 3D Score Rendering
+// ---------------------------------------------------------------------------
+
+fn make_digit_cubes(digit: char, offset_x: f32, color: Vector3<f32>) -> Vec<ModelCube> {
+    let mut cubes = Vec::new();
+    let map = match digit {
+        '0' => [1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1],
+        '1' => [0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0],
+        '2' => [1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1],
+        '3' => [1, 1, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 1, 1],
+        '4' => [1, 0, 1, 1, 0, 1, 1, 1, 1, 0, 0, 1, 0, 0, 1],
+        '5' => [1, 1, 1, 1, 0, 0, 1, 1, 1, 0, 0, 1, 1, 1, 1],
+        '6' => [1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1],
+        '7' => [1, 1, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1],
+        '8' => [1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1],
+        '9' => [1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1],
+        _ => [0; 15],
+    };
+
+    for y in 0..5 {
+        for x in 0..3 {
+            if map[(4 - y) * 3 + x] == 1 {
+                // Digits drawn in X/Y plane in the background (-15.0 on Z)
+                cubes.push(unit_cube(
+                    offset_x + x as f32,
+                    y as f32,
+                    -15.0,
+                    color.x,
+                    color.y,
+                    color.z,
+                ));
+            }
+        }
+    }
+    cubes
+}
+
+fn make_score_model(score: u32, base_x: f32, color: Vector3<f32>) -> DynamicModel {
+    let s = score.to_string();
+    let mut cubes = Vec::new();
+    let mut offset_x = base_x;
+    for c in s.chars() {
+        cubes.extend(make_digit_cubes(c, offset_x, color));
+        offset_x += 4.0; // Spacing between digits
+    }
+    let mut model = DynamicModel::from_cubes(cubes);
+    // Raise the score board
+    model.position = Vector3::new(0.0, FIELD_HALF_H + 2.0, 0.0);
+    model
+}
+
+// ---------------------------------------------------------------------------
 // Game state
 // ---------------------------------------------------------------------------
 
@@ -147,11 +199,15 @@ struct PongGame {
     // Score
     left_score: u32,
     right_score: u32,
+    rendered_left_score: i32,
+    rendered_right_score: i32,
 
     // Dynamic model IDs
     ball_id: usize,
     left_id: usize,
     right_id: usize,
+    left_score_id: Option<usize>,
+    right_score_id: Option<usize>,
 
     // FPS counter
     frame_count: u32,
@@ -197,12 +253,20 @@ impl Game for PongGame {
             200.0,
         );
 
+        let left_color = Vector3::new(0.2, 0.75, 1.0);
+        let right_color = Vector3::new(1.0, 0.45, 0.1);
+
         let walls = make_static_geometry();
-        let left_paddle = make_paddle(0.2, 0.75, 1.0); // blue
-        let right_paddle = make_paddle(1.0, 0.45, 0.1); // orange
+        let left_paddle = make_paddle(left_color.x, left_color.y, left_color.z);
+        let right_paddle = make_paddle(right_color.x, right_color.y, right_color.z);
         let ball = make_ball();
 
-        let max_dyn = left_paddle.cube_count() + right_paddle.cube_count() + ball.cube_count();
+        // 3D Scoreboards
+        let left_score_model = make_score_model(0, -10.0, left_color);
+        let right_score_model = make_score_model(0, 10.0, right_color);
+
+        let max_dyn =
+            left_paddle.cube_count() + right_paddle.cube_count() + ball.cube_count() + 100; // room for score numbers
 
         let mut scene = Scene::new(
             gfx,
@@ -215,6 +279,8 @@ impl Game for PongGame {
         let ball_id = scene.add_dynamic(ball);
         let left_id = scene.add_dynamic(left_paddle);
         let right_id = scene.add_dynamic(right_paddle);
+        let left_score_id = scene.add_dynamic(left_score_model);
+        let right_score_id = scene.add_dynamic(right_score_model);
 
         scene.get_dynamic_mut(left_id).unwrap().position = Vector3::new(-PADDLE_X, 0.0, 0.0);
         scene.get_dynamic_mut(right_id).unwrap().position = Vector3::new(PADDLE_X, 0.0, 0.0);
@@ -251,9 +317,13 @@ impl Game for PongGame {
             right_cooldown_timer: 0.0,
             left_score: 0,
             right_score: 0,
+            rendered_left_score: 0,
+            rendered_right_score: 0,
             ball_id,
             left_id,
             right_id,
+            left_score_id: Some(left_score_id),
+            right_score_id: Some(right_score_id),
             frame_count: 0,
             fps_timer: 0.0,
         }
@@ -420,6 +490,28 @@ impl Game for PongGame {
             self.reset_ball(false); // serve toward left (they just missed)
         }
 
+        // Rebuild 3D score models if they changed
+        let scene = &mut self.my_gfx.as_mut().unwrap().scene;
+        if self.left_score as i32 != self.rendered_left_score {
+            if let Some(old_id) = self.left_score_id {
+                scene.remove_dynamic(old_id);
+            }
+            let left_color = Vector3::new(0.2, 0.75, 1.0);
+            let left_score_model = make_score_model(self.left_score, -10.0, left_color);
+            self.left_score_id = Some(scene.add_dynamic(left_score_model));
+            self.rendered_left_score = self.left_score as i32;
+        }
+
+        if self.right_score as i32 != self.rendered_right_score {
+            if let Some(old_id) = self.right_score_id {
+                scene.remove_dynamic(old_id);
+            }
+            let right_color = Vector3::new(1.0, 0.45, 0.1);
+            let right_score_model = make_score_model(self.right_score, 10.0, right_color);
+            self.right_score_id = Some(scene.add_dynamic(right_score_model));
+            self.rendered_right_score = self.right_score as i32;
+        }
+
         // --- Sync GPU transforms ---
         let scene = &mut self.my_gfx.as_mut().unwrap().scene;
         scene.get_dynamic_mut(self.ball_id).unwrap().position =
@@ -451,10 +543,6 @@ impl Game for PongGame {
                             }
                         }
                     }
-
-                    ui.heading("Scores:");
-                    ui.label(format!("Left: {}", self.left_score));
-                    ui.label(format!("Right: {}", self.right_score));
 
                     ui.separator();
                     ui.heading("Boosts:");
