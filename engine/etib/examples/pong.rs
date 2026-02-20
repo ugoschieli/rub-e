@@ -86,10 +86,71 @@ fn make_static_geometry() -> Vec<ModelCube> {
         cubes.push(unit_cube(x as f32, -FIELD_HALF_H, 0.0, 0.45, 0.45, 0.45));
     }
 
-    // Centre dashed line (every other Y position)
-    let yi = -(FIELD_HALF_H as i32 - 1)..=(FIELD_HALF_H as i32 - 1);
-    for y in yi.step_by(2) {
-        cubes.push(unit_cube(0.0, y as f32, 0.0, 0.2, 0.2, 0.2));
+    // --- Grass Pitch Floor ---
+    let floor_z = -1.0;
+    for x in -(FIELD_HALF_W as i32)..=(FIELD_HALF_W as i32) {
+        for y in -(FIELD_HALF_H as i32)..=(FIELD_HALF_H as i32) {
+            // Create vertical alternating green stripes
+            let (r, g, b) = if x % 4 >= -1 && x % 4 <= 1 {
+                (0.1, 0.45, 0.1) // Dark green
+            } else {
+                (0.15, 0.55, 0.15) // Light green
+            };
+            cubes.push(unit_cube(x as f32, y as f32, floor_z, r, g, b));
+        }
+    }
+
+    // --- Tennis Net ---
+    // At x=0, stretching from -FIELD_HALF_H to +FIELD_HALF_H
+    for y in -(FIELD_HALF_H as i32 - 1)..=(FIELD_HALF_H as i32 - 1) {
+        for z in 0..=3 {
+            // Checkered empty space to look like a net
+            if (y + z) % 2 == 0 {
+                // Bright white net
+                cubes.push(unit_cube(0.0, y as f32, z as f32, 0.95, 0.95, 0.95));
+            }
+        }
+    }
+
+    // --- Stadium Bleachers ---
+    let bleacher_rows = 6;
+
+    let color_red = (0.8, 0.2, 0.2);
+    let color_blue = (0.2, 0.4, 0.9);
+    let color_gray = (0.3, 0.3, 0.3);
+
+    for row in 1..=bleacher_rows {
+        let out_y_top = FIELD_HALF_H + row as f32;
+        let height_z = row as f32 * 1.0;
+        // Top Sideline (Audience)
+        for x in -(FIELD_HALF_W as i32 + row)..=(FIELD_HALF_W as i32 + row) {
+            let (r, g, b) = if (x + row) % 2 == 0 {
+                color_red
+            } else {
+                color_gray
+            };
+            cubes.push(unit_cube(x as f32, out_y_top, height_z, r, g, b));
+        }
+
+        let out_x_left = -FIELD_HALF_W - row as f32;
+        let out_x_right = FIELD_HALF_W + row as f32;
+
+        // Left & Right Goal lines (Audience)
+        for y in -(FIELD_HALF_H as i32 + row - 1)..=(FIELD_HALF_H as i32 + row - 1) {
+            let (r, g, b) = if (y + row) % 2 == 0 {
+                color_blue
+            } else {
+                color_gray
+            };
+            cubes.push(unit_cube(out_x_left, y as f32, height_z, r, g, b));
+
+            let (r, g, b) = if (y + row) % 2 == 0 {
+                color_red
+            } else {
+                color_gray
+            };
+            cubes.push(unit_cube(out_x_right, y as f32, height_z, r, g, b));
+        }
     }
 
     cubes
@@ -118,11 +179,10 @@ fn make_digit_cubes(digit: char, offset_x: f32, color: Vector3<f32>) -> Vec<Mode
     for y in 0..5 {
         for x in 0..3 {
             if map[(4 - y) * 3 + x] == 1 {
-                // Digits drawn in X/Y plane in the background (-15.0 on Z)
                 cubes.push(unit_cube(
                     offset_x + x as f32,
-                    y as f32,
-                    -15.0,
+                    0.0,
+                    y as f32 - 4.0,
                     color.x,
                     color.y,
                     color.z,
@@ -142,8 +202,8 @@ fn make_score_model(score: u32, base_x: f32, color: Vector3<f32>) -> DynamicMode
         offset_x += 4.0; // Spacing between digits
     }
     let mut model = DynamicModel::from_cubes(cubes);
-    // Raise the score board
-    model.position = Vector3::new(0.0, FIELD_HALF_H + 2.0, 0.0);
+    // Float the score board in the air
+    model.position = Vector3::new(0.0, FIELD_HALF_H, 15.0);
     model
 }
 
