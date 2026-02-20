@@ -31,7 +31,7 @@ const PADDLE_MAX_Y: f32 = FIELD_HALF_H - PADDLE_HALF_H - 1.0;
 // Ball
 // ---------------------------------------------------------------------------
 const BALL_SPEED_INIT: f32 = 10.0;
-const BALL_SPEED_MAX: f32 = 26.0;
+const BALL_SPEED_MAX: f32 = 40.0;
 const BALL_SPEED_INC: f32 = 1.5;
 /// Ball center Y limit so it never clips into a wall (wall face − ball radius).
 const WALL_LIMIT: f32 = FIELD_HALF_H - 1.0;
@@ -296,37 +296,76 @@ impl Game for PongGame {
             Vector3::new(PADDLE_X, self.right_y, 0.0);
     }
 
+    fn ui(&mut self, _ctx: &mut EngineContext, ui_ctx: &etib::egui::Context) {
+        etib::egui::Area::new(etib::egui::Id::new("pong_debug_info")).show(ui_ctx, |ui| {
+            ui.with_layout(
+                etib::egui::Layout::left_to_right(etib::egui::Align::Center),
+                |ui| {
+                    if ui.button("Randomize Ball").clicked() {
+                        let t = std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap()
+                            .as_secs_f64();
+                        let r = (t * 13.0).sin().abs() as f32;
+                        let g = (t * 17.0).sin().abs() as f32;
+                        let b = (t * 19.0).sin().abs() as f32;
+                        if let Some(my_gfx) = self.my_gfx.as_mut() {
+                            if let Some(ball) = my_gfx.scene.get_dynamic_mut(self.ball_id) {
+                                for cube in ball.cubes_mut() {
+                                    cube.color = cgmath::Vector3::new(r, g, b);
+                                }
+                            }
+                        }
+                    }
+
+                    ui.heading("Scores:");
+                    ui.label(format!("Left: {}", self.left_score));
+                    ui.label(format!("Right: {}", self.right_score));
+
+                    ui.separator();
+                    ui.heading("Ball Info:");
+                    ui.label(format!("Speed X: {:.2}", self.ball_vel_x));
+                    ui.label(format!("Speed Y: {:.2}", self.ball_vel_y));
+
+                    ui.separator();
+                    ui.label(format!(
+                        "FPS: {:.0}",
+                        self.frame_count as f32 / self.fps_timer.max(0.001)
+                    ));
+                },
+            );
+        });
+    }
+
     fn render(&mut self, ctx: &mut EngineContext) {
-        let gfx = &ctx.gfx;
-        let my_gfx = self.my_gfx.as_mut().unwrap();
-        let (frame, view) = gfx.get_next_frame();
+        let (frame, view) = ctx.gfx.get_next_frame();
 
         self.frame_count += 1;
         self.fps_timer += ctx.time.dt;
         if self.fps_timer >= 0.5 {
-            let fps = self.frame_count as f32 / self.fps_timer;
-            ctx.set_window_title(&format!(
-                "PONG  |  {}  :  {}  |  {:.0} FPS  |  W/S  vs  Up/Down",
-                self.left_score, self.right_score, fps,
-            ));
             self.frame_count = 0;
             self.fps_timer = 0.0;
         }
 
-        let mut encoder = gfx
+        let mut encoder = ctx
+            .gfx
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("Pong encoder"),
             });
 
+        let my_gfx = self.my_gfx.as_mut().unwrap();
         my_gfx.scene.render(
             &mut encoder,
-            gfx,
+            &ctx.gfx,
             &view,
             &my_gfx.camera.bind_group.bind_group,
         );
 
-        gfx.queue.submit(Some(encoder.finish()));
+        // `ctx.window` isn't accessible, we changed render_ui to implicitly use it from context instead or we should export window access. Wait, game.rs `render_ui` expects `&Window`?
+        ctx.render_ui(&mut encoder, &view);
+
+        ctx.gfx.queue.submit(Some(encoder.finish()));
         frame.present();
     }
 

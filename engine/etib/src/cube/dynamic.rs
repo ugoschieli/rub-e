@@ -9,7 +9,7 @@ use anyhow::Result;
 use cgmath::{Matrix4, Quaternion, Vector3, Vector4, Zero};
 
 use super::cube::{Cube, CubeRaw};
-use super::model::{load_model, ModelCube};
+use super::model::{ModelCube, load_model};
 
 /// A multi-cube model loaded from a file that can move independently at runtime.
 ///
@@ -44,6 +44,11 @@ impl DynamicModel {
             rotation: Quaternion::new(1.0, 0.0, 0.0, 0.0),
             scale: 1.0,
         }
+    }
+
+    /// Access the cubes mutably, for instance to change their color.
+    pub fn cubes_mut(&mut self) -> &mut [ModelCube] {
+        &mut self.cubes
     }
 
     /// Number of cubes in this model, which equals the number of GPU instances it occupies.

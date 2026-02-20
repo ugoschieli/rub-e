@@ -25,3 +25,4 @@ pub use crate::game::*;
 pub use crate::gfx::*;
 pub use crate::scene::Scene;
 pub use crate::vertex::*;
+pub use egui;
