@@ -14,6 +14,6 @@ export interface Project {
 export interface Asset {
   id: number
   name: string
-  category_id: Category["id"][] // array of Category IDs
-  project_id: Project["id"][]
+  category_id: Category[]
+  project_id: Project[]
 }

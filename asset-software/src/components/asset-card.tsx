@@ -1,15 +1,9 @@
-import React from "react"
-import { Asset } from "@/types/types"
-import data_categories from "@/../config/data_categories.json";
-import Image from "next/image"
+import React from "react";
+import { Asset } from "@/types/types";
+import Image from "next/image";
+import { AssetOptionCard } from "./asset-option-card";
 
-function getCategoryName(id: number) {
-  const category = data_categories.find((c) => c.id === id);
-  return category ? category.name : "";
-}
 export default function AssetCard({ asset }: { asset: Asset }) {
-
-
   return (
     <div className="flex-none w-[270px] h-[350px] m-4 border rounded-xl bg-card shadow-sm hover:shadow-md transition cursor-pointer">
       {/* IMAGE */}
@@ -21,26 +15,30 @@ export default function AssetCard({ asset }: { asset: Asset }) {
           height={150}
           className="h-36 object-contain"
         />
-
       </div>
 
       {/* CONTENT */}
-      <div className="px-4 py-3">
+      <div className="px-4 py-3 relative">
         <h3 className="font-semibold text-white text-l mb-1">{asset.name}</h3>
         <p className="text-s text-muted-foreground">Asset</p>
 
         {/* TAGS / METADATA */}
         <div className="flex flex-wrap gap-1 mt-2">
-          {asset.category_id?.map((id) => (
+          {asset.category_id?.map((category) => (
             <span
-              key={id}
+              key={category.id}
               className="px-2 py-0.5 mr-0.5 text-s rounded bg-muted text-muted-foreground"
             >
-              {getCategoryName(id)}
+              {category.name}
             </span>
           ))}
         </div>
+
+        {/* ACTIONS / OPTIONS */}
+        <div className="absolute top-2 right-2">
+          <AssetOptionCard />
+        </div>
       </div>
     </div>
-  )
+  );
 }
