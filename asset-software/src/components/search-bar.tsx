@@ -74,7 +74,7 @@ export default function SearchBar() {
 
         switch (type) {
             case 'asset':
-                router.push(`/assets/${encodeURIComponent(item.name.toLowerCase().replace(/\s+/g, '-'))}`);
+                router.push(`/assets?search=${encodeURIComponent(item.name)}`);
                 break;
             case 'project':
                 router.push(`/projects/${item.id}`);

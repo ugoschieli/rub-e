@@ -23,7 +23,7 @@ export default function AssetCard({ asset }: { asset: Asset }) {
         <p className="text-s text-muted-foreground">Asset</p>
 
         {/* TAGS / METADATA */}
-        <div className="flex flex-wrap gap-1 mt-2">
+        <div className="flex flex-wrap gap-1 mt-2" onClick={(e) => e.stopPropagation()}>
           {asset.category_id?.map((category) => (
             <span
               key={category.id}
@@ -35,8 +35,8 @@ export default function AssetCard({ asset }: { asset: Asset }) {
         </div>
 
         {/* ACTIONS / OPTIONS */}
-        <div className="absolute top-2 right-2">
-          <AssetOptionCard />
+        <div className="absolute top-2 right-2" onClick={(e) => e.stopPropagation()}>
+          <AssetOptionCard asset={asset} />
         </div>
       </div>
     </div>

@@ -12,12 +12,11 @@ pub fn register_handlers(builder: Builder<Wry>) -> Builder<Wry> {
         assets::delete_asset,
         assets::add_category_to_asset,
         assets::add_project_to_asset,
-
+        assets::update_asset_category_and_project,
         // Categories
         categories::get_all_categories,
         categories::add_category,
         categories::delete_category,
-
         // Projects
         projects::get_all_projects,
         projects::add_project,

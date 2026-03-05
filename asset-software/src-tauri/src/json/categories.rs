@@ -1,13 +1,19 @@
-use std::{fs};
-use std::path::Path;
 use super::model::AssetCategory;
-
+use std::fs;
+use std::path::Path;
 
 pub fn get_categories(path: &Path) -> Vec<AssetCategory> {
-    if !path.exists() { return Vec::new(); }
-    
+    if !path.exists() {
+        return Vec::new();
+    }
+
     let data = fs::read_to_string(path).unwrap_or_else(|_| "[]".to_string());
     serde_json::from_str(&data).unwrap_or_else(|_| Vec::new())
+}
+
+pub fn get_category_by_id(path: &Path, id: u32) -> Option<AssetCategory> {
+    let items = get_categories(path);
+    items.into_iter().find(|c| c.id == id)
 }
 
 pub fn add_category(path: &Path, name: &str) -> Result<(), String> {
@@ -42,15 +48,17 @@ pub fn init(path: &Path) {
     if !path.exists() {
         let default_items = vec![AssetCategory::new(1, "Catégorie Exemple")];
         save(path, &default_items);
-        println!("Fichier categories créé avec une valeur par défaut à : {:?}", path);
+        println!(
+            "Fichier categories créé avec une valeur par défaut à : {:?}",
+            path
+        );
     }
 }
 
-
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
     use super::*;
+    use std::path::PathBuf;
 
     // Helper to get a unique test path
     fn get_test_path() -> PathBuf {
@@ -68,27 +76,30 @@ mod tests {
     #[test]
     fn test_add_category() {
         cleanup();
-        
+
         add_category(&get_test_path(), "Textures").unwrap();
         add_category(&get_test_path(), "Modèles 3D").unwrap();
-        
+
         let cats = get_categories(&get_test_path());
         assert_eq!(cats.len(), 2);
         assert_eq!(cats[0].name, "Textures");
-        
+
         cleanup();
     }
 
     #[test]
     fn test_remove_category() {
         cleanup();
-        
+
         add_category(&get_test_path(), "A Supprimer").unwrap();
         remove_category(&get_test_path(), "A Supprimer");
-        
+
         let cats = get_categories(&get_test_path());
-        assert!(cats.is_empty(), "La liste devrait être vide après suppression");
-        
+        assert!(
+            cats.is_empty(),
+            "La liste devrait être vide après suppression"
+        );
+
         cleanup();
     }
 }

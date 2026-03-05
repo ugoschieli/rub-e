@@ -49,7 +49,7 @@ fn scan_folder(
 
                         add_asset(assets_db_path, &asset_name, &relative_path_str);
                         if let Some(p) = &project {
-                            add_project_to_asset(assets_db_path, &asset_name, p.clone());
+                            let _ = add_project_to_asset(assets_db_path, &asset_name, p.clone(), assets_root);
                         }
                     }
                 }

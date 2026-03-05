@@ -6,8 +6,10 @@ export async function handleGetAllAssets() {
   try {
     const assets = await invoke("get_all_assets");
     console.log("All assets:", assets);
+    return assets as any[];
   } catch (err) {
     console.error("Failed to get all assets:", err);
+    return [];
   }
 }
 
@@ -31,31 +33,57 @@ export async function handleDeleteAsset(name: string) {
 
 export async function handleAddCategoryToAsset(
   assetName: string,
-  categoryName: string,
+  category: { id: number; name: string },
 ) {
   try {
-    await invoke("add_category_to_asset", {
-      asset_name: assetName,
-      category_name: categoryName,
+    const result = await invoke("add_category_to_asset", {
+      assetName: assetName,
+      category: category,
     });
-    console.log("Category added to asset:", assetName, categoryName);
+    console.log("Category added to asset result:", result);
+    return result;
   } catch (err) {
     console.error("Failed to add category to asset:", err);
+    throw err;
   }
 }
 
 export async function handleAddProjectToAsset(
   assetName: string,
-  projectName: string,
+  project: { id: number; name: string },
 ) {
   try {
-    await invoke("add_project_to_asset", {
-      asset_name: assetName,
-      project_name: projectName,
+    const result = await invoke("add_project_to_asset", {
+      assetName: assetName,
+      project: project,
     });
-    console.log("Project added to asset:", assetName, projectName);
+    console.log("Project added to asset result:", result);
+    return result;
   } catch (err) {
     console.error("Failed to add project to asset:", err);
+    throw err;
+  }
+}
+
+export async function handleUpdateAssetCategoryAndProject(
+  assetId: number,
+  categoryId: number,
+  projectId: number,
+) {
+  try {
+    await invoke("update_asset_category_and_project", {
+      asset_id: assetId,
+      category_id: categoryId,
+      project_id: projectId,
+    });
+    console.log(
+      "Asset updated with new category and project:",
+      assetId,
+      categoryId,
+      projectId,
+    );
+  } catch (err) {
+    console.error("Failed to update asset category and project:", err);
   }
 }
 
