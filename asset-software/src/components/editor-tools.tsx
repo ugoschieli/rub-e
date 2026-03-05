@@ -1,7 +1,6 @@
 "use client"
 
 import * as React from "react"
-import Link from "next/link"
 import {
   Camera,
   Lightbulb,
@@ -10,8 +9,18 @@ import {
   Trash2,
   HelpCircle,
 } from "lucide-react"
+import { useEditor } from "@/context/editor-context"
+import * as THREE from 'three'
 
 export function EditorTools() {
+  const { objects, selected, setSelected, updateObject } = useEditor()
+
+  const getIcon = (obj: THREE.Object3D) => {
+    if (obj instanceof THREE.Light) return <Lightbulb className="h-4 w-4 text-yellow-500" />
+    if (obj instanceof THREE.Camera) return <Camera className="h-4 w-4 text-zinc-400" />
+    return <Box className="h-4 w-4 text-blue-400" />
+  }
+
   return (
     <aside className="flex w-80 flex-col border-l border-zinc-800 bg-[#18181b]">
       
@@ -21,13 +30,15 @@ export function EditorTools() {
           Hiérarchie
         </div>
         <div className="flex-1 overflow-y-auto px-2">
-          <HierarchyItem icon={<Camera className="h-4 w-4 text-zinc-400" />} label="Camera" />
-          <HierarchyItem icon={<Lightbulb className="h-4 w-4 text-yellow-500" />} label="Light" />
-          <HierarchyItem 
-            icon={<Box className="h-4 w-4 text-blue-400" />} 
-            label="Cube" 
-            active 
-          />
+          {objects.map((obj) => (
+            <HierarchyItem 
+              key={obj.uuid}
+              icon={getIcon(obj)} 
+              label={obj.name || obj.type} 
+              active={selected?.uuid === obj.uuid}
+              onClick={() => setSelected(obj)}
+            />
+          ))}
         </div>
       </div>
 
@@ -37,36 +48,59 @@ export function EditorTools() {
           Propriétés
         </div>
 
-        <div className="space-y-6 px-4 pb-8">
-          {/* Nom */}
-          <div className="space-y-2">
-            <label className="text-xs text-zinc-400">Nom</label>
-            <input 
-              type="text" 
-              className="w-full rounded bg-zinc-900 border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 focus:border-blue-500 focus:outline-none"
-              defaultValue="Cube"
-            />
+        {selected ? (
+          <div className="space-y-6 px-4 pb-8">
+            {/* Nom */}
+            <div className="space-y-2">
+              <label className="text-xs text-zinc-400">Nom</label>
+              <input 
+                type="text" 
+                className="w-full rounded bg-zinc-900 border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 focus:border-blue-500 focus:outline-none"
+                value={selected.name}
+                onChange={(e) => {
+                  selected.name = e.target.value
+                  updateObject(selected)
+                }}
+              />
+            </div>
+
+            <div className="h-px bg-zinc-800" />
+
+            {/* Transformations */}
+            <div className="space-y-4">
+              <div className="text-xs text-zinc-500">Transformation</div>
+              
+              <TransformInputGroup 
+                label="Position" 
+                values={selected.position} 
+                onChange={() => updateObject(selected)}
+              />
+              <TransformInputGroup 
+                label="Rotation" 
+                values={selected.rotation} 
+                onChange={() => updateObject(selected)}
+                isRotation
+              />
+              <TransformInputGroup 
+                label="Échelle" 
+                values={selected.scale} 
+                onChange={() => updateObject(selected)}
+              />
+            </div>
+
+            <div className="h-px bg-zinc-800" />
+
+            {/* Type */}
+            <div className="space-y-2">
+              <label className="text-xs text-zinc-400">Type d'objet</label>
+              <div className="text-sm font-medium text-zinc-200">{selected.type}</div>
+            </div>
           </div>
-
-          <div className="h-px bg-zinc-800" />
-
-          {/* Transformations */}
-          <div className="space-y-4">
-            <div className="text-xs text-zinc-500">Transformation</div>
-            
-            <TransformInputGroup label="Position" x="0.00" y="0.00" z="0.00" />
-            <TransformInputGroup label="Rotation" x="0.00" y="0.00" z="0.00" />
-            <TransformInputGroup label="Échelle" x="1.00" y="1.00" z="1.00" />
+        ) : (
+          <div className="px-4 py-8 text-sm text-zinc-500 text-center">
+            Sélectionnez un objet pour voir ses propriétés
           </div>
-
-          <div className="h-px bg-zinc-800" />
-
-          {/* Type */}
-          <div className="space-y-2">
-            <label className="text-xs text-zinc-400">Type d'objet</label>
-            <div className="text-sm font-medium text-zinc-200">Cube</div>
-          </div>
-        </div>
+        )}
       </div>
 
       {/* Pied de page Sidebar */}
@@ -84,13 +118,16 @@ function HierarchyItem({
   icon,
   label,
   active,
+  onClick
 }: {
   icon: React.ReactNode
   label: string
   active?: boolean
+  onClick: () => void
 }) {
   return (
     <div
+      onClick={onClick}
       className={`group flex items-center justify-between rounded px-3 py-1.5 text-sm cursor-pointer mb-1 ${
         active ? "bg-blue-600 text-white" : "text-zinc-300 hover:bg-zinc-800"
       }`}
@@ -107,20 +144,65 @@ function HierarchyItem({
   )
 }
 
-function TransformInputGroup({ label, x, y, z }: { label: string; x: string; y: string; z: string }) {
+function TransformInputGroup({ 
+  label, 
+  values, 
+  onChange,
+  isRotation = false
+}: { 
+  label: string; 
+  values: any; 
+  onChange: () => void;
+  isRotation?: boolean
+}) {
+  const handleAxisChange = (axis: 'x' | 'y' | 'z', value: string) => {
+    const numValue = parseFloat(value) || 0
+    if (isRotation) {
+      values[axis] = THREE.MathUtils.degToRad(numValue)
+    } else {
+      values[axis] = numValue
+    }
+    onChange()
+  }
+
+  const getAxisValue = (axis: 'x' | 'y' | 'z') => {
+    const val = values[axis]
+    return isRotation ? THREE.MathUtils.radToDeg(val).toFixed(2) : val.toFixed(2)
+  }
+
   return (
     <div className="space-y-2">
       <label className="text-xs text-zinc-500">{label}</label>
       <div className="grid grid-cols-3 gap-2">
-        <AxisInput label="X" value={x} />
-        <AxisInput label="Y" value={y} />
-        <AxisInput label="Z" value={z} />
+        <AxisInput 
+          label="X" 
+          value={getAxisValue('x')} 
+          onChange={(val) => handleAxisChange('x', val)}
+        />
+        <AxisInput 
+          label="Y" 
+          value={getAxisValue('y')} 
+          onChange={(val) => handleAxisChange('y', val)}
+        />
+        <AxisInput 
+          label="Z" 
+          value={getAxisValue('z')} 
+          onChange={(val) => handleAxisChange('z', val)}
+        />
       </div>
     </div>
   )
 }
 
-function AxisInput({ label, value }: { label: string; value: string }) {
+function AxisInput({ 
+  label, 
+  value, 
+  onChange 
+}: { 
+  label: string; 
+  value: string; 
+  onChange: (val: string) => void 
+}) {
   return (
     <div className="group relative">
       <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-zinc-500 font-mono pointer-events-none group-hover:text-blue-500">
@@ -128,8 +210,10 @@ function AxisInput({ label, value }: { label: string; value: string }) {
       </span>
       <input
         type="number"
+        step="0.1"
         className="w-full rounded bg-zinc-900 border border-zinc-800 px-2 py-1 pl-6 text-right text-xs text-zinc-300 focus:border-blue-500 focus:bg-zinc-900 focus:outline-none appearance-none"
-        defaultValue={value}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
       />
     </div>
   )

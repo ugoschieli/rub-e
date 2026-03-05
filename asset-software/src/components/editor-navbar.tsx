@@ -2,7 +2,9 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { ChevronLeft } from "lucide-react" // 1. Import de l'icône
+import { ChevronLeft } from "lucide-react"
+import { useEditor } from "@/context/editor-context"
+import * as THREE from 'three'
 
 import { useIsMobile } from "@/hooks/use-mobile"
 import {
@@ -16,6 +18,24 @@ import {
 
 export function EditorNavbar() {
   const isMobile = useIsMobile()
+  const { addObject } = useEditor()
+
+  const addCube = () => {
+    const mesh = new THREE.Mesh(
+      new THREE.BoxGeometry(1, 1, 1),
+      new THREE.MeshStandardMaterial({ color: "#6366f1" })
+    )
+    mesh.name = "Cube " + Math.floor(Math.random() * 100)
+    mesh.position.y = 0.5
+    addObject(mesh)
+  }
+
+  const addLight = () => {
+    const light = new THREE.PointLight(0xffffff, 10)
+    light.name = "Point Light"
+    light.position.set(2, 2, 2)
+    addObject(light)
+  }
 
   return (
     <div className="relative z-50 flex items-center border-b border-zinc-800 bg-[#18181b] px-2">
@@ -80,9 +100,9 @@ export function EditorNavbar() {
             </NavigationMenuTrigger>
             <NavigationMenuContent>
               <ul className="grid w-[200px] gap-1 p-2">
-                <ListItem href="#" title="Cube" />
+                <ListItem onClick={addCube} title="Cube" />
                 <div className="bg-border my-1 h-px" />
-                <ListItem href="#" title="Lumière" />
+                <ListItem onClick={addLight} title="Lumière" />
                 <ListItem href="#" title="Caméra" />
               </ul>
             </NavigationMenuContent>
@@ -134,7 +154,7 @@ const ListItem = React.forwardRef<
       <NavigationMenuLink asChild>
         <a
           ref={ref}
-          className={`hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground block select-none rounded-sm px-3 py-2 text-sm leading-none no-underline transition-colors outline-none ${className}`}
+          className={`hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground block select-none rounded-sm px-3 py-2 text-sm leading-none no-underline transition-colors outline-none cursor-pointer ${className}`}
           {...props}
         >
           <div className="text-sm font-medium leading-none">{title}</div>

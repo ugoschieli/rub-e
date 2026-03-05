@@ -8,7 +8,6 @@ export default function AddCategory() {
 
     const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
-        let name = e.target[0].value
         await handleAddCategory(name);
         setName("");
     };
