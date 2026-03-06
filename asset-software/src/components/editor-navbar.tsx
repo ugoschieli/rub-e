@@ -16,6 +16,11 @@ import {
   NavigationMenuTrigger,
 } from "@/components/ui/navigation-menu"
 
+function exportCubesCoordinates() {
+  const event = new CustomEvent("export-cubes-coordinates")
+  window.dispatchEvent(event)
+}
+
 export function EditorNavbar() {
   const isMobile = useIsMobile()
   const { addObject } = useEditor()
@@ -134,7 +139,14 @@ export function EditorNavbar() {
               <ul className="grid w-[200px] gap-1 p-2">
                 <ListItem href="#" title="Lancer le rendu" />
                 <ListItem href="#" title="Paramètres de rendu" />
-                <ListItem href="#" title="Exporter l'image" />
+                <ListItem 
+                  href="#" 
+                  title="Exporter l'image"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    exportCubesCoordinates()
+                  }} 
+                />
               </ul>
             </NavigationMenuContent>
           </NavigationMenuItem>
