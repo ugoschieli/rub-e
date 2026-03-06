@@ -20,11 +20,11 @@ function SceneManager() {
         new THREE.BoxGeometry(1, 1, 1),
         new THREE.MeshStandardMaterial({ color: "#6366f1" })
       )
-      box.name = "Cube"
+      box.name = "Cube 1"
       box.position.y = 0.5
       addObject(box)
     }
-  }, [scene, setScene, addObject])
+  }, [scene, setScene, addObject, objects.length])
 
   return (
     <>
@@ -43,7 +43,7 @@ function SceneManager() {
 }
 
 function EditorCanvas() {
-  const { selected, setSelected } = useEditor()
+  const { selected, setSelected, updateObject } = useEditor()
 
   return (
     <Canvas
@@ -79,8 +79,8 @@ function EditorCanvas() {
         <TransformControls 
           object={selected} 
           mode="translate" 
-          onMouseDown={() => {
-            // Disable OrbitControls during transform
+          onObjectChange={() => {
+            if (selected) updateObject(selected)
           }}
         />
       )}
