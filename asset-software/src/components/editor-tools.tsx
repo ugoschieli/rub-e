@@ -27,10 +27,10 @@ export function EditorTools() {
   return (
     <aside className="flex w-80 flex-col border-l border-zinc-800 bg-[#18181b] h-full">
 
-      {/* Section Hiérarchie */}
+      {/* Hierarchy Section */}
       <div className="flex flex-col border-b border-zinc-800 h-1/3 min-h-[200px]">
         <div className="px-4 py-3 text-xs font-semibold uppercase text-zinc-500 tracking-wider">
-          Hiérarchie
+          Hierarchy
         </div>
         <div className="flex-1 overflow-y-auto px-2">
 
@@ -43,8 +43,8 @@ export function EditorTools() {
               onClick={() => setSelected(defaultCamera)}
             />
           )}
-           {
-          objects.map((obj) => (
+
+          {objects.map((obj) => (
             <HierarchyItem
               key={obj.uuid}
               icon={getIcon(obj)}
@@ -62,17 +62,17 @@ export function EditorTools() {
         </div>
       </div>
 
-      {/* Section Propriétés */}
+      {/* Properties Section */}
       <div className="flex-1 overflow-y-auto bg-[#18181b]">
         <div className="px-4 py-3 text-xs font-semibold uppercase text-zinc-500 tracking-wider">
-          Propriétés
+          Properties
         </div>
 
         {selected ? (
           <div className="space-y-6 px-4 pb-8">
-            {/* Nom */}
+            {/* Name */}
             <div className="space-y-2">
-              <label className="text-xs text-zinc-400">Nom</label>
+              <label className="text-xs text-zinc-400">Name</label>
               <input
                 type="text"
                 className="w-full rounded bg-zinc-900 border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 focus:border-blue-500 focus:outline-none"
@@ -102,7 +102,7 @@ export function EditorTools() {
                 isRotation
               />
               <TransformInputGroup
-                label="Échelle"
+                label="Scale"
                 values={selected.scale}
                 onChange={() => updateObject(selected)}
               />
@@ -112,18 +112,18 @@ export function EditorTools() {
 
             {/* Type */}
             <div className="space-y-2">
-              <label className="text-xs text-zinc-400">Type d'objet</label>
+              <label className="text-xs text-zinc-400">Object Type</label>
               <div className="text-sm font-medium text-zinc-200">{selected.type}</div>
             </div>
           </div>
         ) : (
           <div className="px-4 py-8 text-sm text-zinc-500 text-center">
-            Sélectionnez un objet pour voir ses propriétés
+            Select an object to view its properties
           </div>
         )}
       </div>
 
-      {/* Pied de page Sidebar */}
+      {/* Sidebar Footer */}
       <div className="border-t border-zinc-800 p-4 flex justify-end">
         <HelpCircle className="h-4 w-4 text-zinc-500 cursor-pointer hover:text-zinc-300" />
       </div>
@@ -178,6 +178,7 @@ function HierarchyItem({
     </div>
   )
 }
+
 function HierarchyCamera({
   icon,
   label,
@@ -201,10 +202,10 @@ function HierarchyCamera({
         {icon}
         <span className="truncate">{label}</span>
       </div>
-     
     </div>
   )
 }
+
 function TransformInputGroup({
   label,
   values,
