@@ -41,24 +41,27 @@ function SceneManager() {
     </>
   )
 }
-
 function EditorCanvas() {
-  const { selected, setSelected } = useEditor()
+  const { selected, setSelected, updateObject,objects } = useEditor()
+  const transformRef = React.useRef<any>(null)
+
+  React.useEffect(() => {
+    if (!transformRef.current) return
+    if (selected && selected.parent && objects.includes(selected)) {
+      transformRef.current.attach(selected)
+    } else {
+      transformRef.current.detach()
+    }
+  }, [selected, objects])
+
+
 
   return (
-    <Canvas
-      shadows
-      camera={{ position: [5, 5, 5], fov: 50 }}
-      className="h-full w-full bg-[#121212]"
-      onPointerMissed={() => setSelected(null)}
-    >
+    <Canvas shadows camera={{ position: [5, 5, 5], fov: 50 }} className="h-full w-full bg-[#121212]" onPointerMissed={() => setSelected(null)}>
       <color attach="background" args={["#121212"]} />
-
       <ambientLight intensity={0.5} />
       <directionalLight position={[10, 10, 5]} intensity={1} castShadow />
-
       <OrbitControls makeDefault minPolarAngle={0} maxPolarAngle={Math.PI / 1.75} />
-
       <Grid
         position={[0, -0.01, 0]}
         args={[10.5, 10.5]}
@@ -74,17 +77,13 @@ function EditorCanvas() {
       />
 
       <SceneManager />
-
-      {selected && (
-        <TransformControls 
-          object={selected} 
-          mode="translate" 
-          onMouseDown={() => {
-            // Disable OrbitControls during transform
-          }}
-        />
-      )}
-
+      <TransformControls
+        ref={transformRef}
+        mode="translate"
+        onChange={() => {
+          if (selected) updateObject(selected)  // <-- triggers re-render of sidebar
+        }}
+      />
       <ContactShadows position={[0, 0, 0]} opacity={0.5} scale={10} blur={1.5} far={0.8} />
       <Environment preset="city" />
     </Canvas>

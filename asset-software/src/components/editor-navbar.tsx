@@ -37,6 +37,14 @@ export function EditorNavbar() {
     addObject(light)
   }
 
+  const addCamera = () => {
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000)
+    camera.name = "Camera"
+    camera.lookAt(0, 0, 0)
+    camera.position.set(0, 2, 5)
+    addObject(camera)
+  }
+
   return (
     <div className="relative z-50 flex items-center border-b border-zinc-800 bg-[#18181b] px-2">
       
@@ -103,7 +111,7 @@ export function EditorNavbar() {
                 <ListItem onClick={addCube} title="Cube" />
                 <div className="bg-border my-1 h-px" />
                 <ListItem onClick={addLight} title="Lumière" />
-                <ListItem href="#" title="Caméra" />
+                <ListItem onClick={addCamera} title="Caméra" />
               </ul>
             </NavigationMenuContent>
           </NavigationMenuItem>

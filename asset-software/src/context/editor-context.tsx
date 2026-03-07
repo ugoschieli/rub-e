@@ -33,17 +33,17 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
   }, [scene])
 
   const removeObject = useCallback((obj: THREE.Object3D) => {
-    if (scene) {
-      scene.remove(obj)
-      setObjects(prev => prev.filter(o => o !== obj))
-      if (selected === obj) setSelected(null)
-    }
+    if (!scene) return
+
+    if (selected === obj) setSelected(null)   // clear first
+    scene.remove(obj)                         // then remove
+
+    setObjects(prev => prev.filter(o => o !== obj))
   }, [scene, selected, setSelected])
 
-  const updateObject = useCallback((obj: THREE.Object3D) => {
-    // Force a re-render of the components listening to objects
-    setObjects(prev => [...prev])
-  }, [])
+  function updateObject(updatedObj: THREE.Object3D) {
+    setObjects(prev => prev.map(obj => (obj.uuid === updatedObj.uuid ? updatedObj : obj)))
+  }[]
 
   return (
     <EditorContext.Provider
