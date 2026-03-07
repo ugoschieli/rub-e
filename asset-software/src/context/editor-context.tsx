@@ -8,6 +8,8 @@ interface EditorState {
   setSelected: (obj: THREE.Object3D | null) => void
   scene: THREE.Scene | null
   setScene: (scene: THREE.Scene | null) => void
+  camera: THREE.Camera | null
+  setCamera: (camera: THREE.Camera | null) => void
   objects: THREE.Object3D[]
   addObject: (obj: THREE.Object3D) => void
   removeObject: (obj: THREE.Object3D) => void
@@ -19,6 +21,7 @@ const EditorContext = createContext<EditorState | undefined>(undefined)
 export function EditorProvider({ children }: { children: React.ReactNode }) {
   const [selected, setSelectedState] = useState<THREE.Object3D | null>(null)
   const [scene, setScene] = useState<THREE.Scene | null>(null)
+  const [camera, setCamera] = useState<THREE.Camera | null>(null)   // ← new
   const [objects, setObjects] = useState<THREE.Object3D[]>([])
 
   const setSelected = useCallback((obj: THREE.Object3D | null) => {
@@ -52,6 +55,8 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
         setSelected,
         scene,
         setScene,
+        camera,     
+        setCamera, 
         objects,
         addObject,
         removeObject,
