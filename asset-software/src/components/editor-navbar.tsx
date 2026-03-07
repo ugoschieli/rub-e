@@ -18,21 +18,37 @@ import {
 
 export function EditorNavbar() {
   const isMobile = useIsMobile()
-  const { addObject } = useEditor()
+  const { objects, addObject } = useEditor()
 
   const addCube = () => {
     const mesh = new THREE.Mesh(
       new THREE.BoxGeometry(1, 1, 1),
       new THREE.MeshStandardMaterial({ color: "#6366f1" })
     )
-    mesh.name = "Cube " + Math.floor(Math.random() * 100)
+    
+    // Calculate next cube number
+    const cubeIndices = objects.map((obj) => {
+      const match = obj.name.match(/^Cube\s+(\d+)$/)
+      return match ? parseInt(match[1], 10) : (obj.name === "Cube" ? 1 : 0)
+    })
+    const maxIndex = Math.max(0, ...cubeIndices)
+    mesh.name = `Cube ${maxIndex + 1}`
+    
     mesh.position.y = 0.5
     addObject(mesh)
   }
 
   const addLight = () => {
     const light = new THREE.PointLight(0xffffff, 10)
-    light.name = "Point Light"
+    
+    // Calculate next light number
+    const lightIndices = objects.map((obj) => {
+      const match = obj.name.match(/^Point Light\s+(\d+)$/)
+      return match ? parseInt(match[1], 10) : (obj.name === "Point Light" ? 1 : 0)
+    })
+    const maxIndex = Math.max(0, ...lightIndices)
+    light.name = `Point Light ${maxIndex + 1}`
+    
     light.position.set(2, 2, 2)
     addObject(light)
   }
