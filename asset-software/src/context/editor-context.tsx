@@ -9,6 +9,8 @@ interface EditorState {
   setSelected: (obj: THREE.Object3D | null, multi?: boolean) => void
   scene: THREE.Scene | null
   setScene: (scene: THREE.Scene | null) => void
+  camera: THREE.Camera | null
+  setCamera: (camera: THREE.Camera | null) => void
   objects: THREE.Object3D[]
   addObject: (obj: THREE.Object3D) => void
   removeObject: (obj: THREE.Object3D) => void
@@ -22,6 +24,7 @@ const EditorContext = createContext<EditorState | undefined>(undefined)
 export function EditorProvider({ children }: { children: React.ReactNode }) {
   const [selection, setSelection] = useState<THREE.Object3D[]>([])
   const [scene, setScene] = useState<THREE.Scene | null>(null)
+  const [camera, setCamera] = useState<THREE.Camera | null>(null)   // ← new
   const [objects, setObjects] = useState<THREE.Object3D[]>([])
 
   const selected = selection.length > 0 ? selection[selection.length - 1] : null
@@ -53,16 +56,16 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
 
   const removeObject = useCallback((obj: THREE.Object3D) => {
     if (scene) {
+      if (selected === obj) setSelected(null);
       scene.remove(obj)
       setObjects(prev => prev.filter(o => o !== obj))
       setSelection(prev => prev.filter(o => o.uuid !== obj.uuid))
     }
   }, [scene])
 
-  const updateObject = useCallback((obj: THREE.Object3D) => {
-    // Force a re-render of the components listening to objects
-    setObjects(prev => [...prev])
-  }, [])
+  function updateObject(updatedObj: THREE.Object3D) {
+    setObjects(prev => prev.map(obj => (obj.uuid === updatedObj.uuid ? updatedObj : obj)))
+  }[]
 
   const groupSelection = useCallback(() => {
     if (selection.length <= 1 || !scene) return
@@ -127,6 +130,8 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
         setSelected,
         scene,
         setScene,
+        camera,     
+        setCamera, 
         objects,
         addObject,
         removeObject,

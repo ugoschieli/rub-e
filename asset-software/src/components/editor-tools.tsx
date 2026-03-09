@@ -16,22 +16,23 @@ import {
   Ungroup
 } from "lucide-react"
 import { useEditor } from "@/context/editor-context"
+import { useThree } from "@react-three/fiber"
 import * as THREE from 'three'
+import { get } from "http"
 
 export function EditorTools() {
-  const { objects, selection, selected, setSelected, updateObject, removeObject, groupSelection, ungroupSelection } = useEditor()
+  const { camera: defaultCamera, objects, selection, selected, setSelected, updateObject, removeObject, groupSelection, ungroupSelection } = useEditor()
 
   return (
     <aside className="flex w-80 flex-col border-l border-zinc-800 bg-[#18181b] h-full">
-
-      {/* Section Hiérarchie */}
+      {/* Section Hierarchy */}
       <div className="flex flex-col border-b border-zinc-800 h-1/2 min-h-[300px]">
         <div className="flex items-center justify-between px-4 py-3">
           <div className="text-xs font-semibold uppercase text-zinc-500 tracking-wider">
-            Hiérarchie
+            Hierarchy
           </div>
           <div className="flex items-center gap-2">
-            <button 
+            <button
               onClick={groupSelection}
               disabled={selection.length <= 1}
               className="p-1 hover:bg-zinc-800 rounded disabled:opacity-30 text-zinc-400 hover:text-white transition-colors"
@@ -39,9 +40,9 @@ export function EditorTools() {
             >
               <Layers className="h-3.5 w-3.5" />
             </button>
-            <button 
+            <button
               onClick={ungroupSelection}
-              disabled={!selection.some(s => s instanceof THREE.Group)}
+              disabled={!selection.some((s) => s instanceof THREE.Group)}
               className="p-1 hover:bg-zinc-800 rounded disabled:opacity-30 text-zinc-400 hover:text-white transition-colors"
               title="Dégrouper"
             >
@@ -50,34 +51,40 @@ export function EditorTools() {
           </div>
         </div>
         <div className="flex-1 overflow-y-auto px-2">
-          {objects.map((obj) => (
-            <RecursiveHierarchyItem
-              key={obj.uuid}
-              obj={obj}
-              depth={0}
+          {defaultCamera && (
+            <HierarchyCamera
+              icon={<Camera className="h-4 w-4 text-zinc-400" />}
+              label="Default Camera"
+              active={selected?.uuid === defaultCamera.uuid}
+              visible={true}
+              onClick={() => setSelected(defaultCamera)}
             />
+          )}
+
+          {objects.map((obj) => (
+            <RecursiveHierarchyItem key={obj.uuid} obj={obj} depth={0} />
           ))}
         </div>
       </div>
 
-      {/* Section Propriétés */}
+      {/* Properties Section */}
       <div className="flex-1 overflow-y-auto bg-[#18181b]">
         <div className="px-4 py-3 text-xs font-semibold uppercase text-zinc-500 tracking-wider">
-          Propriétés
+          Properties
         </div>
 
         {selected ? (
           <div className="space-y-6 px-4 pb-8">
-            {/* Nom */}
+            {/* Name */}
             <div className="space-y-2">
-              <label className="text-xs text-zinc-400">Nom</label>
+              <label className="text-xs text-zinc-400">Name</label>
               <input
                 type="text"
                 className="w-full rounded bg-zinc-900 border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 focus:border-blue-500 focus:outline-none"
                 value={selected.name}
                 onChange={(e) => {
-                  selected.name = e.target.value
-                  updateObject(selected)
+                  selected.name = e.target.value;
+                  updateObject(selected);
                 }}
               />
             </div>
@@ -100,7 +107,7 @@ export function EditorTools() {
                 isRotation
               />
               <TransformInputGroup
-                label="Échelle"
+                label="Scale"
                 values={selected.scale}
                 onChange={() => updateObject(selected)}
               />
@@ -110,24 +117,25 @@ export function EditorTools() {
 
             {/* Type */}
             <div className="space-y-2">
-              <label className="text-xs text-zinc-400">Type d'objet</label>
-              <div className="text-sm font-medium text-zinc-200">{selected.type}</div>
+              <label className="text-xs text-zinc-400">Object Type</label>
+              <div className="text-sm font-medium text-zinc-200">
+                {selected.type}
+              </div>
             </div>
           </div>
         ) : (
           <div className="px-4 py-8 text-sm text-zinc-500 text-center">
-            Sélectionnez un objet pour voir ses propriétés
+            Select an object to view its properties
           </div>
         )}
       </div>
 
-      {/* Pied de page Sidebar */}
+      {/* Sidebar Footer */}
       <div className="border-t border-zinc-800 p-4 flex justify-end">
         <HelpCircle className="h-4 w-4 text-zinc-500 cursor-pointer hover:text-zinc-300" />
       </div>
-
     </aside>
-  )
+  );
 }
 
 // --- HELPER COMPONENTS ---
@@ -224,6 +232,33 @@ function HierarchyItem({
         >
           <Trash2 className="h-3.5 w-3.5" />
         </button>
+      </div>
+    </div>
+  )
+}
+
+function HierarchyCamera({
+  icon,
+  label,
+  active,
+  visible,
+  onClick
+}: {
+  icon: React.ReactNode
+  label: string
+  active?: boolean
+  visible: boolean
+  onClick: () => void
+}) {
+  return (
+    <div
+      onClick={onClick}
+      className={`group flex items-center justify-between rounded px-3 py-1.5 text-sm cursor-pointer mb-1 transition-colors ${active ? "bg-blue-600 text-white" : "text-zinc-300 hover:bg-zinc-800"
+        }`}
+    >
+      <div className="flex items-center gap-3 overflow-hidden">
+        {icon}
+        <span className="truncate">{label}</span>
       </div>
     </div>
   )

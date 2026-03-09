@@ -2,10 +2,12 @@
 
 import * as React from "react"
 import { Canvas, useThree } from "@react-three/fiber"
-import { OrbitControls, Grid, Environment, ContactShadows, TransformControls } from "@react-three/drei"
+import { Grid, Environment, ContactShadows, TransformControls } from "@react-three/drei"
+import { OrbitControls as DreiOrbitControls } from "@react-three/drei" // React component
 import { EditorTools } from "./editor-tools"
 import { useEditor } from "@/context/editor-context"
 import * as THREE from 'three'
+
 
 function SceneManager() {
   const { setScene, objects, addObject, setSelected } = useEditor()
@@ -41,9 +43,37 @@ function SceneManager() {
     </>
   )
 }
+function CameraInitializer({ setCamera }: { setCamera: (cam: THREE.Camera) => void }) {
+  const { camera } = useThree()
+  React.useEffect(() => {
+    camera.name = "Default Camera"
+    setCamera(camera)   // store the orbital camera in context
+  }, [camera, setCamera])
+  return null
+}
+
+
+function EditorOrbitControls() {
+  const { camera, updateObject } = useEditor()
+  const controls = useThree((state) => state.controls as any) // <- use any
+
+  React.useEffect(() => {
+    if (!controls || !camera) return
+
+    const handleChange = () => {
+      updateObject(camera)
+    }
+
+    controls.addEventListener('change', handleChange)
+    return () => controls.removeEventListener('change', handleChange)
+  }, [controls, camera, updateObject])
+
+  return null
+}
+
 
 function EditorCanvas() {
-  const { selected, selection, setSelected, updateObject } = useEditor()
+  const { selected, selection, setSelected, updateObject, objects, setCamera } = useEditor()
   
   // Ref to store initial positions for delta movement
   const initialPositions = React.useRef<Map<string, THREE.Vector3>>(new Map())
@@ -77,6 +107,18 @@ function EditorCanvas() {
     
     updateObject(selected)
   }, [selected, selection, updateObject])
+  const transformRef = React.useRef<any>(null)
+
+  React.useEffect(() => {
+    if (!transformRef.current) return
+    if (selected && selected.parent && objects.includes(selected)) {
+      transformRef.current.attach(selected)
+    } else {
+      transformRef.current.detach()
+    }
+  }, [selected, objects])
+
+
 
   return (
     <Canvas
@@ -86,12 +128,15 @@ function EditorCanvas() {
       onPointerMissed={() => setSelected(null)}
     >
       <color attach="background" args={["#121212"]} />
-
+      <CameraInitializer setCamera={setCamera} />
       <ambientLight intensity={0.5} />
       <directionalLight position={[10, 10, 5]} intensity={1} castShadow />
-
-      <OrbitControls makeDefault minPolarAngle={0} maxPolarAngle={Math.PI / 1.75} />
-
+      <DreiOrbitControls
+        makeDefault
+        minPolarAngle={0}
+        maxPolarAngle={Math.PI / 1.75}
+      />
+      <EditorOrbitControls />
       <Grid
         position={[0, -0.01, 0]}
         args={[10.5, 10.5]}
@@ -109,18 +154,27 @@ function EditorCanvas() {
       <SceneManager />
 
       {selected && (
-        <TransformControls 
-          object={selected} 
-          mode="translate" 
+        <TransformControls
+          object={selected}
+          mode="translate"
           onMouseDown={onTransformMouseDown}
           onObjectChange={onTransformChange}
+          // onChange={() => {
+          //   if (selected) updateObject(selected); // <-- triggers re-render of sidebar
+          // }}
         />
       )}
 
-      <ContactShadows position={[0, 0, 0]} opacity={0.5} scale={10} blur={1.5} far={0.8} />
+      <ContactShadows
+        position={[0, 0, 0]}
+        opacity={0.5}
+        scale={10}
+        blur={1.5}
+        far={0.8}
+      />
       <Environment preset="city" />
     </Canvas>
-  )
+  );
 }
 
 export function EditorLayout() {
