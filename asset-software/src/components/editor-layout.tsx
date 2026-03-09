@@ -34,7 +34,7 @@ function SceneManager() {
           object={obj} 
           onClick={(e: any) => {
             e.stopPropagation()
-            setSelected(obj)
+            setSelected(obj, e.shiftKey)
           }}
         />
       ))}
@@ -43,7 +43,40 @@ function SceneManager() {
 }
 
 function EditorCanvas() {
-  const { selected, setSelected, updateObject } = useEditor()
+  const { selected, selection, setSelected, updateObject } = useEditor()
+  
+  // Ref to store initial positions for delta movement
+  const initialPositions = React.useRef<Map<string, THREE.Vector3>>(new Map())
+
+  const onTransformMouseDown = React.useCallback(() => {
+    if (!selected) return
+    
+    initialPositions.current.clear()
+    selection.forEach(obj => {
+      initialPositions.current.set(obj.uuid, obj.position.clone())
+    })
+  }, [selected, selection])
+
+  const onTransformChange = React.useCallback(() => {
+    if (!selected) return
+    
+    const startPos = initialPositions.current.get(selected.uuid)
+    if (!startPos) return
+
+    // Calculate delta from the object being transformed
+    const deltaPos = selected.position.clone().sub(startPos)
+    
+    // Apply delta to all other selected objects
+    selection.forEach(obj => {
+      if (obj.uuid === selected.uuid) return
+      const objStartPos = initialPositions.current.get(obj.uuid)
+      if (objStartPos) {
+        obj.position.copy(objStartPos).add(deltaPos)
+      }
+    })
+    
+    updateObject(selected)
+  }, [selected, selection, updateObject])
 
   return (
     <Canvas
@@ -79,9 +112,8 @@ function EditorCanvas() {
         <TransformControls 
           object={selected} 
           mode="translate" 
-          onObjectChange={() => {
-            if (selected) updateObject(selected)
-          }}
+          onMouseDown={onTransformMouseDown}
+          onObjectChange={onTransformChange}
         />
       )}
 

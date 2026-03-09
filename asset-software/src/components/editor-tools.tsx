@@ -9,41 +9,52 @@ import {
   EyeOff,
   Trash2,
   HelpCircle,
+  Folder,
+  ChevronRight,
+  ChevronDown,
+  Layers,
+  Ungroup
 } from "lucide-react"
 import { useEditor } from "@/context/editor-context"
 import * as THREE from 'three'
 
 export function EditorTools() {
-  const { objects, selected, setSelected, updateObject, removeObject } = useEditor()
-
-  const getIcon = (obj: THREE.Object3D) => {
-    if (obj instanceof THREE.Light) return <Lightbulb className="h-4 w-4 text-yellow-500" />
-    if (obj instanceof THREE.Camera) return <Camera className="h-4 w-4 text-zinc-400" />
-    return <Box className="h-4 w-4 text-blue-400" />
-  }
+  const { objects, selection, selected, setSelected, updateObject, removeObject, groupSelection, ungroupSelection } = useEditor()
 
   return (
     <aside className="flex w-80 flex-col border-l border-zinc-800 bg-[#18181b] h-full">
 
       {/* Section Hiérarchie */}
-      <div className="flex flex-col border-b border-zinc-800 h-1/3 min-h-[200px]">
-        <div className="px-4 py-3 text-xs font-semibold uppercase text-zinc-500 tracking-wider">
-          Hiérarchie
+      <div className="flex flex-col border-b border-zinc-800 h-1/2 min-h-[300px]">
+        <div className="flex items-center justify-between px-4 py-3">
+          <div className="text-xs font-semibold uppercase text-zinc-500 tracking-wider">
+            Hiérarchie
+          </div>
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={groupSelection}
+              disabled={selection.length <= 1}
+              className="p-1 hover:bg-zinc-800 rounded disabled:opacity-30 text-zinc-400 hover:text-white transition-colors"
+              title="Grouper la sélection"
+            >
+              <Layers className="h-3.5 w-3.5" />
+            </button>
+            <button 
+              onClick={ungroupSelection}
+              disabled={!selection.some(s => s instanceof THREE.Group)}
+              className="p-1 hover:bg-zinc-800 rounded disabled:opacity-30 text-zinc-400 hover:text-white transition-colors"
+              title="Dégrouper"
+            >
+              <Ungroup className="h-3.5 w-3.5" />
+            </button>
+          </div>
         </div>
         <div className="flex-1 overflow-y-auto px-2">
           {objects.map((obj) => (
-            <HierarchyItem
+            <RecursiveHierarchyItem
               key={obj.uuid}
-              icon={getIcon(obj)}
-              label={obj.name || obj.type}
-              active={selected?.uuid === obj.uuid}
-              visible={obj.visible}
-              onClick={() => setSelected(obj)}
-              onRemove={() => removeObject(obj)}
-              onToggleVisibility={() => {
-                obj.visible = !obj.visible
-                updateObject(obj)
-              }}
+              obj={obj}
+              depth={0}
             />
           ))}
         </div>
@@ -121,11 +132,51 @@ export function EditorTools() {
 
 // --- HELPER COMPONENTS ---
 
+function RecursiveHierarchyItem({ obj, depth }: { obj: THREE.Object3D, depth: number }) {
+  const { selection, setSelected, updateObject, removeObject } = useEditor()
+  const [isOpen, setIsOpen] = React.useState(true)
+  
+  const getIcon = (obj: THREE.Object3D) => {
+    if (obj instanceof THREE.Group) return <Folder className="h-4 w-4 text-blue-400" />
+    if (obj instanceof THREE.Light) return <Lightbulb className="h-4 w-4 text-yellow-500" />
+    if (obj instanceof THREE.Camera) return <Camera className="h-4 w-4 text-zinc-400" />
+    return <Box className="h-4 w-4 text-zinc-400" />
+  }
+
+  return (
+    <>
+      <HierarchyItem
+        icon={getIcon(obj)}
+        label={obj.name || obj.type}
+        active={selection.some(s => s.uuid === obj.uuid)}
+        visible={obj.visible}
+        depth={depth}
+        hasChildren={obj.children.length > 0}
+        isOpen={isOpen}
+        onToggleOpen={() => setIsOpen(!isOpen)}
+        onClick={(e) => setSelected(obj, e.shiftKey)}
+        onRemove={() => removeObject(obj)}
+        onToggleVisibility={() => {
+          obj.visible = !obj.visible
+          updateObject(obj)
+        }}
+      />
+      {isOpen && obj.children.length > 0 && obj.children.map(child => (
+        <RecursiveHierarchyItem key={child.uuid} obj={child} depth={depth + 1} />
+      ))}
+    </>
+  )
+}
+
 function HierarchyItem({
   icon,
   label,
   active,
   visible,
+  depth,
+  hasChildren,
+  isOpen,
+  onToggleOpen,
   onClick,
   onRemove,
   onToggleVisibility
@@ -134,17 +185,29 @@ function HierarchyItem({
   label: string
   active?: boolean
   visible: boolean
-  onClick: () => void
+  depth: number
+  hasChildren: boolean
+  isOpen: boolean
+  onToggleOpen: () => void
+  onClick: (e: React.MouseEvent) => void
   onRemove: () => void
   onToggleVisibility: () => void
 }) {
   return (
     <div
       onClick={onClick}
-      className={`group flex items-center justify-between rounded px-3 py-1.5 text-sm cursor-pointer mb-1 transition-colors ${active ? "bg-blue-600 text-white" : "text-zinc-300 hover:bg-zinc-800"
+      className={`group flex items-center justify-between rounded px-2 py-1.5 text-sm cursor-pointer mb-0.5 transition-colors ${active ? "bg-blue-600 text-white" : "text-zinc-300 hover:bg-zinc-800"
         }`}
+      style={{ marginLeft: `${depth * 8}px` }}
     >
-      <div className="flex items-center gap-3 overflow-hidden">
+      <div className="flex items-center gap-2 overflow-hidden">
+        <div className="w-4 flex items-center justify-center">
+          {hasChildren && (
+            <button onClick={(e) => { e.stopPropagation(); onToggleOpen(); }}>
+              {isOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+            </button>
+          )}
+        </div>
         {icon}
         <span className="truncate">{label}</span>
       </div>

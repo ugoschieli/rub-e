@@ -18,7 +18,7 @@ import {
 
 export function EditorNavbar() {
   const isMobile = useIsMobile()
-  const { objects, addObject } = useEditor()
+  const { objects, addObject, groupSelection, ungroupSelection } = useEditor()
 
   const addCube = () => {
     const mesh = new THREE.Mesh(
@@ -103,6 +103,9 @@ export function EditorNavbar() {
                 <ListItem href="#" title="Couper" />
                 <ListItem href="#" title="Copier" />
                 <ListItem href="#" title="Coller" />
+                <div className="bg-border my-1 h-px" />
+                <ListItem onClick={groupSelection} title="Grouper" />
+                <ListItem onClick={ungroupSelection} title="Dégrouper" />
                 <div className="bg-border my-1 h-px" />
                 <ListItem href="#" title="Paramètres" />
               </ul>
