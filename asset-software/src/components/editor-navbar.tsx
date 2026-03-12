@@ -15,15 +15,21 @@ import {
   NavigationMenuList,
   NavigationMenuTrigger,
 } from "@/components/ui/navigation-menu"
-
-function exportCubesCoordinates() {
-  const event = new CustomEvent("export-cubes-coordinates")
-  window.dispatchEvent(event)
-}
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 
 export function EditorNavbar() {
   const isMobile = useIsMobile()
   const { addObject } = useEditor()
+  const [isExportDialogOpen, setIsExportDialogOpen] = React.useState(false)
+  const [exportFileName, setExportFileName] = React.useState("")
 
   const addCube = () => {
     const mesh = new THREE.Mesh(
@@ -41,6 +47,16 @@ export function EditorNavbar() {
     light.position.set(2, 2, 2)
     addObject(light)
   }
+
+const handleExport = () => {
+  const fileName = exportFileName.trim() || "export"
+  console.log("Export avec le nom:", fileName)
+  const event = new CustomEvent("export-cubes-coordinates", {
+    detail: { fileName }
+  })
+  window.dispatchEvent(event)
+  setIsExportDialogOpen(false)
+}
 
   return (
     <div className="relative z-50 flex items-center border-b border-zinc-800 bg-[#18181b] px-2">
@@ -144,7 +160,7 @@ export function EditorNavbar() {
                   title="Exporter l'image"
                   onClick={(e) => {
                     e.preventDefault()
-                    exportCubesCoordinates()
+                    setIsExportDialogOpen(true)
                   }} 
                 />
               </ul>
@@ -153,6 +169,35 @@ export function EditorNavbar() {
 
         </NavigationMenuList>
       </NavigationMenu>
+      <Dialog open={isExportDialogOpen} onOpenChange={setIsExportDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Exporter le mode</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <label htmlFor="filename" className="text-sm font-medium">
+                Nom du fichier
+              </label>
+              <Input
+                id="filename"
+                value={exportFileName}
+                onChange={(e) => setExportFileName(e.target.value)}
+                placeholder="Nom du fichier"
+                autoFocus
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsExportDialogOpen(false)}>
+              Annuler
+            </Button>
+            <Button onClick={handleExport}>
+              Exporter
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -7,12 +7,12 @@ import { EditorTools } from "./editor-tools"
 import { useEditor } from "@/context/editor-context"
 import * as THREE from 'three'
 
-function ExportHandler() {
-  const { scene } = useThree()
+function ExportHandler({ exportFileName }: { exportFileName: string }) {
   const { objects } = useEditor()
   
   React.useEffect(() => {
-    const handleExport = () => {
+    const handleExport = (event: any) => {
+      const fileName = event.detail?.fileName || "export"
       const cubes: { position: { x: number; y: number; z: number }, color: { r: number; g: number; b: number } }[] = []
       
       objects.forEach((object) => {
@@ -38,20 +38,15 @@ function ExportHandler() {
         }
       })
       
-      const fileContent = cubes.map(cube => `
-          ${cube.position.x.toFixed(2)}
-          ${cube.position.y.toFixed(2)}
-          ${cube.position.z.toFixed(2)}
-          ${cube.color.r.toFixed(3)}
-          ${cube.color.g.toFixed(3)}
-          ${cube.color.b.toFixed(3)}`)
-        .join('\n')
+      const fileContent = cubes.map(cube => 
+        `${cube.position.x.toFixed(2)} ${cube.position.y.toFixed(2)} ${cube.position.z.toFixed(2)} ${cube.color.r.toFixed(3)} ${cube.color.g.toFixed(3)} ${cube.color.b.toFixed(3)}`
+      ).join('\n')
       
       const blob = new Blob([fileContent], { type: 'text/plain' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = 'cubes_coordinates.model'
+      a.download = `${fileName}.model`
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
@@ -62,7 +57,7 @@ function ExportHandler() {
     
     window.addEventListener('export-cubes-coordinates', handleExport)
     return () => window.removeEventListener('export-cubes-coordinates', handleExport)
-  }, [objects])
+  }, [objects, exportFileName])
   
   return null
 }
@@ -101,7 +96,7 @@ function SceneManager() {
   )
 }
 
-function EditorCanvas() {
+function EditorCanvas({ exportFileName }: { exportFileName: string }) {
   const { selected, setSelected } = useEditor()
 
   return (
@@ -113,7 +108,7 @@ function EditorCanvas() {
     >
       <color attach="background" args={["#121212"]} />
 
-      <ExportHandler />
+      <ExportHandler exportFileName={exportFileName} />
       <ambientLight intensity={0.5} />
       <directionalLight position={[10, 10, 5]} intensity={1} castShadow />
 
@@ -150,7 +145,7 @@ function EditorCanvas() {
   )
 }
 
-export function EditorLayout() {
+export function EditorLayout({ exportFileName = "export" }: { exportFileName?: string }) {
   const canvasContainerRef = React.useRef<HTMLDivElement>(null)
 
   return (
@@ -162,7 +157,7 @@ export function EditorLayout() {
         id="canvas-container"
         className="relative flex-1 bg-[#121212] overflow-hidden"
       >
-        <EditorCanvas />
+        <EditorCanvas exportFileName={exportFileName} />
       </main>
       <EditorTools />
     </div>
