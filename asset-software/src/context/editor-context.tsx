@@ -27,7 +27,7 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
   const [scene, setScene] = useState<THREE.Scene | null>(null)
   const [camera, setCamera] = useState<THREE.Camera | null>(null)   // ← new
   const [objects, setObjects] = useState<THREE.Object3D[]>([])
-  const SNAP_DISTANCE = 0.05
+  const SNAP_DISTANCE = 0.07
 
   const selected = selection.length > 0 ? selection[selection.length - 1] : null
 
@@ -63,7 +63,7 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
       setObjects(prev => prev.filter(o => o !== obj))
       setSelection(prev => prev.filter(o => o.uuid !== obj.uuid))
     }
-  }, [scene])
+  }, [scene, selected, setSelected])
 
   const updateObject = useCallback((updatedObj: THREE.Object3D) => {
     setObjects(prev => prev.map(obj => (obj.uuid === updatedObj.uuid ? updatedObj : obj)))
@@ -132,77 +132,66 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
     const movingCenter = new THREE.Vector3()
     movingBox.getCenter(movingCenter)
 
-    let bestDistance = Infinity
-    let bestAxis: string | null = null
-    let bestTarget: THREE.Object3D | null = null
+    const oldWorldPos = selected.getWorldPosition(new THREE.Vector3())
+    const newWorldPos = oldWorldPos.clone()
+    
+    let bestX = { dist: SNAP_DISTANCE, pos: oldWorldPos.x }
+    let bestY = { dist: SNAP_DISTANCE, pos: oldWorldPos.y }
+    let bestZ = { dist: SNAP_DISTANCE, pos: oldWorldPos.z }
 
     for (const obj of objects) {
       if (obj.uuid === selected.uuid) continue
       obj.updateMatrixWorld(true)
       const targetBox = new THREE.Box3().setFromObject(obj)
+      const targetCenter = new THREE.Vector3()
+      targetBox.getCenter(targetCenter)
 
-      const distances = {
-        px: Math.abs(movingBox.max.x - targetBox.min.x),
-        nx: Math.abs(movingBox.min.x - targetBox.max.x),
+      // Seuil de proximité pour l'alignement sur les autres axes
+      const MARGIN = 0.1
+      const overlapX = movingBox.min.x < targetBox.max.x + MARGIN && movingBox.max.x > targetBox.min.x - MARGIN
+      const overlapY = movingBox.min.y < targetBox.max.y + MARGIN && movingBox.max.y > targetBox.min.y - MARGIN
+      const overlapZ = movingBox.min.z < targetBox.max.z + MARGIN && movingBox.max.z > targetBox.min.z - MARGIN
 
-        py: Math.abs(movingBox.max.y - targetBox.min.y),
-        ny: Math.abs(movingBox.min.y - targetBox.max.y),
+      // Snap X (seulement si aligné en Y et Z)
+      if (overlapY && overlapZ) {
+        // Face à face
+        const dx1 = targetBox.min.x - movingBox.max.x
+        if (Math.abs(dx1) < bestX.dist) bestX = { dist: Math.abs(dx1), pos: oldWorldPos.x + dx1 }
+        
+        const dx2 = targetBox.max.x - movingBox.min.x
+        if (Math.abs(dx2) < bestX.dist) bestX = { dist: Math.abs(dx2), pos: oldWorldPos.x + dx2 }
 
-        pz: Math.abs(movingBox.max.z - targetBox.min.z),
-        nz: Math.abs(movingBox.min.z - targetBox.max.z)
+        // Centre à centre
+        const dx3 = targetCenter.x - movingCenter.x
+        if (Math.abs(dx3) < bestX.dist) bestX = { dist: Math.abs(dx3), pos: oldWorldPos.x + dx3 }
       }
 
-      for (const axis in distances) {
-        const d = distances[axis as keyof typeof distances]
-        if (d < bestDistance && d < SNAP_DISTANCE) {
-          bestDistance = d
-          bestAxis = axis
-          bestTarget = obj
-        }
+      // Snap Y (seulement si aligné en X et Z)
+      if (overlapX && overlapZ) {
+        const dy1 = targetBox.min.y - movingBox.max.y
+        if (Math.abs(dy1) < bestY.dist) bestY = { dist: Math.abs(dy1), pos: oldWorldPos.y + dy1 }
+        
+        const dy2 = targetBox.max.y - movingBox.min.y
+        if (Math.abs(dy2) < bestY.dist) bestY = { dist: Math.abs(dy2), pos: oldWorldPos.y + dy2 }
+
+        const dy3 = targetCenter.y - movingCenter.y
+        if (Math.abs(dy3) < bestY.dist) bestY = { dist: Math.abs(dy3), pos: oldWorldPos.y + dy3 }
+      }
+
+      // Snap Z (seulement si aligné en X et Y)
+      if (overlapX && overlapY) {
+        const dz1 = targetBox.min.z - movingBox.max.z
+        if (Math.abs(dz1) < bestZ.dist) bestZ = { dist: Math.abs(dz1), pos: oldWorldPos.z + dz1 }
+        
+        const dz2 = targetBox.max.z - movingBox.min.z
+        if (Math.abs(dz2) < bestZ.dist) bestZ = { dist: Math.abs(dz2), pos: oldWorldPos.z + dz2 }
+
+        const dz3 = targetCenter.z - movingCenter.z
+        if (Math.abs(dz3) < bestZ.dist) bestZ = { dist: Math.abs(dz3), pos: oldWorldPos.z + dz3 }
       }
     }
 
-    if (!bestTarget || !bestAxis) return
-
-    const targetBox = new THREE.Box3().setFromObject(bestTarget)
-    const targetCenter = new THREE.Vector3()
-    targetBox.getCenter(targetCenter)
-
-    const newWorldPos = selected.getWorldPosition(new THREE.Vector3())
-
-    // --- Snap selon l'axe choisi ---
-    switch (bestAxis) {
-      case "px":
-        newWorldPos.x = targetBox.min.x - (movingBox.max.x - movingCenter.x)
-        newWorldPos.y = targetCenter.y
-        newWorldPos.z = targetCenter.z
-        break
-      case "nx":
-        newWorldPos.x = targetBox.max.x + (movingCenter.x - movingBox.min.x)
-        newWorldPos.y = targetCenter.y
-        newWorldPos.z = targetCenter.z
-        break
-      case "pz":
-        newWorldPos.z = targetBox.min.z - (movingBox.max.z - movingCenter.z)
-        newWorldPos.x = targetCenter.x
-        newWorldPos.y = targetCenter.y
-        break
-      case "nz":
-        newWorldPos.z = targetBox.max.z + (movingCenter.z - movingBox.min.z)
-        newWorldPos.x = targetCenter.x
-        newWorldPos.y = targetCenter.y
-        break
-      case "py":
-        newWorldPos.y = targetBox.min.y - (movingBox.max.y - movingCenter.y)
-        newWorldPos.x = targetCenter.x
-        newWorldPos.z = targetCenter.z
-        break
-      case "ny":
-        newWorldPos.y = targetBox.max.y + (movingCenter.y - movingBox.min.y)
-        newWorldPos.x = targetCenter.x
-        newWorldPos.z = targetCenter.z
-        break
-    }
+    newWorldPos.set(bestX.pos, bestY.pos, bestZ.pos)
 
     if (selected.parent) {
       selected.parent.worldToLocal(newWorldPos)
