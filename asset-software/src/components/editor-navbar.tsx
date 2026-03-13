@@ -133,8 +133,8 @@ const handleExport = () => {
                 <ListItem href="#" title="Copy" />
                 <ListItem href="#" title="Paste" />
                 <div className="bg-border my-1 h-px" />
-                <ListItem onClick={groupSelection} title="Grouper" />
-                <ListItem onClick={ungroupSelection} title="Dégrouper" />
+                <ListItem onClick={groupSelection} title="Group" />
+                <ListItem onClick={ungroupSelection} title="Ungroup" />
                 <div className="bg-border my-1 h-px" />
                 <ListItem href="#" title="Settings" />
               </ul>
@@ -180,11 +180,11 @@ const handleExport = () => {
             </NavigationMenuTrigger>
             <NavigationMenuContent>
               <ul className="grid w-[200px] gap-1 p-2">
-                <ListItem href="#" title="Lancer le rendu" />
-                <ListItem href="#" title="Paramètres de rendu" />
+                <ListItem href="#" title="Start Render" />
+                <ListItem href="#" title="Render Settings" />
                 <ListItem 
                   href="#" 
-                  title="Exporter l'image"
+                  title="Export Image"
                   onClick={(e) => {
                     e.preventDefault()
                     setIsExportDialogOpen(true)

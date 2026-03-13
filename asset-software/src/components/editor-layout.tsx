@@ -160,18 +160,6 @@ function EditorCanvas({ exportFileName }: { exportFileName: string }) {
     
     updateObject(selected)
   }, [selected, selection, updateObject])
-  const transformRef = React.useRef<any>(null)
-
-  React.useEffect(() => {
-    if (!transformRef.current) return
-    if (selected && selected.parent && objects.includes(selected)) {
-      transformRef.current.attach(selected)
-    } else {
-      transformRef.current.detach()
-    }
-  }, [selected, objects])
-
-
 
   return (
     <Canvas
@@ -207,8 +195,9 @@ function EditorCanvas({ exportFileName }: { exportFileName: string }) {
 
       <SceneManager />
 
-      {selected && (
+      {selected && selected.parent && selected.type !== 'PerspectiveCamera' && (
         <TransformControls
+          key={selected.uuid}
           object={selected}
           mode="translate"
           onMouseDown={onTransformMouseDown}

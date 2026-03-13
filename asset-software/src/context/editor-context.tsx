@@ -1,7 +1,7 @@
-"use client"
+"use client";
 
-import React, { createContext, useContext, useState, useCallback } from 'react'
-import * as THREE from 'three'
+import React, { createContext, useContext, useState, useCallback } from "react";
+import * as THREE from "three";
 
 interface EditorState {
   selected: THREE.Object3D | null
@@ -20,7 +20,7 @@ interface EditorState {
   ungroupSelection: () => void
 }
 
-const EditorContext = createContext<EditorState | undefined>(undefined)
+const EditorContext = createContext<EditorState | undefined>(undefined);
 
 export function EditorProvider({ children }: { children: React.ReactNode }) {
   const [selection, setSelection] = useState<THREE.Object3D[]>([])
@@ -29,32 +29,33 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
   const [objects, setObjects] = useState<THREE.Object3D[]>([])
   const SNAP_DISTANCE = 0.07
 
-  const selected = selection.length > 0 ? selection[selection.length - 1] : null
+  const selected =
+    selection.length > 0 ? selection[selection.length - 1] : null;
 
-  const setSelected = useCallback((obj: THREE.Object3D | null, multi: boolean = false) => {
-    if (!obj) {
-      setSelection([])
-      return
-    }
+  const setSelected = useCallback(
+    (obj: THREE.Object3D | null, multi: boolean = false) => {
+      if (!obj) {
+        setSelection([]);
+        return;
+      }
 
-    if (multi) {
-      setSelection(prev => {
-        if (prev.find(o => o.uuid === obj.uuid)) {
-          return prev.filter(o => o.uuid !== obj.uuid)
-        }
-        return [...prev, obj]
-      })
-    } else {
-      setSelection([obj])
-    }
-  }, [])
+      if (multi) {
+        setSelection((prev) => {
+          if (prev.find((o) => o.uuid === obj.uuid)) {
+            return prev.filter((o) => o.uuid !== obj.uuid);
+          }
+          return [...prev, obj];
+        });
+      } else {
+        setSelection([obj]);
+      }
+    },
+    [],
+  );
 
   const addObject = useCallback((obj: THREE.Object3D) => {
-    if (scene) {
-      scene.add(obj)
-      setObjects(prev => [...prev, obj])
-    }
-  }, [scene])
+    setObjects((prev) => [...prev, obj]);
+  }, []);
 
   const removeObject = useCallback((obj: THREE.Object3D) => {
     if (scene) {
@@ -70,57 +71,61 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
   },[])
 
   const groupSelection = useCallback(() => {
-    if (selection.length <= 1 || !scene) return
+    if (selection.length <= 1 || !scene) return;
 
-    const group = new THREE.Group()
-    group.name = "Group"
+    const group = new THREE.Group();
+    group.name = "Group";
 
-    const box = new THREE.Box3()
-    selection.forEach(obj => box.expandByObject(obj))
-    const center = new THREE.Vector3()
-    box.getCenter(center)
+    const box = new THREE.Box3();
+    selection.forEach((obj) => box.expandByObject(obj));
+    const center = new THREE.Vector3();
+    box.getCenter(center);
 
-    group.position.copy(center)
-    scene.add(group)
-    group.updateMatrixWorld()
+    group.position.copy(center);
 
-    selection.forEach(obj => {
-      group.attach(obj)
-    })
+    group.updateMatrixWorld();
 
-    setObjects(prev => {
-      const filtered = prev.filter(o => !selection.some(s => s.uuid === o.uuid))
-      return [...filtered, group]
-    })
+    selection.forEach((obj) => {
+      group.attach(obj);
+    });
 
-    setSelection([group])
-  }, [selection, scene])
+    setObjects((prev) => {
+      const filtered = prev.filter(
+        (o) => !selection.some((s) => s.uuid === o.uuid),
+      );
+      return [...filtered, group];
+    });
+
+    setSelection([group]);
+  }, [selection, scene]);
 
   const ungroupSelection = useCallback(() => {
-    if (selection.length === 0 || !scene) return
-    
-    let currentObjects = [...objects]
-    const newSelection: THREE.Object3D[] = []
-    let changed = false
+    if (selection.length === 0 || !scene) return;
 
-    selection.forEach(selectedObj => {
+    let currentObjects = [...objects];
+    const newSelection: THREE.Object3D[] = [];
+    let changed = false;
+
+    selection.forEach((selectedObj) => {
       if (selectedObj instanceof THREE.Group) {
-        changed = true
-        const children = [...selectedObj.children]
-        children.forEach(child => {
-          scene.attach(child)
-          newSelection.push(child)
-        })
-        scene.remove(selectedObj)
-        currentObjects = currentObjects.filter(o => o.uuid !== selectedObj.uuid).concat(children)
+        changed = true;
+        const children = [...selectedObj.children];
+        children.forEach((child) => {
+          scene.attach(child);
+          newSelection.push(child);
+        });
+        // We don't manual scene.remove(selectedObj) here
+        currentObjects = currentObjects
+          .filter((o) => o.uuid !== selectedObj.uuid)
+          .concat(children);
       } else {
-        newSelection.push(selectedObj)
+        newSelection.push(selectedObj);
       }
-    })
-    
+    });
+
     if (changed) {
-      setObjects(currentObjects)
-      setSelection(newSelection)
+      setObjects(currentObjects);
+      setSelection(newSelection);
     }
   }, [selection, scene, objects])
 
@@ -210,8 +215,8 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
         setSelected,
         scene,
         setScene,
-        camera,     
-        setCamera, 
+        camera,
+        setCamera,
         objects,
         addObject,
         removeObject,
@@ -223,13 +228,13 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
     >
       {children}
     </EditorContext.Provider>
-  )
+  );
 }
 
 export function useEditor() {
-  const context = useContext(EditorContext)
+  const context = useContext(EditorContext);
   if (context === undefined) {
-    throw new Error('useEditor must be used within an EditorProvider')
+    throw new Error("useEditor must be used within an EditorProvider");
   }
-  return context
+  return context;
 }
