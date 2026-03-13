@@ -15,6 +15,7 @@ interface EditorState {
   addObject: (obj: THREE.Object3D) => void
   removeObject: (obj: THREE.Object3D) => void
   updateObject: (obj: THREE.Object3D) => void
+  snapObjects: () => void
   groupSelection: () => void
   ungroupSelection: () => void
 }
@@ -26,6 +27,7 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
   const [scene, setScene] = useState<THREE.Scene | null>(null)
   const [camera, setCamera] = useState<THREE.Camera | null>(null)   // ← new
   const [objects, setObjects] = useState<THREE.Object3D[]>([])
+  const SNAP_DISTANCE = 0.05
 
   const selected = selection.length > 0 ? selection[selection.length - 1] : null
 
@@ -63,21 +65,21 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
     }
   }, [scene])
 
-  function updateObject(updatedObj: THREE.Object3D) {
+  const updateObject = useCallback((updatedObj: THREE.Object3D) => {
     setObjects(prev => prev.map(obj => (obj.uuid === updatedObj.uuid ? updatedObj : obj)))
-  }[]
+  },[])
 
   const groupSelection = useCallback(() => {
     if (selection.length <= 1 || !scene) return
 
     const group = new THREE.Group()
     group.name = "Group"
-    
+
     const box = new THREE.Box3()
     selection.forEach(obj => box.expandByObject(obj))
     const center = new THREE.Vector3()
     box.getCenter(center)
-    
+
     group.position.copy(center)
     scene.add(group)
     group.updateMatrixWorld()
@@ -90,7 +92,7 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
       const filtered = prev.filter(o => !selection.some(s => s.uuid === o.uuid))
       return [...filtered, group]
     })
-    
+
     setSelection([group])
   }, [selection, scene])
 
@@ -122,6 +124,95 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
     }
   }, [selection, scene, objects])
 
+  const snapObjects = useCallback(() => {
+    if (!selected) return
+
+    selected.updateMatrixWorld(true)
+    const movingBox = new THREE.Box3().setFromObject(selected)
+    const movingCenter = new THREE.Vector3()
+    movingBox.getCenter(movingCenter)
+
+    let bestDistance = Infinity
+    let bestAxis: string | null = null
+    let bestTarget: THREE.Object3D | null = null
+
+    for (const obj of objects) {
+      if (obj.uuid === selected.uuid) continue
+      obj.updateMatrixWorld(true)
+      const targetBox = new THREE.Box3().setFromObject(obj)
+
+      const distances = {
+        px: Math.abs(movingBox.max.x - targetBox.min.x),
+        nx: Math.abs(movingBox.min.x - targetBox.max.x),
+
+        py: Math.abs(movingBox.max.y - targetBox.min.y),
+        ny: Math.abs(movingBox.min.y - targetBox.max.y),
+
+        pz: Math.abs(movingBox.max.z - targetBox.min.z),
+        nz: Math.abs(movingBox.min.z - targetBox.max.z)
+      }
+
+      for (const axis in distances) {
+        const d = distances[axis as keyof typeof distances]
+        if (d < bestDistance && d < SNAP_DISTANCE) {
+          bestDistance = d
+          bestAxis = axis
+          bestTarget = obj
+        }
+      }
+    }
+
+    if (!bestTarget || !bestAxis) return
+
+    const targetBox = new THREE.Box3().setFromObject(bestTarget)
+    const targetCenter = new THREE.Vector3()
+    targetBox.getCenter(targetCenter)
+
+    const newWorldPos = selected.getWorldPosition(new THREE.Vector3())
+
+    // --- Snap selon l'axe choisi ---
+    switch (bestAxis) {
+      case "px":
+        newWorldPos.x = targetBox.min.x - (movingBox.max.x - movingCenter.x)
+        newWorldPos.y = targetCenter.y
+        newWorldPos.z = targetCenter.z
+        break
+      case "nx":
+        newWorldPos.x = targetBox.max.x + (movingCenter.x - movingBox.min.x)
+        newWorldPos.y = targetCenter.y
+        newWorldPos.z = targetCenter.z
+        break
+      case "pz":
+        newWorldPos.z = targetBox.min.z - (movingBox.max.z - movingCenter.z)
+        newWorldPos.x = targetCenter.x
+        newWorldPos.y = targetCenter.y
+        break
+      case "nz":
+        newWorldPos.z = targetBox.max.z + (movingCenter.z - movingBox.min.z)
+        newWorldPos.x = targetCenter.x
+        newWorldPos.y = targetCenter.y
+        break
+      case "py":
+        newWorldPos.y = targetBox.min.y - (movingBox.max.y - movingCenter.y)
+        newWorldPos.x = targetCenter.x
+        newWorldPos.z = targetCenter.z
+        break
+      case "ny":
+        newWorldPos.y = targetBox.max.y + (movingCenter.y - movingBox.min.y)
+        newWorldPos.x = targetCenter.x
+        newWorldPos.z = targetCenter.z
+        break
+    }
+
+    if (selected.parent) {
+      selected.parent.worldToLocal(newWorldPos)
+    }
+
+    selected.position.copy(newWorldPos)
+    selected.updateMatrixWorld(true)
+
+  }, [selected, objects])
+  
   return (
     <EditorContext.Provider
       value={{
@@ -137,7 +228,8 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
         removeObject,
         updateObject,
         groupSelection,
-        ungroupSelection
+        ungroupSelection,
+        snapObjects
       }}
     >
       {children}

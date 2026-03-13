@@ -126,7 +126,7 @@ function EditorOrbitControls() {
 
 
 function EditorCanvas({ exportFileName }: { exportFileName: string }) {
-  const { selected, selection, setSelected, updateObject, objects, setCamera } = useEditor()
+  const { selected, selection, setSelected, updateObject, objects, setCamera, snapObjects } = useEditor()
   
   // Ref to store initial positions for delta movement
   const initialPositions = React.useRef<Map<string, THREE.Vector3>>(new Map())
@@ -213,6 +213,7 @@ function EditorCanvas({ exportFileName }: { exportFileName: string }) {
           mode="translate"
           onMouseDown={onTransformMouseDown}
           onObjectChange={onTransformChange}
+          onChange={() => snapObjects()}
           // onChange={() => {
           //   if (selected) updateObject(selected); // <-- triggers re-render of sidebar
           // }}
