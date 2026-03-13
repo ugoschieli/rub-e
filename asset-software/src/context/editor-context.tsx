@@ -51,19 +51,16 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
     [],
   );
 
-  const addObject = useCallback(
-    (obj: THREE.Object3D) => {
-      setObjects((prev) => [...prev, obj]);
-    },
-    [],
-  );
+  const addObject = useCallback((obj: THREE.Object3D) => {
+    setObjects((prev) => [...prev, obj]);
+  }, []);
 
   const removeObject = useCallback(
     (obj: THREE.Object3D) => {
       if (selected?.uuid === obj.uuid) {
         setSelected(null);
       }
-      
+
       setObjects((prev) => prev.filter((o) => o.uuid !== obj.uuid));
       setSelection((prev) => prev.filter((o) => o.uuid !== obj.uuid));
     },
@@ -88,7 +85,7 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
     box.getCenter(center);
 
     group.position.copy(center);
-    
+
     group.updateMatrixWorld();
 
     selection.forEach((obj) => {

@@ -36,7 +36,7 @@ export function EditorTools() {
               onClick={groupSelection}
               disabled={selection.length <= 1}
               className="p-1 hover:bg-zinc-800 rounded disabled:opacity-30 text-zinc-400 hover:text-white transition-colors"
-              title="Grouper la sélection"
+              title="group selection"
             >
               <Layers className="h-3.5 w-3.5" />
             </button>
@@ -44,7 +44,7 @@ export function EditorTools() {
               onClick={ungroupSelection}
               disabled={!selection.some((s) => s instanceof THREE.Group)}
               className="p-1 hover:bg-zinc-800 rounded disabled:opacity-30 text-zinc-400 hover:text-white transition-colors"
-              title="Dégrouper"
+              title="Ungroup"
             >
               <Ungroup className="h-3.5 w-3.5" />
             </button>
