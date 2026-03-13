@@ -27,7 +27,7 @@ import { Input } from "@/components/ui/input"
 
 export function EditorNavbar() {
   const isMobile = useIsMobile()
-  const { addObject } = useEditor()
+  const { objects, addObject, groupSelection, ungroupSelection } = useEditor()
   const [isExportDialogOpen, setIsExportDialogOpen] = React.useState(false)
   const [exportFileName, setExportFileName] = React.useState("")
 
@@ -36,14 +36,30 @@ export function EditorNavbar() {
       new THREE.BoxGeometry(1, 1, 1),
       new THREE.MeshStandardMaterial({ color: "#6366f1" })
     )
-    mesh.name = "Cube " + Math.floor(Math.random() * 100)
+
+    // Calculate next cube number
+    const cubeIndices = objects.map((obj) => {
+      const match = obj.name.match(/^Cube\s+(\d+)$/)
+      return match ? parseInt(match[1], 10) : (obj.name === "Cube" ? 1 : 0)
+    })
+    const maxIndex = Math.max(0, ...cubeIndices)
+    mesh.name = `Cube ${maxIndex + 1}`
+
     mesh.position.y = 0.5
     addObject(mesh)
   }
 
   const addLight = () => {
     const light = new THREE.PointLight(0xffffff, 10)
-    light.name = "Point Light"
+
+    // Calculate next light number
+    const lightIndices = objects.map((obj) => {
+      const match = obj.name.match(/^Point Light\s+(\d+)$/)
+      return match ? parseInt(match[1], 10) : (obj.name === "Point Light" ? 1 : 0)
+    })
+    const maxIndex = Math.max(0, ...lightIndices)
+    light.name = `Point Light ${maxIndex + 1}`
+
     light.position.set(2, 2, 2)
     addObject(light)
   }
@@ -58,98 +74,109 @@ const handleExport = () => {
   setIsExportDialogOpen(false)
 }
 
+  const addCamera = () => {
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000)
+    camera.name = "Camera"
+    camera.lookAt(0, 0, 0)
+    camera.position.set(0, 2, 5)
+    addObject(camera)
+  }
+
   return (
     <div className="relative z-50 flex items-center border-b border-zinc-800 bg-[#18181b] px-2">
-      
-      {/* Retour */}
+
+      {/* Back */}
       <Link
-        href="/" 
+        href="/"
         className="mr-2 flex h-8 items-center gap-1 rounded-sm px-2 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
-        title="Retour à l'accueil"
+        title="Back to home"
       >
         <ChevronLeft className="h-4 w-4" />
       </Link>
 
-      {/* Séparateur */}
+      {/* Divider */}
       <div className="mr-2 h-4 w-[1px] bg-zinc-700" />
 
-      {/* Le Menu existant */}
+      {/* Existing Menu */}
       <NavigationMenu viewport={isMobile}>
         <NavigationMenuList>
-          
-          {/* Menu Fichier */}
+
+          {/* File Menu */}
           <NavigationMenuItem>
             <NavigationMenuTrigger className="h-8 bg-transparent px-3 text-sm font-normal text-zinc-100 hover:bg-zinc-800 hover:text-white">
-              Fichier
+              File
             </NavigationMenuTrigger>
             <NavigationMenuContent>
               <ul className="grid w-[200px] gap-1 p-2">
-                <ListItem href="#" title="Nouveau projet" />
-                <ListItem href="#" title="Ouvrir..." />
-                <ListItem href="#" title="Enregistrer" />
-                <ListItem href="#" title="Enregistrer sous..." />
+                <ListItem href="#" title="New Project" />
+                <ListItem href="#" title="Open..." />
+                <ListItem href="#" title="Save" />
+                <ListItem href="#" title="Save As..." />
                 <div className="bg-border my-1 h-px" />
-                <ListItem href="#" title="Importer" />
-                <ListItem href="#" title="Exporter" />
+                <ListItem href="#" title="Import" />
+                <ListItem href="#" title="Export" />
               </ul>
             </NavigationMenuContent>
           </NavigationMenuItem>
 
-          {/* Menu Éditer */}
+          {/* Edit Menu */}
           <NavigationMenuItem>
             <NavigationMenuTrigger className="h-8 bg-transparent px-3 text-sm font-normal text-zinc-100 hover:bg-zinc-800 hover:text-white">
-              Éditer
+              Edit
             </NavigationMenuTrigger>
             <NavigationMenuContent>
               <ul className="grid w-[200px] gap-1 p-2">
-                <ListItem href="#" title="Annuler" />
-                <ListItem href="#" title="Rétablir" />
+                <ListItem href="#" title="Undo" />
+                <ListItem href="#" title="Redo" />
                 <div className="bg-border my-1 h-px" />
-                <ListItem href="#" title="Couper" />
-                <ListItem href="#" title="Copier" />
-                <ListItem href="#" title="Coller" />
+                <ListItem href="#" title="Cut" />
+                <ListItem href="#" title="Copy" />
+                <ListItem href="#" title="Paste" />
                 <div className="bg-border my-1 h-px" />
-                <ListItem href="#" title="Paramètres" />
+                <ListItem onClick={groupSelection} title="Grouper" />
+                <ListItem onClick={ungroupSelection} title="Dégrouper" />
+                <div className="bg-border my-1 h-px" />
+                <ListItem href="#" title="Settings" />
               </ul>
             </NavigationMenuContent>
           </NavigationMenuItem>
 
-          {/* Menu + Ajouter */}
+          {/* + Add Menu */}
           <NavigationMenuItem>
             <NavigationMenuTrigger className="h-8 bg-transparent px-3 text-sm font-normal text-zinc-100 hover:bg-zinc-800 hover:text-white">
-              + Ajouter
+              Add
             </NavigationMenuTrigger>
             <NavigationMenuContent>
               <ul className="grid w-[200px] gap-1 p-2">
                 <ListItem onClick={addCube} title="Cube" />
                 <div className="bg-border my-1 h-px" />
-                <ListItem onClick={addLight} title="Lumière" />
-                <ListItem href="#" title="Caméra" />
+                <ListItem onClick={addLight} title="Light" />
+                <ListItem onClick={addCamera} title="Camera" />
               </ul>
             </NavigationMenuContent>
           </NavigationMenuItem>
 
-          {/* Menu Vue */}
+          {/* View Menu */}
           <NavigationMenuItem>
             <NavigationMenuTrigger className="h-8 bg-transparent px-3 text-sm font-normal text-zinc-100 hover:bg-zinc-800 hover:text-white">
-              Vue
+              View
             </NavigationMenuTrigger>
             <NavigationMenuContent>
               <ul className="grid w-[200px] gap-1 p-2">
                 <ListItem href="#" title="Perspective" />
-                <ListItem href="#" title="Orthographique" />
+                <ListItem href="#" title="Orthographic" />
                 <div className="bg-border my-1 h-px" />
-                <ListItem href="#" title="Vue de haut" />
-                <ListItem href="#" title="Vue de face" />
-                <ListItem href="#" title="Vue de côté" />
+                <ListItem href="#" title="Top View" />
+                <ListItem href="#" title="Front View" />
+                <ListItem href="#" title="Side View" />
               </ul>
             </NavigationMenuContent>
           </NavigationMenuItem>
 
-          {/* Menu Rendu */}
+          {/* Render Menu */}
           <NavigationMenuItem>
             <NavigationMenuTrigger className="h-8 bg-transparent px-3 text-sm font-normal text-zinc-100 hover:bg-zinc-800 hover:text-white">
-              Rendu
+              Render
             </NavigationMenuTrigger>
             <NavigationMenuContent>
               <ul className="grid w-[200px] gap-1 p-2">

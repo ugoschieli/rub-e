@@ -2,7 +2,8 @@
 
 import * as React from "react"
 import { Canvas, useThree } from "@react-three/fiber"
-import { OrbitControls, Grid, Environment, ContactShadows, TransformControls } from "@react-three/drei"
+import { Grid, Environment, ContactShadows, TransformControls } from "@react-three/drei"
+import { OrbitControls as DreiOrbitControls } from "@react-three/drei" // React component
 import { EditorTools } from "./editor-tools"
 import { useEditor } from "@/context/editor-context"
 import * as THREE from 'three'
@@ -74,11 +75,11 @@ function SceneManager() {
         new THREE.BoxGeometry(1, 1, 1),
         new THREE.MeshStandardMaterial({ color: "#6366f1" })
       )
-      box.name = "Cube"
+      box.name = "Cube 1"
       box.position.y = 0.5
       addObject(box)
     }
-  }, [scene, setScene, addObject])
+  }, [scene, setScene, addObject, objects.length])
 
   return (
     <>
@@ -88,16 +89,89 @@ function SceneManager() {
           object={obj} 
           onClick={(e: any) => {
             e.stopPropagation()
-            setSelected(obj)
+            setSelected(obj, e.shiftKey)
           }}
         />
       ))}
     </>
   )
 }
+function CameraInitializer({ setCamera }: { setCamera: (cam: THREE.Camera) => void }) {
+  const { camera } = useThree()
+  React.useEffect(() => {
+    camera.name = "Default Camera"
+    setCamera(camera)   // store the orbital camera in context
+  }, [camera, setCamera])
+  return null
+}
+
+
+function EditorOrbitControls() {
+  const { camera, updateObject } = useEditor()
+  const controls = useThree((state) => state.controls as any) // <- use any
+
+  React.useEffect(() => {
+    if (!controls || !camera) return
+
+    const handleChange = () => {
+      updateObject(camera)
+    }
+
+    controls.addEventListener('change', handleChange)
+    return () => controls.removeEventListener('change', handleChange)
+  }, [controls, camera, updateObject])
+
+  return null
+}
+
 
 function EditorCanvas({ exportFileName }: { exportFileName: string }) {
-  const { selected, setSelected } = useEditor()
+  const { selected, selection, setSelected, updateObject, objects, setCamera } = useEditor()
+  
+  // Ref to store initial positions for delta movement
+  const initialPositions = React.useRef<Map<string, THREE.Vector3>>(new Map())
+
+  const onTransformMouseDown = React.useCallback(() => {
+    if (!selected) return
+    
+    initialPositions.current.clear()
+    selection.forEach(obj => {
+      initialPositions.current.set(obj.uuid, obj.position.clone())
+    })
+  }, [selected, selection])
+
+  const onTransformChange = React.useCallback(() => {
+    if (!selected) return
+    
+    const startPos = initialPositions.current.get(selected.uuid)
+    if (!startPos) return
+
+    // Calculate delta from the object being transformed
+    const deltaPos = selected.position.clone().sub(startPos)
+    
+    // Apply delta to all other selected objects
+    selection.forEach(obj => {
+      if (obj.uuid === selected.uuid) return
+      const objStartPos = initialPositions.current.get(obj.uuid)
+      if (objStartPos) {
+        obj.position.copy(objStartPos).add(deltaPos)
+      }
+    })
+    
+    updateObject(selected)
+  }, [selected, selection, updateObject])
+  const transformRef = React.useRef<any>(null)
+
+  React.useEffect(() => {
+    if (!transformRef.current) return
+    if (selected && selected.parent && objects.includes(selected)) {
+      transformRef.current.attach(selected)
+    } else {
+      transformRef.current.detach()
+    }
+  }, [selected, objects])
+
+
 
   return (
     <Canvas
@@ -107,13 +181,16 @@ function EditorCanvas({ exportFileName }: { exportFileName: string }) {
       onPointerMissed={() => setSelected(null)}
     >
       <color attach="background" args={["#121212"]} />
-
+      <CameraInitializer setCamera={setCamera} />
       <ExportHandler exportFileName={exportFileName} />
       <ambientLight intensity={0.5} />
       <directionalLight position={[10, 10, 5]} intensity={1} castShadow />
-
-      <OrbitControls makeDefault minPolarAngle={0} maxPolarAngle={Math.PI / 1.75} />
-
+      <DreiOrbitControls
+        makeDefault
+        minPolarAngle={0}
+        maxPolarAngle={Math.PI / 1.75}
+      />
+      <EditorOrbitControls />
       <Grid
         position={[0, -0.01, 0]}
         args={[10.5, 10.5]}
@@ -131,18 +208,27 @@ function EditorCanvas({ exportFileName }: { exportFileName: string }) {
       <SceneManager />
 
       {selected && (
-        <TransformControls 
-          object={selected} 
-          mode="translate" 
-          onMouseDown={() => {
-          }}
+        <TransformControls
+          object={selected}
+          mode="translate"
+          onMouseDown={onTransformMouseDown}
+          onObjectChange={onTransformChange}
+          // onChange={() => {
+          //   if (selected) updateObject(selected); // <-- triggers re-render of sidebar
+          // }}
         />
       )}
 
-      <ContactShadows position={[0, 0, 0]} opacity={0.5} scale={10} blur={1.5} far={0.8} />
+      <ContactShadows
+        position={[0, 0, 0]}
+        opacity={0.5}
+        scale={10}
+        blur={1.5}
+        far={0.8}
+      />
       <Environment preset="city" />
     </Canvas>
-  )
+  );
 }
 
 export function EditorLayout({ exportFileName = "export" }: { exportFileName?: string }) {
