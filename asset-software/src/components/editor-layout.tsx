@@ -7,6 +7,61 @@ import { EditorTools } from "./editor-tools"
 import { useEditor } from "@/context/editor-context"
 import * as THREE from 'three'
 
+function ExportHandler({ exportFileName }: { exportFileName: string }) {
+  const { objects } = useEditor()
+  
+  React.useEffect(() => {
+    const handleExport = (event: any) => {
+      const fileName = event.detail?.fileName || "export"
+      const cubes: { position: { x: number; y: number; z: number }, color: { r: number; g: number; b: number } }[] = []
+      
+      objects.forEach((object) => {
+        if (object instanceof THREE.Mesh && object.geometry instanceof THREE.BoxGeometry) {
+          const worldPosition = new THREE.Vector3()
+          object.getWorldPosition(worldPosition)
+          
+          let r = 0, g = 0, b = 0
+          if (object.material instanceof THREE.MeshStandardMaterial && object.material.color) {
+            r = object.material.color.r
+            g = object.material.color.g
+            b = object.material.color.b
+          }
+          
+          cubes.push({
+            position: {
+              x: worldPosition.x,
+              y: worldPosition.y,
+              z: worldPosition.z
+            },
+            color: { r, g, b }
+          })
+        }
+      })
+      
+      const fileContent = cubes.map(cube => 
+        `${cube.position.x.toFixed(2)} ${cube.position.y.toFixed(2)} ${cube.position.z.toFixed(2)} ${cube.color.r.toFixed(3)} ${cube.color.g.toFixed(3)} ${cube.color.b.toFixed(3)}`
+      ).join('\n')
+      
+      const blob = new Blob([fileContent], { type: 'text/plain' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${fileName}.model`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      
+      console.log(`Exported ${cubes.length} cube(s):`, cubes)
+    }
+    
+    window.addEventListener('export-cubes-coordinates', handleExport)
+    return () => window.removeEventListener('export-cubes-coordinates', handleExport)
+  }, [objects, exportFileName])
+  
+  return null
+}
+
 function SceneManager() {
   const { setScene, objects, addObject, setSelected } = useEditor()
   const { scene } = useThree()
@@ -14,7 +69,6 @@ function SceneManager() {
   React.useEffect(() => {
     setScene(scene)
     
-    // Initial objects if any (or we can add the first box here)
     if (objects.length === 0) {
       const box = new THREE.Mesh(
         new THREE.BoxGeometry(1, 1, 1),
@@ -42,7 +96,7 @@ function SceneManager() {
   )
 }
 
-function EditorCanvas() {
+function EditorCanvas({ exportFileName }: { exportFileName: string }) {
   const { selected, setSelected } = useEditor()
 
   return (
@@ -54,6 +108,7 @@ function EditorCanvas() {
     >
       <color attach="background" args={["#121212"]} />
 
+      <ExportHandler exportFileName={exportFileName} />
       <ambientLight intensity={0.5} />
       <directionalLight position={[10, 10, 5]} intensity={1} castShadow />
 
@@ -80,7 +135,6 @@ function EditorCanvas() {
           object={selected} 
           mode="translate" 
           onMouseDown={() => {
-            // Disable OrbitControls during transform
           }}
         />
       )}
@@ -91,7 +145,7 @@ function EditorCanvas() {
   )
 }
 
-export function EditorLayout() {
+export function EditorLayout({ exportFileName = "export" }: { exportFileName?: string }) {
   const canvasContainerRef = React.useRef<HTMLDivElement>(null)
 
   return (
@@ -103,7 +157,7 @@ export function EditorLayout() {
         id="canvas-container"
         className="relative flex-1 bg-[#121212] overflow-hidden"
       >
-        <EditorCanvas />
+        <EditorCanvas exportFileName={exportFileName} />
       </main>
       <EditorTools />
     </div>
