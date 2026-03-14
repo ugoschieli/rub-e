@@ -5,19 +5,20 @@ import * as THREE from "three";
 import { invoke } from "@tauri-apps/api/core";
 
 interface EditorState {
-  selected: THREE.Object3D | null;
-  selection: THREE.Object3D[];
-  setSelected: (obj: THREE.Object3D | null, multi?: boolean) => void;
-  scene: THREE.Scene | null;
-  setScene: (scene: THREE.Scene | null) => void;
-  camera: THREE.Camera | null;
-  setCamera: (camera: THREE.Camera | null) => void;
-  objects: THREE.Object3D[];
-  addObject: (obj: THREE.Object3D) => void;
-  removeObject: (obj: THREE.Object3D) => void;
-  updateObject: (obj: THREE.Object3D) => void;
-  groupSelection: () => void;
-  ungroupSelection: () => void;
+  selected: THREE.Object3D | null
+  selection: THREE.Object3D[]
+  setSelected: (obj: THREE.Object3D | null, multi?: boolean) => void
+  scene: THREE.Scene | null
+  setScene: (scene: THREE.Scene | null) => void
+  camera: THREE.Camera | null
+  setCamera: (camera: THREE.Camera | null) => void
+  objects: THREE.Object3D[]
+  addObject: (obj: THREE.Object3D) => void
+  removeObject: (obj: THREE.Object3D) => void
+  updateObject: (obj: THREE.Object3D) => void
+  snapObjects: () => void
+  groupSelection: () => void
+  ungroupSelection: () => void
   assetId: number | null;
   setAssetId: (id: number | null) => void;
   saveAsset: () => Promise<void>;
@@ -27,10 +28,11 @@ interface EditorState {
 const EditorContext = createContext<EditorState | undefined>(undefined);
 
 export function EditorProvider({ children }: { children: React.ReactNode }) {
-  const [selection, setSelection] = useState<THREE.Object3D[]>([]);
-  const [scene, setScene] = useState<THREE.Scene | null>(null);
-  const [camera, setCamera] = useState<THREE.Camera | null>(null);
-  const [objects, setObjects] = useState<THREE.Object3D[]>([]);
+  const [selection, setSelection] = useState<THREE.Object3D[]>([])
+  const [scene, setScene] = useState<THREE.Scene | null>(null)
+  const [camera, setCamera] = useState<THREE.Camera | null>(null)   // ← new
+  const [objects, setObjects] = useState<THREE.Object3D[]>([])
+  const SNAP_DISTANCE = 0.07
   const [assetId, setAssetId] = useState<number | null>(null);
 
   const selected =
@@ -76,10 +78,11 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
   );
 
   const updateObject = useCallback((updatedObj: THREE.Object3D) => {
-    setObjects((prev) =>
-      prev.map((obj) => (obj.uuid === updatedObj.uuid ? updatedObj : obj)),
-    );
-  }, []);
+    setObjects(prev => {
+      if (!prev.some(obj => obj.uuid === updatedObj.uuid)) return prev;
+      return prev.map(obj => (obj.uuid === updatedObj.uuid ? updatedObj : obj));
+    });
+  },[])
 
   const groupSelection = useCallback(() => {
     if (selection.length <= 1 || !scene) return;
@@ -138,7 +141,85 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
       setObjects(currentObjects);
       setSelection(newSelection);
     }
-  }, [selection, scene, objects]);
+  }, [selection, scene, objects])
+
+  const snapObjects = useCallback(() => {
+    if (!selected) return
+
+    selected.updateMatrixWorld(true)
+    const movingBox = new THREE.Box3().setFromObject(selected)
+    const movingCenter = new THREE.Vector3()
+    movingBox.getCenter(movingCenter)
+
+    const oldWorldPos = selected.getWorldPosition(new THREE.Vector3())
+    const newWorldPos = oldWorldPos.clone()
+    
+    let bestX = { dist: SNAP_DISTANCE, pos: oldWorldPos.x }
+    let bestY = { dist: SNAP_DISTANCE, pos: oldWorldPos.y }
+    let bestZ = { dist: SNAP_DISTANCE, pos: oldWorldPos.z }
+
+    for (const obj of objects) {
+      if (obj.uuid === selected.uuid) continue
+      obj.updateMatrixWorld(true)
+      const targetBox = new THREE.Box3().setFromObject(obj)
+      const targetCenter = new THREE.Vector3()
+      targetBox.getCenter(targetCenter)
+
+      // Seuil de proximité pour l'alignement sur les autres axes
+      const MARGIN = 0.1
+      const overlapX = movingBox.min.x < targetBox.max.x + MARGIN && movingBox.max.x > targetBox.min.x - MARGIN
+      const overlapY = movingBox.min.y < targetBox.max.y + MARGIN && movingBox.max.y > targetBox.min.y - MARGIN
+      const overlapZ = movingBox.min.z < targetBox.max.z + MARGIN && movingBox.max.z > targetBox.min.z - MARGIN
+
+      // Snap X (seulement si aligné en Y et Z)
+      if (overlapY && overlapZ) {
+        // Face à face
+        const dx1 = targetBox.min.x - movingBox.max.x
+        if (Math.abs(dx1) < bestX.dist) bestX = { dist: Math.abs(dx1), pos: oldWorldPos.x + dx1 }
+        
+        const dx2 = targetBox.max.x - movingBox.min.x
+        if (Math.abs(dx2) < bestX.dist) bestX = { dist: Math.abs(dx2), pos: oldWorldPos.x + dx2 }
+
+        // Centre à centre
+        const dx3 = targetCenter.x - movingCenter.x
+        if (Math.abs(dx3) < bestX.dist) bestX = { dist: Math.abs(dx3), pos: oldWorldPos.x + dx3 }
+      }
+
+      // Snap Y (seulement si aligné en X et Z)
+      if (overlapX && overlapZ) {
+        const dy1 = targetBox.min.y - movingBox.max.y
+        if (Math.abs(dy1) < bestY.dist) bestY = { dist: Math.abs(dy1), pos: oldWorldPos.y + dy1 }
+        
+        const dy2 = targetBox.max.y - movingBox.min.y
+        if (Math.abs(dy2) < bestY.dist) bestY = { dist: Math.abs(dy2), pos: oldWorldPos.y + dy2 }
+
+        const dy3 = targetCenter.y - movingCenter.y
+        if (Math.abs(dy3) < bestY.dist) bestY = { dist: Math.abs(dy3), pos: oldWorldPos.y + dy3 }
+      }
+
+      // Snap Z (seulement si aligné en X et Y)
+      if (overlapX && overlapY) {
+        const dz1 = targetBox.min.z - movingBox.max.z
+        if (Math.abs(dz1) < bestZ.dist) bestZ = { dist: Math.abs(dz1), pos: oldWorldPos.z + dz1 }
+        
+        const dz2 = targetBox.max.z - movingBox.min.z
+        if (Math.abs(dz2) < bestZ.dist) bestZ = { dist: Math.abs(dz2), pos: oldWorldPos.z + dz2 }
+
+        const dz3 = targetCenter.z - movingCenter.z
+        if (Math.abs(dz3) < bestZ.dist) bestZ = { dist: Math.abs(dz3), pos: oldWorldPos.z + dz3 }
+      }
+    }
+
+    newWorldPos.set(bestX.pos, bestY.pos, bestZ.pos)
+
+    if (selected.parent) {
+      selected.parent.worldToLocal(newWorldPos)
+    }
+
+    selected.position.copy(newWorldPos)
+    selected.updateMatrixWorld(true)
+
+  }, [selected, objects])
 
   const saveAsset = useCallback(async () => {
     if (assetId === null) return;
@@ -182,51 +263,44 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
         const content = (await invoke("load_asset_content", { id })) as string;
         setAssetId(id);
 
+        const loadedObjects: THREE.Object3D[] = [];
         if (content && content.trim() !== "") {
           const lines = content.split("\n");
-          const loadedObjects: THREE.Object3D[] = [];
 
-          if (scene) {
-            // Clear current objects
-            objects.forEach((obj) => scene.remove(obj));
+          lines.forEach((line, index) => {
+            const trimmed = line.trim();
+            if (trimmed === "" || trimmed.startsWith("#")) return;
 
-            lines.forEach((line, index) => {
-              const trimmed = line.trim();
-              if (trimmed === "" || trimmed.startsWith("#")) return;
+            const parts = trimmed.split(/\s+/);
+            if (parts.length >= 6) {
+              const x = parseFloat(parts[0]);
+              const y = parseFloat(parts[1])
+              const z = parseFloat(parts[2])
+              const r = parseFloat(parts[3])
+              const g = parseFloat(parts[4])
+              const b = parseFloat(parts[5])
 
-              const parts = trimmed.split(/\s+/);
-              if (parts.length >= 6) {
-                const x = parseFloat(parts[0]);
-                const y = parseFloat(parts[1])
-                const z = parseFloat(parts[2])
-                const r = parseFloat(parts[3])
-                const g = parseFloat(parts[4])
-                const b = parseFloat(parts[5])
-
-                const mesh = new THREE.Mesh(
-                  new THREE.BoxGeometry(1, 1, 1),
-                  new THREE.MeshStandardMaterial({
-                    color: new THREE.Color(r, g, b),
-                  }),
-                );
-                mesh.position.set(x, y, z);
-                mesh.name = `Cube ${index + 1}`;
-                scene.add(mesh);
-                loadedObjects.push(mesh);
-              }
-            });
-
-            setObjects(loadedObjects);
-            setSelection([]);
-          }
+              const mesh = new THREE.Mesh(
+                new THREE.BoxGeometry(1, 1, 1),
+                new THREE.MeshStandardMaterial({
+                  color: new THREE.Color(r, g, b),
+                }),
+              );
+              mesh.position.set(x, y, z);
+              mesh.name = `Cube ${index + 1}`;
+              loadedObjects.push(mesh);
+            }
+          });
         }
+        setObjects(loadedObjects);
+        setSelection([]);
       } catch (error) {
         console.error("Failed to load asset:", error);
       }
     },
-    [scene, objects],
+    [],
   );
-
+  
   return (
     <EditorContext.Provider
       value={{
@@ -247,6 +321,7 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
         setAssetId,
         saveAsset,
         loadAsset,
+        snapObjects
       }}
     >
       {children}
