@@ -1,17 +1,35 @@
 "use client"
 
 import { EditorNavbar } from "@/components/editor-navbar";
-import React from "react";
+import React, { useEffect } from "react";
 import { EditorLayout } from "@/components/editor-layout";
-import { EditorProvider } from "@/context/editor-context";
+import { EditorProvider, useEditor } from "@/context/editor-context";
 
-export default function EditorPage({ children }: { children: React.ReactNode }) {
+function EditorContent({ slug }: { slug: string }) {
+  const { loadAsset, scene, setAssetId } = useEditor()
+  
+  useEffect(() => {
+    if (scene) {
+      loadAsset(parseInt(slug))
+    } else {
+        setAssetId(parseInt(slug))
+    }
+  }, [slug, loadAsset, scene, setAssetId])
+
+  return (
+    <div className="h-screen w-full bg-black">
+      <EditorNavbar />
+      <EditorLayout />
+    </div>
+  )
+}
+
+export default function EditorPage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = React.use(params)
+
   return (
     <EditorProvider>
-      <div className="h-screen w-full bg-black">
-        <EditorNavbar />
-        <EditorLayout />
-      </div>
+      <EditorContent slug={slug} />
     </EditorProvider>
   )
 }

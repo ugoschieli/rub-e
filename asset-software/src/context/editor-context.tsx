@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useCallback } from 'react'
 import * as THREE from 'three'
+import { invoke } from '@tauri-apps/api/core'
 
 interface EditorState {
   selected: THREE.Object3D | null
@@ -17,6 +18,10 @@ interface EditorState {
   updateObject: (obj: THREE.Object3D) => void
   groupSelection: () => void
   ungroupSelection: () => void
+  assetId: number | null
+  setAssetId: (id: number | null) => void
+  saveAsset: () => Promise<void>
+  loadAsset: (id: number) => Promise<void>
 }
 
 const EditorContext = createContext<EditorState | undefined>(undefined)
@@ -24,8 +29,9 @@ const EditorContext = createContext<EditorState | undefined>(undefined)
 export function EditorProvider({ children }: { children: React.ReactNode }) {
   const [selection, setSelection] = useState<THREE.Object3D[]>([])
   const [scene, setScene] = useState<THREE.Scene | null>(null)
-  const [camera, setCamera] = useState<THREE.Camera | null>(null)   // ← new
+  const [camera, setCamera] = useState<THREE.Camera | null>(null)
   const [objects, setObjects] = useState<THREE.Object3D[]>([])
+  const [assetId, setAssetId] = useState<number | null>(null)
 
   const selected = selection.length > 0 ? selection[selection.length - 1] : null
 
@@ -61,11 +67,11 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
       setObjects(prev => prev.filter(o => o !== obj))
       setSelection(prev => prev.filter(o => o.uuid !== obj.uuid))
     }
-  }, [scene])
+  }, [scene, selected, setSelected])
 
-  function updateObject(updatedObj: THREE.Object3D) {
+  const updateObject = useCallback((updatedObj: THREE.Object3D) => {
     setObjects(prev => prev.map(obj => (obj.uuid === updatedObj.uuid ? updatedObj : obj)))
-  }[]
+  }, [])
 
   const groupSelection = useCallback(() => {
     if (selection.length <= 1 || !scene) return
@@ -122,6 +128,81 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
     }
   }, [selection, scene, objects])
 
+  const saveAsset = useCallback(async () => {
+    if (assetId === null) return
+    
+    const lines: string[] = []
+    objects.forEach(rootObj => {
+      rootObj.traverse(obj => {
+        if (obj instanceof THREE.Mesh) {
+          const worldPosition = new THREE.Vector3()
+          obj.getWorldPosition(worldPosition)
+          
+          let r = 0, g = 0, b = 0
+          if (obj.material instanceof THREE.MeshStandardMaterial && obj.material.color) {
+            r = obj.material.color.r
+            g = obj.material.color.g
+            b = obj.material.color.b
+          }
+          lines.push(`${worldPosition.x.toFixed(2)} ${worldPosition.y.toFixed(2)} ${worldPosition.z.toFixed(2)} ${r.toFixed(3)} ${g.toFixed(3)} ${b.toFixed(3)}`)
+        }
+      })
+    })
+    
+    const content = lines.join('\n')
+    try {
+      await invoke('save_asset_content', { id: assetId, content })
+    } catch (error) {
+      console.error("Failed to save asset:", error)
+    }
+  }, [assetId, objects])
+
+  const loadAsset = useCallback(async (id: number) => {
+    try {
+      const content = await invoke('load_asset_content', { id }) as string
+      setAssetId(id)
+      
+      if (content && content.trim() !== "") {
+        const lines = content.split('\n')
+        const loadedObjects: THREE.Object3D[] = []
+        
+        if (scene) {
+          // Clear current objects
+          objects.forEach(obj => scene.remove(obj))
+          
+          lines.forEach((line, index) => {
+            const trimmed = line.trim()
+            if (trimmed === "" || trimmed.startsWith("#")) return
+            
+            const parts = trimmed.split(/\s+/)
+            if (parts.length >= 6) {
+              const x = parseFloat(parts[0])
+              const y = parseFloat(parts[1])
+              const z = parseFloat(parts[2])
+              const r = parseFloat(parts[3])
+              const g = parseFloat(parts[4])
+              const b = parseFloat(parts[5])
+              
+              const mesh = new THREE.Mesh(
+                new THREE.BoxGeometry(1, 1, 1),
+                new THREE.MeshStandardMaterial({ color: new THREE.Color(r, g, b) })
+              )
+              mesh.position.set(x, y, z)
+              mesh.name = `Cube ${index + 1}`
+              scene.add(mesh)
+              loadedObjects.push(mesh)
+            }
+          })
+          
+          setObjects(loadedObjects)
+          setSelection([])
+        }
+      }
+    } catch (error) {
+      console.error("Failed to load asset:", error)
+    }
+  }, [scene, objects])
+
   return (
     <EditorContext.Provider
       value={{
@@ -137,7 +218,11 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
         removeObject,
         updateObject,
         groupSelection,
-        ungroupSelection
+        ungroupSelection,
+        assetId,
+        setAssetId,
+        saveAsset,
+        loadAsset
       }}
     >
       {children}

@@ -84,3 +84,52 @@ pub fn update_asset_category_and_project(
 
     Ok(())
 }
+
+#[tauri::command]
+pub fn get_asset_by_id(app: AppHandle, id: u32) -> Option<Asset> {
+    let assets_db_path = get_db_path(&app, "data_assets.json");
+    let assets = json::assets::get_assets(&assets_db_path);
+    assets.into_iter().find(|a| a.id == id)
+}
+
+#[tauri::command]
+pub fn save_asset_content(app: AppHandle, id: u32, content: String) -> Result<(), String> {
+    let assets_db_path = get_db_path(&app, "data_assets.json");
+    let assets_root = get_folder_assets_path(&app);
+    let assets = json::assets::get_assets(&assets_db_path);
+    
+    if let Some(asset) = assets.iter().find(|a| a.id == id) {
+        let full_path = assets_root.join(&asset.path);
+        
+        // Ensure parent directory exists
+        if let Some(parent) = full_path.parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|e| format!("Erreur lors de la création du dossier : {}", e))?;
+        }
+
+        std::fs::write(&full_path, content)
+            .map_err(|e| format!("Erreur lors de l'écriture du fichier : {}", e))?;
+        Ok(())
+    } else {
+        Err("Asset introuvable".to_string())
+    }
+}
+
+#[tauri::command]
+pub fn load_asset_content(app: AppHandle, id: u32) -> Result<String, String> {
+    let assets_db_path = get_db_path(&app, "data_assets.json");
+    let assets_root = get_folder_assets_path(&app);
+    let assets = json::assets::get_assets(&assets_db_path);
+    
+    if let Some(asset) = assets.iter().find(|a| a.id == id) {
+        let full_path = assets_root.join(&asset.path);
+        if full_path.exists() {
+            std::fs::read_to_string(&full_path)
+                .map_err(|e| format!("Erreur lors de la lecture du fichier : {}", e))
+        } else {
+            Ok("".to_string())
+        }
+    } else {
+        Err("Asset introuvable".to_string())
+    }
+}

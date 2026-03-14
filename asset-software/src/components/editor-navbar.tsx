@@ -27,7 +27,7 @@ import { Input } from "@/components/ui/input"
 
 export function EditorNavbar() {
   const isMobile = useIsMobile()
-  const { objects, addObject, groupSelection, ungroupSelection } = useEditor()
+  const { objects, addObject, groupSelection, ungroupSelection, saveAsset } = useEditor()
   const [isExportDialogOpen, setIsExportDialogOpen] = React.useState(false)
   const [exportFileName, setExportFileName] = React.useState("")
 
@@ -110,7 +110,7 @@ const handleExport = () => {
               <ul className="grid w-[200px] gap-1 p-2">
                 <ListItem href="#" title="New Project" />
                 <ListItem href="#" title="Open..." />
-                <ListItem href="#" title="Save" />
+                <ListItem onClick={saveAsset} title="Save" />
                 <ListItem href="#" title="Save As..." />
                 <div className="bg-border my-1 h-px" />
                 <ListItem href="#" title="Import" />
