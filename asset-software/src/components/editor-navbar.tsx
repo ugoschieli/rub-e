@@ -27,15 +27,22 @@ import { Input } from "@/components/ui/input"
 
 export function EditorNavbar() {
   const isMobile = useIsMobile()
-  const { objects, addObject, groupSelection, ungroupSelection, saveAsset } = useEditor()
+  const { objects, addObject, groupSelection, ungroupSelection, saveAsset, copy, paste, cut } = useEditor()
   const [isExportDialogOpen, setIsExportDialogOpen] = React.useState(false)
   const [exportFileName, setExportFileName] = React.useState("")
 
   const addCube = () => {
+    const color = new THREE.Color("#6366f1") // ✅ define it
+
     const mesh = new THREE.Mesh(
       new THREE.BoxGeometry(1, 1, 1),
-      new THREE.MeshStandardMaterial({ color: "#6366f1" })
+      new THREE.MeshStandardMaterial({ color })
     )
+    mesh.userData.color = {
+      r: color.r,
+      g: color.g,
+      b: color.b
+    }
 
     // Calculate next cube number
     const cubeIndices = objects.map((obj) => {
@@ -117,9 +124,9 @@ const handleExport = () => {
             <NavigationMenuContent>
               <ul className="grid w-[200px] gap-1 p-2">
                 <div className="bg-border my-1 h-px" />
-                <ListItem href="#" title="Cut" />
-                <ListItem href="#" title="Copy" />
-                <ListItem href="#" title="Paste" />
+                <ListItem onClick={cut} title="Cut" />
+                <ListItem onClick={copy} title="Copy" />
+                <ListItem onClick={paste} title="Paste" />
                 <div className="bg-border my-1 h-px" />
                 <ListItem onClick={groupSelection} title="Group" />
                 <ListItem onClick={ungroupSelection} title="Ungroup" />

@@ -23,6 +23,10 @@ interface EditorState {
   setAssetId: (id: number | null) => void;
   saveAsset: () => Promise<void>;
   loadAsset: (id: number) => Promise<void>;
+  copy: () => void;
+  paste: () => void;
+  cut: () => void;
+  duplicate: () => void;
 }
 
 const EditorContext = createContext<EditorState | undefined>(undefined);
@@ -34,6 +38,7 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
   const [objects, setObjects] = useState<THREE.Object3D[]>([])
   const SNAP_DISTANCE = 0.07
   const [assetId, setAssetId] = useState<number | null>(null);
+  const [copiedObject, setCopiedObject] = useState<THREE.Object3D[]>([]);
 
   const selected =
     selection.length > 0 ? selection[selection.length - 1] : null;
@@ -231,16 +236,12 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
           const worldPosition = new THREE.Vector3();
           obj.getWorldPosition(worldPosition);
 
-          let r = 0,
-            g = 0,
-            b = 0;
-          if (
-            obj.material instanceof THREE.MeshStandardMaterial &&
-            obj.material.color
-          ) {
-            r = obj.material.color.r;
-            g = obj.material.color.g;
-            b = obj.material.color.b;
+          let r = 0, g = 0, b = 0;
+
+          if (obj.userData?.color) {
+            r = obj.userData.color.r;
+            g = obj.userData.color.g;
+            b = obj.userData.color.b;
           }
           lines.push(
             `${worldPosition.x.toFixed(2)} ${worldPosition.y.toFixed(2)} ${worldPosition.z.toFixed(2)} ${r.toFixed(3)} ${g.toFixed(3)} ${b.toFixed(3)}`,
@@ -288,6 +289,7 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
               );
               mesh.position.set(x, y, z);
               mesh.name = `Cube ${index + 1}`;
+              mesh.userData.color = { r, g, b };
               loadedObjects.push(mesh);
             }
           });
@@ -300,7 +302,95 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
     },
     [],
   );
-  
+
+  const copy = useCallback(() => {
+    if (selection.length >= 1) {
+      const clones = selection.map(obj => cloneObject(obj))
+      setCopiedObject(clones)
+    }
+  }, [selection])
+
+  const paste = useCallback(() => {
+    if (copiedObject.length === 0) return;
+
+    const newObjects: THREE.Object3D[] = [];
+
+    copiedObject.forEach((obj) => {
+      const clone = cloneObject(obj)
+      clone.position.x += 1
+      clone.position.y += 1
+      clone.position.z += 1
+      clone.name += " Copy"
+      newObjects.push(clone)
+      addObject(clone)
+    })
+
+    setSelection(newObjects)
+  }, [copiedObject, addObject])
+
+
+  const cut = useCallback(() => {
+    if (selection.length === 0) return
+
+    const clones = selection.map(obj => cloneObject(obj))
+    setCopiedObject(clones)
+
+    const roots = selection.filter(obj => {
+      let parent = obj.parent
+      while (parent) {
+        if (selection.some(sel => sel.uuid === parent?.uuid)) {
+          return false
+        }
+        parent = parent.parent
+      }
+      return true
+    })
+
+    roots.forEach(obj => removeObject(obj))
+
+  }, [selection, removeObject])
+
+  const duplicate = useCallback(() => {
+    if (selection.length === 0) return;
+
+    const newObjects: THREE.Object3D[] = [];
+
+    selection.forEach((obj) => {
+      const clone = cloneObject(obj);
+
+      clone.position.x += 1;
+      clone.position.y += 1;
+      clone.position.z += 1;
+
+      clone.name = obj.name + " Copy";
+
+      newObjects.push(clone);
+      addObject(clone);
+    });
+
+    setSelection(newObjects);
+
+  }, [selection, addObject]);
+
+  function cloneObject(obj: THREE.Object3D) {
+    const clone = obj.clone(true)
+
+    clone.traverse((child: any) => {
+      if (child.isMesh) {
+        if (child.material) {
+          child.material = child.material.clone()
+        }
+
+        if (child.geometry) {
+          child.geometry = child.geometry.clone()
+        }
+      }
+
+      child.userData = JSON.parse(JSON.stringify(child.userData))
+    })
+
+    return clone
+  }
   return (
     <EditorContext.Provider
       value={{
@@ -321,7 +411,11 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
         setAssetId,
         saveAsset,
         loadAsset,
-        snapObjects
+        snapObjects,
+        copy,
+        paste,
+        cut,
+        duplicate
       }}
     >
       {children}

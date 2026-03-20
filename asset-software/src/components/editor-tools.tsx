@@ -8,6 +8,7 @@ import {
   Eye,
   EyeOff,
   Trash2,
+  Copy,
   HelpCircle,
   Folder,
   ChevronRight,
@@ -123,7 +124,15 @@ export function EditorTools() {
                   <HexColorPicker
                     color={`#${selected.material.color.getHexString()}`}
                     onChange={(hex) => {
-                      selected.material.color.set(hex)
+                      const color = new THREE.Color(hex)
+
+                      selected.material.color.set(color)
+
+                      selected.userData.color = {
+                        r: color.r,
+                        g: color.g,
+                        b: color.b
+                      }
                       updateObject(selected)
                     }}
                     className="shadow-none! bg-[#18181b]! w-auto!"
@@ -138,6 +147,7 @@ export function EditorTools() {
               <label className="text-xs text-zinc-400">Object Type</label>
               <div className="text-sm font-medium text-zinc-200">
                 {selected.type}
+                {selected.uuid}
               </div>
             </div>
           </div>
@@ -159,7 +169,7 @@ export function EditorTools() {
 // --- HELPER COMPONENTS ---
 
 function RecursiveHierarchyItem({ obj, depth }: { obj: THREE.Object3D, depth: number }) {
-  const { selection, setSelected, updateObject, removeObject } = useEditor()
+  const { selection, setSelected, updateObject, removeObject, duplicate } = useEditor()
   const [isOpen, setIsOpen] = React.useState(true)
 
   const getIcon = (obj: THREE.Object3D) => {
@@ -182,6 +192,7 @@ function RecursiveHierarchyItem({ obj, depth }: { obj: THREE.Object3D, depth: nu
         onToggleOpen={() => setIsOpen(!isOpen)}
         onClick={(e) => setSelected(obj, e.shiftKey)}
         onRemove={() => removeObject(obj)}
+        onDuplicate={() => duplicate()}
         onToggleVisibility={() => {
           obj.visible = !obj.visible
           updateObject(obj)
@@ -205,6 +216,7 @@ function HierarchyItem({
   onToggleOpen,
   onClick,
   onRemove,
+  onDuplicate,
   onToggleVisibility
 }: {
   icon: React.ReactNode
@@ -217,6 +229,7 @@ function HierarchyItem({
   onToggleOpen: () => void
   onClick: (e: React.MouseEvent) => void
   onRemove: () => void
+  onDuplicate: () => void
   onToggleVisibility: () => void
 }) {
   return (
@@ -245,6 +258,12 @@ function HierarchyItem({
           {visible ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5 text-zinc-500" />}
         </button>
         <button
+          onClick={(e) => { e.stopPropagation(); onDuplicate(); }}
+          className="hover:text-blue-400"
+        >
+          <Copy className="h-3.5 w-3.5" />
+        </button>
+        <button
           onClick={(e) => { e.stopPropagation(); onRemove(); }}
           className="hover:text-red-400"
         >
@@ -254,7 +273,6 @@ function HierarchyItem({
     </div>
   )
 }
-
 function HierarchyCamera({
   icon,
   label,

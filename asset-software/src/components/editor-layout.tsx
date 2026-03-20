@@ -22,10 +22,11 @@ function ExportHandler({ exportFileName }: { exportFileName: string }) {
           object.getWorldPosition(worldPosition)
           
           let r = 0, g = 0, b = 0
-          if (object.material instanceof THREE.MeshStandardMaterial && object.material.color) {
-            r = object.material.color.r
-            g = object.material.color.g
-            b = object.material.color.b
+
+          if (object.userData?.color) {
+            r = object.userData.color.r
+            g = object.userData.color.g
+            b = object.userData.color.b
           }
           
           cubes.push({
@@ -62,7 +63,6 @@ function ExportHandler({ exportFileName }: { exportFileName: string }) {
   
   return null
 }
-
 function SceneManager() {
   const { setScene, objects, addObject, setSelected } = useEditor()
   const { scene } = useThree()
@@ -104,8 +104,6 @@ function CameraInitializer({ setCamera }: { setCamera: (cam: THREE.Camera) => vo
   }, [camera, setCamera])
   return null
 }
-
-
 function EditorOrbitControls() {
   const { camera, updateObject } = useEditor()
   const controls = useThree((state) => state.controls as any) // <- use any
@@ -123,8 +121,6 @@ function EditorOrbitControls() {
 
   return null
 }
-
-
 function EditorCanvas({ exportFileName }: { exportFileName: string }) {
   const { selected, selection, setSelected, updateObject, objects, setCamera, snapObjects } = useEditor()
   
@@ -223,7 +219,34 @@ function EditorCanvas({ exportFileName }: { exportFileName: string }) {
 
 export function EditorLayout({ exportFileName = "export" }: { exportFileName?: string }) {
   const canvasContainerRef = React.useRef<HTMLDivElement>(null)
+  const { cut, copy, paste } = useEditor() // ✅ add this
 
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const key = e.key.toLowerCase()
+
+      // CUT → Ctrl + X
+      if (e.ctrlKey && key === "x") {
+        e.preventDefault()
+        cut()
+      }
+
+      // COPY → Ctrl + C
+      if (e.ctrlKey && key === "c") {
+        e.preventDefault()
+        copy()
+      }
+
+      // PASTE → Ctrl + V
+      if (e.ctrlKey && key === "v") {
+        e.preventDefault()
+        paste()
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [cut, copy, paste])
+  
   return (
     <div className="flex h-[calc(100vh-40px)] w-full bg-[#18181b] text-zinc-100 overflow-hidden font-sans">
       
