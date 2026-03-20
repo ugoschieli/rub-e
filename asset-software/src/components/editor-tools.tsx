@@ -16,13 +16,13 @@ import {
   Ungroup
 } from "lucide-react"
 import { useEditor } from "@/context/editor-context"
-import { useThree } from "@react-three/fiber"
 import * as THREE from 'three'
-import { get } from "http"
+import { HexColorPicker } from "react-colorful";
+import { NumberInput } from "@heroui/react";
+
 
 export function EditorTools() {
   const { camera: defaultCamera, objects, selection, selected, setSelected, updateObject, removeObject, groupSelection, ungroupSelection } = useEditor()
-
   return (
     <aside className="flex w-80 flex-col border-l border-zinc-800 bg-[#18181b] h-full">
       {/* Section Hierarchy */}
@@ -68,10 +68,10 @@ export function EditorTools() {
       </div>
 
       {/* Properties Section */}
+      <div className="px-4 py-3 text-xs font-semibold uppercase text-zinc-500 tracking-wider">
+        Properties
+      </div>
       <div className="flex-1 overflow-y-auto bg-[#18181b]">
-        <div className="px-4 py-3 text-xs font-semibold uppercase text-zinc-500 tracking-wider">
-          Properties
-        </div>
 
         {selected ? (
           <div className="space-y-6 px-4 pb-8">
@@ -93,7 +93,7 @@ export function EditorTools() {
 
             {/* Transformations */}
             <div className="space-y-4">
-              <div className="text-xs text-zinc-500">Transformation</div>
+              <div className="text-xs text-zinc-400">Transformation</div>
 
               <TransformInputGroup
                 label="Position"
@@ -111,6 +111,24 @@ export function EditorTools() {
                 values={selected.scale}
                 onChange={() => updateObject(selected)}
               />
+            </div>
+
+            <div className="h-px bg-zinc-800" />
+            {/* Color */}
+            <div className="space-y-4">
+              <div className="text-xs text-zinc-400">Color</div>
+
+              {selected instanceof THREE.Mesh &&
+                selected.material instanceof THREE.MeshStandardMaterial && (
+                  <HexColorPicker
+                    color={`#${selected.material.color.getHexString()}`}
+                    onChange={(hex) => {
+                      selected.material.color.set(hex)
+                      updateObject(selected)
+                    }}
+                    className="shadow-none! bg-[#18181b]! w-auto!"
+                  />
+                )}
             </div>
 
             <div className="h-px bg-zinc-800" />
@@ -143,7 +161,7 @@ export function EditorTools() {
 function RecursiveHierarchyItem({ obj, depth }: { obj: THREE.Object3D, depth: number }) {
   const { selection, setSelected, updateObject, removeObject } = useEditor()
   const [isOpen, setIsOpen] = React.useState(true)
-  
+
   const getIcon = (obj: THREE.Object3D) => {
     if (obj instanceof THREE.Group) return <Folder className="h-4 w-4 text-blue-400" />
     if (obj instanceof THREE.Light) return <Lightbulb className="h-4 w-4 text-yellow-500" />
@@ -263,7 +281,6 @@ function HierarchyCamera({
     </div>
   )
 }
-
 function TransformInputGroup({
   label,
   values,
@@ -275,19 +292,18 @@ function TransformInputGroup({
   onChange: () => void;
   isRotation?: boolean
 }) {
-  const handleAxisChange = (axis: 'x' | 'y' | 'z', value: string) => {
-    const numValue = parseFloat(value) || 0
+  const handleAxisChange = (axis: 'x' | 'y' | 'z', value: number) => {
     if (isRotation) {
-      values[axis] = THREE.MathUtils.degToRad(numValue)
+      values[axis] = THREE.MathUtils.degToRad(value)
     } else {
-      values[axis] = numValue
+      values[axis] = value
     }
     onChange()
   }
 
   const getAxisValue = (axis: 'x' | 'y' | 'z') => {
     const val = values[axis]
-    return isRotation ? THREE.MathUtils.radToDeg(val).toFixed(2) : val.toFixed(2)
+    return isRotation ? parseFloat(THREE.MathUtils.radToDeg(val).toFixed(2)) : parseFloat(val.toFixed(2))
   }
 
   return (
@@ -297,6 +313,7 @@ function TransformInputGroup({
         {(['x', 'y', 'z'] as const).map((axis) => (
           <AxisInput
             key={axis}
+            axis={axis}
             label={axis.toUpperCase()}
             value={getAxisValue(axis)}
             onChange={(val) => handleAxisChange(axis, val)}
@@ -312,21 +329,22 @@ function AxisInput({
   value,
   onChange
 }: {
+  axis: 'x' | 'y' | 'z';
   label: string;
-  value: string;
-  onChange: (val: string) => void
+  value: number;
+  onChange: (val: number) => void
 }) {
   return (
     <div className="group relative">
-      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-zinc-500 font-mono pointer-events-none group-hover:text-blue-500">
+      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-zinc-400 font-mono pointer-events-none group-hover:text-blue-500">
         {label}
       </span>
-      <input
-        type="number"
-        step="0.1"
-        className="w-full rounded bg-zinc-900 border border-zinc-800 px-2 py-1 pl-6 text-right text-xs text-zinc-300 focus:border-blue-500 focus:bg-zinc-900 focus:outline-none appearance-none"
+
+      <NumberInput
+        className="w-full rounded pl-5 border border-zinc-800 text-right text-xs"
+        step={0.1}
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(val) => onChange(val as number)}
       />
     </div>
   )

@@ -74,14 +74,6 @@ const handleExport = () => {
   setIsExportDialogOpen(false)
 }
 
-  const addCamera = () => {
-    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000)
-    camera.name = "Camera"
-    camera.lookAt(0, 0, 0)
-    camera.position.set(0, 2, 5)
-    addObject(camera)
-  }
-
   return (
     <div className="relative z-50 flex items-center border-b border-zinc-800 bg-[#18181b] px-2">
 
@@ -108,10 +100,7 @@ const handleExport = () => {
             </NavigationMenuTrigger>
             <NavigationMenuContent>
               <ul className="grid w-[200px] gap-1 p-2">
-                <ListItem href="#" title="New Project" />
-                <ListItem href="#" title="Open..." />
                 <ListItem href="#" title="Save" />
-                <ListItem href="#" title="Save As..." />
                 <div className="bg-border my-1 h-px" />
                 <ListItem href="#" title="Import" />
                 <ListItem href="#" title="Export" />
@@ -126,8 +115,6 @@ const handleExport = () => {
             </NavigationMenuTrigger>
             <NavigationMenuContent>
               <ul className="grid w-[200px] gap-1 p-2">
-                <ListItem href="#" title="Undo" />
-                <ListItem href="#" title="Redo" />
                 <div className="bg-border my-1 h-px" />
                 <ListItem href="#" title="Cut" />
                 <ListItem href="#" title="Copy" />
@@ -135,8 +122,6 @@ const handleExport = () => {
                 <div className="bg-border my-1 h-px" />
                 <ListItem onClick={groupSelection} title="Group" />
                 <ListItem onClick={ungroupSelection} title="Ungroup" />
-                <div className="bg-border my-1 h-px" />
-                <ListItem href="#" title="Settings" />
               </ul>
             </NavigationMenuContent>
           </NavigationMenuItem>
@@ -151,13 +136,12 @@ const handleExport = () => {
                 <ListItem onClick={addCube} title="Cube" />
                 <div className="bg-border my-1 h-px" />
                 <ListItem onClick={addLight} title="Light" />
-                <ListItem onClick={addCamera} title="Camera" />
               </ul>
             </NavigationMenuContent>
           </NavigationMenuItem>
 
           {/* View Menu */}
-          <NavigationMenuItem>
+          {/* <NavigationMenuItem>
             <NavigationMenuTrigger className="h-8 bg-transparent px-3 text-sm font-normal text-zinc-100 hover:bg-zinc-800 hover:text-white">
               View
             </NavigationMenuTrigger>
@@ -171,7 +155,7 @@ const handleExport = () => {
                 <ListItem href="#" title="Side View" />
               </ul>
             </NavigationMenuContent>
-          </NavigationMenuItem>
+          </NavigationMenuItem> */}
 
           {/* Render Menu */}
           <NavigationMenuItem>
@@ -180,8 +164,6 @@ const handleExport = () => {
             </NavigationMenuTrigger>
             <NavigationMenuContent>
               <ul className="grid w-[200px] gap-1 p-2">
-                <ListItem href="#" title="Start Render" />
-                <ListItem href="#" title="Render Settings" />
                 <ListItem 
                   href="#" 
                   title="Export Image"
