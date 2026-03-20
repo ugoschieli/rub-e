@@ -147,7 +147,6 @@ export function EditorTools() {
               <label className="text-xs text-zinc-400">Object Type</label>
               <div className="text-sm font-medium text-zinc-200">
                 {selected.type}
-                {selected.uuid}
               </div>
             </div>
           </div>
