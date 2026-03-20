@@ -27,7 +27,7 @@ import { Input } from "@/components/ui/input"
 
 export function EditorNavbar() {
   const isMobile = useIsMobile()
-  const { objects, addObject, groupSelection, ungroupSelection } = useEditor()
+  const { objects, addObject, groupSelection, ungroupSelection, saveAsset } = useEditor()
   const [isExportDialogOpen, setIsExportDialogOpen] = React.useState(false)
   const [exportFileName, setExportFileName] = React.useState("")
 
@@ -74,6 +74,7 @@ const handleExport = () => {
   setIsExportDialogOpen(false)
 }
 
+
   return (
     <div className="relative z-50 flex items-center border-b border-zinc-800 bg-[#18181b] px-2">
 
@@ -100,7 +101,7 @@ const handleExport = () => {
             </NavigationMenuTrigger>
             <NavigationMenuContent>
               <ul className="grid w-[200px] gap-1 p-2">
-                <ListItem href="#" title="Save" />
+                <ListItem onClick={saveAsset} title="Save" />
                 <div className="bg-border my-1 h-px" />
                 <ListItem href="#" title="Import" />
                 <ListItem href="#" title="Export" />
