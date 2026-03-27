@@ -226,19 +226,19 @@ export function EditorLayout({ exportFileName = "export" }: { exportFileName?: s
       const key = e.key.toLowerCase()
 
       // CUT → Ctrl + X
-      if (e.ctrlKey && key === "x") {
+      if ((e.ctrlKey||e.metaKey) && key === "x") {
         e.preventDefault()
         cut()
       }
 
       // COPY → Ctrl + C
-      if (e.ctrlKey && key === "c") {
+      if ((e.ctrlKey||e.metaKey) && key === "c") {
         e.preventDefault()
         copy()
       }
 
       // PASTE → Ctrl + V
-      if (e.ctrlKey && key === "v") {
+      if ((e.ctrlKey||e.metaKey) && key === "v") {
         e.preventDefault()
         paste()
       }
