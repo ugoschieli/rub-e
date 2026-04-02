@@ -142,8 +142,8 @@ const handleExport = () => {
             <NavigationMenuContent>
               <ul className="grid w-[200px] gap-1 p-2">
                 <ListItem onClick={addCube} title="Cube" />
-                <div className="bg-border my-1 h-px" />
-                <ListItem onClick={addLight} title="Light" />
+                {/* <div className="bg-border my-1 h-px" />
+                <ListItem onClick={addLight} title="Light" /> */}
               </ul>
             </NavigationMenuContent>
           </NavigationMenuItem>

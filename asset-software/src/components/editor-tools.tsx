@@ -26,11 +26,11 @@ export function EditorTools() {
   const { camera: defaultCamera, objects, selection, selected, setSelected, updateObject, removeObject, groupSelection, ungroupSelection } = useEditor()
   return (
     <aside className="flex w-80 flex-col border-l border-zinc-800 bg-[#18181b] h-full">
-      {/* Section Hierarchy */}
+      {/* Section Objects */}
       <div className="flex flex-col border-b border-zinc-800 h-1/2 min-h-[300px]">
         <div className="flex items-center justify-between px-4 py-3">
           <div className="text-xs font-semibold uppercase text-zinc-500 tracking-wider">
-            Hierarchy
+            Objects
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -94,14 +94,14 @@ export function EditorTools() {
 
             {/* Transformations */}
             <div className="space-y-4">
-              <div className="text-xs text-zinc-400">Transformation</div>
+              <div className="text-xs text-zinc-400">Position</div>
 
               <TransformInputGroup
-                label="Position"
+                label=""
                 values={selected.position}
                 onChange={() => updateObject(selected)}
               />
-              <TransformInputGroup
+              {/* <TransformInputGroup
                 label="Rotation"
                 values={selected.rotation}
                 onChange={() => updateObject(selected)}
@@ -111,7 +111,7 @@ export function EditorTools() {
                 label="Scale"
                 values={selected.scale}
                 onChange={() => updateObject(selected)}
-              />
+              /> */}
             </div>
 
             <div className="h-px bg-zinc-800" />
@@ -160,24 +160,19 @@ export function EditorTools() {
 
             <div className="h-px bg-zinc-800" />
 
-            {/* Type */}
+            {/* Type
             <div className="space-y-2">
               <label className="text-xs text-zinc-400">Object Type</label>
               <div className="text-sm font-medium text-zinc-200">
                 {selected.type}
               </div>
-            </div>
+            </div> */}
           </div>
         ) : (
           <div className="px-4 py-8 text-sm text-zinc-500 text-center">
             Select an object to view its properties
           </div>
         )}
-      </div>
-
-      {/* Sidebar Footer */}
-      <div className="border-t border-zinc-800 p-4 flex justify-end">
-        <HelpCircle className="h-4 w-4 text-zinc-500 cursor-pointer hover:text-zinc-300" />
       </div>
     </aside>
   );
