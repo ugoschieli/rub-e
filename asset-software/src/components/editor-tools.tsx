@@ -18,7 +18,7 @@ import {
 } from "lucide-react"
 import { useEditor } from "@/context/editor-context"
 import * as THREE from 'three'
-import { HexColorPicker } from "react-colorful";
+import { HexColorPicker, HexColorInput } from "react-colorful";
 import { NumberInput } from "@heroui/react";
 
 
@@ -121,22 +121,40 @@ export function EditorTools() {
 
               {selected instanceof THREE.Mesh &&
                 selected.material instanceof THREE.MeshStandardMaterial && (
-                  <HexColorPicker
-                    color={`#${selected.material.color.getHexString()}`}
-                    onChange={(hex) => {
-                      const color = new THREE.Color(hex)
+                  <>
+                    <HexColorPicker
+                      color={`#${selected.material.color.getHexString()}`}
+                      onChange={(hex) => {
+                        const color = new THREE.Color(hex)
 
-                      selected.material.color.set(color)
+                        selected.material.color.set(color)
 
-                      selected.userData.color = {
-                        r: color.r,
-                        g: color.g,
-                        b: color.b
-                      }
-                      updateObject(selected)
-                    }}
-                    className="shadow-none! bg-[#18181b]! w-auto!"
-                  />
+                        selected.userData.color = {
+                          r: color.r,
+                          g: color.g,
+                          b: color.b
+                        }
+                        updateObject(selected)
+                      }}
+                      className="shadow-none! bg-[#18181b]! w-auto!" />
+                    <HexColorInput
+                      prefixed
+                      alpha
+                      color={`#${selected.material.color.getHexString()}`}
+                      onChange={(hex) => {
+                        const color = new THREE.Color(hex)
+
+                        selected.material.color.set(color)
+
+                        selected.userData.color = {
+                          r: color.r,
+                          g: color.g,
+                          b: color.b
+                        }
+                        updateObject(selected)
+                      }}
+                      className="w-full rounded bg-zinc-900 border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 focus:border-blue-500 focus:outline-none" />
+                  </>
                 )}
             </div>
 
