@@ -5,7 +5,6 @@ import Link from "next/link"
 import { ChevronLeft } from "lucide-react"
 import { useEditor } from "@/context/editor-context"
 import * as THREE from 'three'
-
 import { useIsMobile } from "@/hooks/use-mobile"
 import {
   NavigationMenu,
@@ -30,7 +29,7 @@ export function EditorNavbar() {
   const { objects, addObject, groupSelection, ungroupSelection, saveAsset, copy, paste, cut } = useEditor()
   const [isExportDialogOpen, setIsExportDialogOpen] = React.useState(false)
   const [exportFileName, setExportFileName] = React.useState("")
-
+  const [backsave, setbacksave] = React.useState(false)
   const addCube = () => {
     const color = new THREE.Color("#6366f1") // ✅ define it
 
@@ -86,13 +85,13 @@ const handleExport = () => {
     <div className="relative z-50 flex items-center border-b border-zinc-800 bg-[#18181b] px-2">
 
       {/* Back */}
-      <Link
-        href="/"
+      <button
+        onClick={() => setbacksave(true)}
         className="mr-2 flex h-8 items-center gap-1 rounded-sm px-2 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
         title="Back to home"
       >
         <ChevronLeft className="h-4 w-4" />
-      </Link>
+      </button>
 
       {/* Divider */}
       <div className="mr-2 h-4 w-[1px] bg-zinc-700" />
@@ -186,31 +185,73 @@ const handleExport = () => {
 
         </NavigationMenuList>
       </NavigationMenu>
+
+      {/* Back Save */}
+      <Dialog open={backsave} onOpenChange={setbacksave}>
+        <DialogContent className="sm:max-w-md rounded-xl border border-zinc-800 bg-[#18181b]">
+
+          <DialogHeader>
+            <DialogTitle className="text-lg font-semibold text-white">
+              Save your changes?
+            </DialogTitle>
+            <p className="text-sm text-zinc-400">
+              You have unsaved changes. If you leave now, your progress will be lost.
+            </p>
+          </DialogHeader>
+
+          <DialogFooter className="mt-6 flex flex-row justify-end gap-2">
+
+            {/* Don't Save */}
+            <Button
+              variant="outline"
+              className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+              onClick={() => {
+                window.location.href = "/"
+              }}
+            >
+              Don't save
+            </Button>
+
+            {/* Save */}
+            <Button
+              className="bg-indigo-500 hover:bg-indigo-600 text-white"
+              onClick={() => {
+                saveAsset()
+                window.location.href = "/"
+              }}
+            >
+              Save
+            </Button>
+
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={isExportDialogOpen} onOpenChange={setIsExportDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Exporter le mode</DialogTitle>
+            <DialogTitle>Export Image</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
               <label htmlFor="filename" className="text-sm font-medium">
-                Nom du fichier
+                File name
               </label>
               <Input
                 id="filename"
                 value={exportFileName}
                 onChange={(e) => setExportFileName(e.target.value)}
-                placeholder="Nom du fichier"
+                placeholder="File name"
                 autoFocus
               />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsExportDialogOpen(false)}>
-              Annuler
+              Cancel
             </Button>
             <Button onClick={handleExport}>
-              Exporter
+              Export
             </Button>
           </DialogFooter>
         </DialogContent>
