@@ -19,6 +19,9 @@ wgpu = { workspace = true }
 winit = "0.30"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+kira = { version = "0.12", features = ["cpal", "wav"] }
+glam = "0.32"
+mint = "0.5"
 
 [dev-dependencies]
 tempfile = "3.15.0"
