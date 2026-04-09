@@ -44,11 +44,12 @@ pub fn add_project_to_asset(
     if let Some(asset) = items.iter_mut().find(|a| a.name == asset_name) {
         // Déplacer le fichier physiquement
         let old_path = assets_root.join(&asset.path);
-        
-        let file_name = old_path.file_name()
+
+        let file_name = old_path
+            .file_name()
             .ok_or_else(|| "Nom de fichier invalide".to_string())?
             .to_os_string();
-            
+
         let mut new_rel_path = PathBuf::from(&project.name);
         new_rel_path.push(&file_name);
 

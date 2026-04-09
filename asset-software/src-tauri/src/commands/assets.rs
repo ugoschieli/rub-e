@@ -58,7 +58,11 @@ pub fn add_category_to_asset(app: AppHandle, asset_name: String, category: Asset
 }
 
 #[tauri::command]
-pub fn add_project_to_asset(app: AppHandle, asset_name: String, project: Project) -> Result<(), String> {
+pub fn add_project_to_asset(
+    app: AppHandle,
+    asset_name: String,
+    project: Project,
+) -> Result<(), String> {
     let path = get_db_path(&app, "data_assets.json");
     let assets_root = get_folder_assets_path(&app);
     json::assets::add_project_to_asset(&path, &asset_name, project, &assets_root)
@@ -97,10 +101,10 @@ pub fn save_asset_content(app: AppHandle, id: u32, content: String) -> Result<()
     let assets_db_path = get_db_path(&app, "data_assets.json");
     let assets_root = get_folder_assets_path(&app);
     let assets = json::assets::get_assets(&assets_db_path);
-    
+
     if let Some(asset) = assets.iter().find(|a| a.id == id) {
         let full_path = assets_root.join(&asset.path);
-        
+
         // Ensure parent directory exists
         if let Some(parent) = full_path.parent() {
             std::fs::create_dir_all(parent)
@@ -120,7 +124,7 @@ pub fn load_asset_content(app: AppHandle, id: u32) -> Result<String, String> {
     let assets_db_path = get_db_path(&app, "data_assets.json");
     let assets_root = get_folder_assets_path(&app);
     let assets = json::assets::get_assets(&assets_db_path);
-    
+
     if let Some(asset) = assets.iter().find(|a| a.id == id) {
         let full_path = assets_root.join(&asset.path);
         if full_path.exists() {
