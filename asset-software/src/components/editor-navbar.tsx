@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { toast } from "sonner"
 
 export function EditorNavbar() {
   const isMobile = useIsMobile()
@@ -78,6 +79,7 @@ const handleExport = () => {
   })
   window.dispatchEvent(event)
   setIsExportDialogOpen(false)
+  toast.success(`Image "${fileName}.png" exported successfully`)
 }
 
 
