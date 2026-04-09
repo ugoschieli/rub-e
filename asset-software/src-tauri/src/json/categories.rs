@@ -60,14 +60,8 @@ mod tests {
     use super::*;
     use std::path::PathBuf;
 
-    // Helper to get a unique test path
-    fn get_test_path() -> PathBuf {
-        PathBuf::from("test_data_categories.json")
-    }
-
     // Helper to clean up after each test
-    fn cleanup() {
-        let path = get_test_path();
+    fn cleanup(path: &Path) {
         if path.exists() {
             let _ = fs::remove_file(path);
         }
@@ -75,31 +69,33 @@ mod tests {
 
     #[test]
     fn test_add_category() {
-        cleanup();
+        let path = PathBuf::from("test_add_category.json");
+        cleanup(&path);
 
-        add_category(&get_test_path(), "Textures").unwrap();
-        add_category(&get_test_path(), "Modèles 3D").unwrap();
+        add_category(&path, "Textures").unwrap();
+        add_category(&path, "Modèles 3D").unwrap();
 
-        let cats = get_categories(&get_test_path());
+        let cats = get_categories(&path);
         assert_eq!(cats.len(), 2);
         assert_eq!(cats[0].name, "Textures");
 
-        cleanup();
+        cleanup(&path);
     }
 
     #[test]
     fn test_remove_category() {
-        cleanup();
+        let path = PathBuf::from("test_remove_category.json");
+        cleanup(&path);
 
-        add_category(&get_test_path(), "A Supprimer").unwrap();
-        remove_category(&get_test_path(), "A Supprimer");
+        add_category(&path, "A Supprimer").unwrap();
+        remove_category(&path, "A Supprimer");
 
-        let cats = get_categories(&get_test_path());
+        let cats = get_categories(&path);
         assert!(
             cats.is_empty(),
             "La liste devrait être vide après suppression"
         );
 
-        cleanup();
+        cleanup(&path);
     }
 }
