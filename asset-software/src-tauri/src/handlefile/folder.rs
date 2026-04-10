@@ -62,11 +62,12 @@ fn clean_missing_projects(root_path: &Path, json_path: &Path) {
 mod tests {
     use super::*;
     use std::path::PathBuf;
+    use std::fs;
 
     fn cleanup(filename: &str) {
         let path = PathBuf::from(filename);
         if path.exists() {
-            let _ = std::fs::remove_file(path);
+            let _ = fs::remove_file(path);
         }
     }
 
@@ -77,10 +78,13 @@ mod tests {
         let path = PathBuf::from(filename);
 
         // Simulate local folders
-        let test_root = PathBuf::from("test_assets");
-        let _ = std::fs::create_dir_all(test_root.join("ProjetA"));
-        let _ = std::fs::create_dir_all(test_root.join("ProjetB"));
-
+        let test_root = PathBuf::from("test_assets_sync");
+        if test_root.exists() {
+            let _ = fs::remove_dir_all(&test_root);
+        }
+        let _ = fs::create_dir_all(test_root.join("ProjetA"));
+        let _ = fs::create_dir_all(test_root.join("ProjetB"));
+        
         // Sync with JSON
         check_projet_folder(&test_root, &path);
 
@@ -89,7 +93,31 @@ mod tests {
         assert!(projects.iter().any(|p| p.name == "ProjetB"));
 
         // Cleanup
-        let _ = std::fs::remove_dir_all(test_root);
+        let _ = fs::remove_dir_all(&test_root);
+        cleanup(filename);
+    }
+
+    #[test]
+    fn test_check_projet_folder_creates_all() {
+        let filename = "test_check_all.json";
+        cleanup(filename);
+        let path = PathBuf::from(filename);
+        let test_root = PathBuf::from("test_assets_all");
+        
+        if test_root.exists() {
+            let _ = fs::remove_dir_all(&test_root);
+        }
+        let _ = fs::create_dir_all(&test_root);
+
+        let path_all = test_root.join("all");
+        assert!(!path_all.exists());
+
+        check_projet_folder(&test_root, &path);
+
+        assert!(path_all.exists());
+        assert!(path_all.is_dir());
+
+        let _ = fs::remove_dir_all(&test_root);
         cleanup(filename);
     }
 }

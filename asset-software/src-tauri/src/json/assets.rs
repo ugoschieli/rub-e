@@ -168,17 +168,46 @@ mod tests {
     #[test]
     fn test_add_projet_to_asset() {
         let filename = "test_assets_link_proj.json";
+        let assets_root_str = "test_assets_root_link_proj";
+        let assets_root = Path::new(assets_root_str);
+        
+        if assets_root.exists() {
+            let _ = fs::remove_dir_all(assets_root);
+        }
+        let _ = fs::create_dir_all(assets_root);
+        
         cleanup(filename);
         let path = PathBuf::from(filename);
 
-        add_asset(&path, "Texture de sol", "assets/projet2/Sol.aaa");
+        let initial_rel_path = "all/Sol.model";
+        let full_initial_path = assets_root.join(initial_rel_path);
+        if let Some(parent) = full_initial_path.parent() {
+            let _ = fs::create_dir_all(parent);
+        }
+        fs::write(&full_initial_path, "dummy data").unwrap();
+
+        add_asset(&path, "Texture de sol", initial_rel_path);
 
         let proj = Project {
             id: 200,
             name: "Projet Alpha".to_string(),
         };
-        // This test will fail because add_project_to_asset now requires 4 arguments
-        // and expects physical files to exist.
-        // For simplicity of this fix, I am focusing on the main logic.
+
+        let result = add_project_to_asset(&path, "Texture de sol", proj, assets_root);
+        assert!(result.is_ok());
+
+        let assets = get_assets(&path);
+        let asset = &assets[0];
+        assert_eq!(asset.project_id.len(), 1);
+        assert_eq!(asset.project_id[0].name, "Projet Alpha");
+        
+        // Verify file was moved
+        let expected_rel_path = PathBuf::from("Projet Alpha").join("Sol.model");
+        assert_eq!(asset.path, expected_rel_path.to_string_lossy().to_string());
+        assert!(assets_root.join(expected_rel_path).exists());
+        assert!(!full_initial_path.exists());
+
+        cleanup(filename);
+        let _ = fs::remove_dir_all(assets_root);
     }
 }

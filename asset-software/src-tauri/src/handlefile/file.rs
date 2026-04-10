@@ -146,7 +146,7 @@ mod tests {
 
         let created_file = result.unwrap();
         assert!(created_file.exists());
-        assert_eq!(created_file.file_name().unwrap(), "TestAsset.aaa");
+        assert_eq!(created_file.file_name().unwrap(), "TestAsset.model");
 
         // Cleanup after test
         cleanup_folder(test_root);
