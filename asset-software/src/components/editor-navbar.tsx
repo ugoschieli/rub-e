@@ -23,6 +23,8 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { toast } from "sonner"
+import { save } from "@tauri-apps/plugin-dialog"
 
 export function EditorNavbar() {
   const isMobile = useIsMobile()
@@ -70,16 +72,25 @@ export function EditorNavbar() {
     addObject(light)
   }
 
-const handleExport = () => {
+  const handleExport = async () => {
   const fileName = exportFileName.trim() || "export"
-  console.log("Export avec le nom:", fileName)
+  const filePath = await save({
+    defaultPath: `${fileName}.model`,
+    filters: [
+      {
+        name: "Model",
+        extensions: ["model"]
+      }
+    ]
+  })
+  if (!filePath) return
   const event = new CustomEvent("export-cubes-coordinates", {
-    detail: { fileName }
+    detail: { fileName, filePath }
   })
   window.dispatchEvent(event)
   setIsExportDialogOpen(false)
+  toast.success(`Model "${fileName}.model" exported successfully`)
 }
-
 
   return (
     <div className="relative z-50 flex items-center border-b border-zinc-800 bg-[#18181b] px-2">
@@ -110,7 +121,14 @@ const handleExport = () => {
                 <ListItem onClick={saveAsset} title="Save" />
                 <div className="bg-border my-1 h-px" />
                 <ListItem href="#" title="Import" />
-                <ListItem href="#" title="Export" />
+                <ListItem 
+                  href="#" 
+                  title="Export"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    setIsExportDialogOpen(true)
+                  }} 
+                />
               </ul>
             </NavigationMenuContent>
           </NavigationMenuItem>
@@ -163,25 +181,6 @@ const handleExport = () => {
               </ul>
             </NavigationMenuContent>
           </NavigationMenuItem> */}
-
-          {/* Render Menu */}
-          <NavigationMenuItem>
-            <NavigationMenuTrigger className="h-8 bg-transparent px-3 text-sm font-normal text-zinc-100 hover:bg-zinc-800 hover:text-white">
-              Render
-            </NavigationMenuTrigger>
-            <NavigationMenuContent>
-              <ul className="grid w-[200px] gap-1 p-2">
-                <ListItem 
-                  href="#" 
-                  title="Export Image"
-                  onClick={(e) => {
-                    e.preventDefault()
-                    setIsExportDialogOpen(true)
-                  }} 
-                />
-              </ul>
-            </NavigationMenuContent>
-          </NavigationMenuItem>
 
         </NavigationMenuList>
       </NavigationMenu>

@@ -1,6 +1,6 @@
+use crate::handlefile;
 use crate::json::{self, model::Project};
 use crate::paths::{get_db_path, get_folder_assets_path};
-use crate::handlefile;
 use tauri::AppHandle;
 
 #[tauri::command]
@@ -10,10 +10,10 @@ pub fn get_all_projects(app: AppHandle) -> Vec<Project> {
 }
 
 #[tauri::command]
-pub fn add_project(app: AppHandle, name: String) -> Result<(), String> { 
+pub fn add_project(app: AppHandle, name: String) -> Result<(), String> {
     let assets_root = get_folder_assets_path(&app);
     let project_folder = assets_root.join(&name);
-    
+
     // add folder on disk
     if !project_folder.exists() {
         std::fs::create_dir_all(&project_folder)
@@ -28,10 +28,14 @@ pub fn delete_project(app: AppHandle, name: String) -> Result<(), String> {
     let assets_root = get_folder_assets_path(&app);
     let project_path = assets_root.join(&name);
 
-    // del folder 
+    // del folder
     if project_path.exists() {
-        std::fs::remove_dir_all(&project_path)
-            .map_err(|e| format!("Erreur lors de la suppression du dossier projet '{}' : {}", name, e))?;
+        std::fs::remove_dir_all(&project_path).map_err(|e| {
+            format!(
+                "Erreur lors de la suppression du dossier projet '{}' : {}",
+                name, e
+            )
+        })?;
     }
 
     // del project from json

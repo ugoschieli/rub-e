@@ -1,5 +1,6 @@
 // src/app/layout.tsx
 import "./globals.css";
+import { Toaster } from "@/components/ui/sonner"
 // import fonts...
 
 export default function RootLayout({
@@ -11,6 +12,7 @@ export default function RootLayout({
     <html lang="fr">
       <body>
         {children}
+        <Toaster/>
       </body>
     </html>
   );

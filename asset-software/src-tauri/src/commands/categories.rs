@@ -9,7 +9,7 @@ pub fn get_all_categories(app: AppHandle) -> Vec<AssetCategory> {
 }
 
 #[tauri::command]
-pub fn add_category(app: AppHandle, name: String) -> Result<(), String> { 
+pub fn add_category(app: AppHandle, name: String) -> Result<(), String> {
     let path = get_db_path(&app, "data_categories.json");
     json::categories::add_category(&path, &name)
 }
