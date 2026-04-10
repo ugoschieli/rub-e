@@ -6,6 +6,7 @@ mod paths;
 
 fn main() {
     let builder = tauri::Builder::default()
+        .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let handle = app.handle();
