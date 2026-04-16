@@ -1,4 +1,5 @@
 mod cube;
+/// GPU frustum culling compute pass
 pub mod culling;
 mod dynamic;
 mod model;
