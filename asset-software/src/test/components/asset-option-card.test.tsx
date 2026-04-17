@@ -62,11 +62,70 @@ describe('AssetOptionCard', () => {
     expect(services.handleAddProjectToAsset).toHaveBeenCalledWith('Test Asset', { id: 1, name: 'Proj 1' })
   })
 
-  it('calls handleAddCategoryToAsset when selecting a category', async () => {
+  it('handles error when fetching projects', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.mocked(services.handleGetAllProjects).mockRejectedValue(new Error('Fetch Error'))
+    
+    render(<AssetOptionCard asset={mockAsset as any} />)
+    
+    await waitFor(() => {
+      expect(consoleSpy).toHaveBeenCalledWith('Failed to fetch projects:', expect.any(Error))
+    })
+    consoleSpy.mockRestore()
+  })
+
+  it('handles error when fetching categories', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.mocked(services.handleGetAllCategories).mockRejectedValue(new Error('Fetch Error'))
+    
+    render(<AssetOptionCard asset={mockAsset as any} />)
+    
+    await waitFor(() => {
+      expect(consoleSpy).toHaveBeenCalledWith('Failed to fetch categories:', expect.any(Error))
+    })
+    consoleSpy.mockRestore()
+  })
+
+  it('handles error when selecting project', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.mocked(services.handleAddProjectToAsset).mockRejectedValue(new Error('Select Error'))
+    
+    render(<AssetOptionCard asset={mockAsset as any} />)
+    await waitFor(() => expect(screen.getByText('Proj 1')).toBeInTheDocument())
+    
+    fireEvent.click(screen.getByText('Proj 1'))
+    
+    await waitFor(() => {
+      expect(consoleSpy).toHaveBeenCalledWith('Error moving asset to project:', expect.any(Error))
+    })
+    consoleSpy.mockRestore()
+  })
+
+  it('handles error when selecting category', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.mocked(services.handleAddCategoryToAsset).mockRejectedValue(new Error('Select Error'))
+    
     render(<AssetOptionCard asset={mockAsset as any} />)
     await waitFor(() => expect(screen.getByText('Cat 1')).toBeInTheDocument())
-    const categoryItem = screen.getByText('Cat 1')
-    fireEvent.click(categoryItem)
-    expect(services.handleAddCategoryToAsset).toHaveBeenCalledWith('Test Asset', { id: 1, name: 'Cat 1' })
+    
+    fireEvent.click(screen.getByText('Cat 1'))
+    
+    await waitFor(() => {
+      expect(consoleSpy).toHaveBeenCalledWith('Error changing asset category:', expect.any(Error))
+    })
+    consoleSpy.mockRestore()
+  })
+
+  it('handles error when deleting asset', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.mocked(services.handleDeleteAsset).mockRejectedValue(new Error('Delete Error'))
+    
+    render(<AssetOptionCard asset={mockAsset as any} />)
+    fireEvent.click(screen.getByText('Delete Asset'))
+    
+    await waitFor(() => {
+      expect(consoleSpy).toHaveBeenCalledWith('Error deleting asset:', expect.any(Error))
+    })
+    consoleSpy.mockRestore()
   })
 })

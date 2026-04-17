@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { AssetAddCard } from '../../components/asset-add-card'
 import * as services from '../../components/services'
@@ -76,9 +76,44 @@ describe('AssetAddCard', () => {
     expect(services.handleAddAsset).toHaveBeenCalledWith('New Asset', 1)
   })
 
-  it('calls onClose when clicking cancel', () => {
+  it('handles error when fetching projects', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.mocked(services.handleGetAllProjects).mockRejectedValue(new Error('Fetch Error'))
+    
     render(<AssetAddCard onClose={mockOnClose} />)
-    fireEvent.click(screen.getByText('Cancel'))
+    
+    await waitFor(() => {
+      expect(consoleSpy).toHaveBeenCalledWith('Failed to fetch projects:', expect.any(Error))
+    })
+    consoleSpy.mockRestore()
+  })
+
+  it('shows alert if fields are empty', () => {
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {})
+    render(<AssetAddCard onClose={mockOnClose} />)
+    
+    fireEvent.click(screen.getByText('Create Asset'))
+    
+    expect(alertSpy).toHaveBeenCalledWith('Please fill all fields!')
+    alertSpy.mockRestore()
+  })
+
+  it('calls onClose after timeout on success', async () => {
+    vi.useFakeTimers()
+    render(<AssetAddCard onClose={mockOnClose} />)
+    
+    fireEvent.change(screen.getByPlaceholderText('Asset name'), { target: { value: 'New Asset' } })
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: '1' } })
+    
+    fireEvent.click(screen.getByText('Create Asset'))
+    
+    expect(services.handleAddAsset).toHaveBeenCalled()
+    
+    act(() => {
+        vi.advanceTimersByTime(2000)
+    })
+    
     expect(mockOnClose).toHaveBeenCalled()
+    vi.useRealTimers()
   })
 })

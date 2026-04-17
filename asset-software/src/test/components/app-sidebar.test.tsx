@@ -32,4 +32,12 @@ describe('AppSidebar', () => {
     expect(screen.getByTestId('nav-projects')).toBeInTheDocument()
     expect(screen.getByText('Add Asset')).toBeInTheDocument()
   })
+
+  it('opens dialog when clicking Add Asset', () => {
+    render(<AppSidebar />)
+    const button = screen.getByText('Add Asset')
+    fireEvent.click(button)
+    // Dialog mock renders children directly in my simple mock above
+    expect(screen.getByTestId('asset-add-card')).toBeInTheDocument()
+  })
 })

@@ -49,6 +49,6 @@ describe('Assets Page', () => {
 
     render(<Page />)
     expect(screen.getByText(/No assets found/)).toBeInTheDocument()
-    expect(screen.getByText(/for "nonexistent"/)).toBeInTheDocument()
+  expect(screen.getByText(/for "nonexistent"/)).toBeInTheDocument()
   })
 })
