@@ -1,7 +1,7 @@
-use crate::Gfx;
 use crate::config::EngineConfig;
 use crate::input::InputState;
 use crate::time::TimeState;
+use crate::{Gfx, Scene};
 use std::sync::Arc;
 use winit::dpi::PhysicalSize;
 use winit::error::ExternalError;
@@ -60,9 +60,7 @@ impl EngineContext {
     }
 
     /// Render the egui UI produced during this frame's [`Game::ui`] callback into `view`.
-    ///
-    /// Call this at the end of [`Game::render`] after the scene has been drawn.
-    pub fn render_ui(&mut self, encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView) {
+    fn render_ui(&mut self, encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView) {
         let Some(full_output) = self.egui_output.take() else {
             return;
         };
@@ -148,10 +146,11 @@ pub trait Game {
     fn update(&mut self, ctx: &mut EngineContext);
     /// Build egui UI for this frame. Called between `update` and `render`.
     fn ui(&mut self, _ctx: &mut EngineContext, _ui_ctx: &egui::Context) {}
-    /// Called every frame to submit draw calls. Build your command encoder and present here.
-    fn render(&mut self, ctx: &mut EngineContext);
-    /// Called when the window is resized. Rebuild any size-dependent resources here.
-    fn resize(&mut self, ctx: &mut EngineContext, size: PhysicalSize<u32>);
+    /// Return the active scene for this frame. The engine renders it automatically after `update`
+    /// and resizes it when the window resizes. Switch scenes by returning a different scene.
+    fn scene(&mut self) -> Option<&mut Scene> {
+        None
+    }
     /// Called for window-level input events (keyboard, mouse buttons, …) not consumed by egui.
     fn input(&mut self, _ctx: &mut EngineContext, _event: &WindowEvent) {}
     /// Called for raw device events (e.g. mouse motion deltas) regardless of egui focus.
@@ -164,6 +163,10 @@ struct EngineRunner<G: Game> {
     game: Option<G>,
     config: Arc<EngineConfig>,
     params: Option<G::InitParams>,
+    /// Raw pointer of the scene rendered last frame — used to detect scene switches.
+    last_scene_ptr: Option<*const Scene>,
+    /// Last known window size — used to resize a freshly activated scene.
+    last_window_size: PhysicalSize<u32>,
 }
 
 impl<G: Game> ApplicationHandler for EngineRunner<G> {
@@ -205,6 +208,7 @@ impl<G: Game> ApplicationHandler for EngineRunner<G> {
         };
         let params = self.params.take().unwrap();
         let game = G::init(&mut ctx, params);
+        self.last_window_size = window.inner_size();
         self.window = Some(window);
         self.ctx = Some(ctx);
         self.game = Some(game);
@@ -236,22 +240,60 @@ impl<G: Game> ApplicationHandler for EngineRunner<G> {
                 }
             }
             WindowEvent::Resized(size) => {
-                /* engine handles surface + depth resize, then */
-                game.resize(ctx, size);
+                ctx.gfx.reconfigure_surface_size(size);
+                if let Some(scene) = game.scene() {
+                    scene.camera.aspect = size.width as f32 / size.height as f32;
+                    scene.camera.update_matrix(&ctx.gfx.queue);
+                    scene.resize(ctx.gfx.device(), size.width, size.height);
+                }
+                self.last_window_size = size;
             }
             WindowEvent::RedrawRequested => {
+                let (frame, view) = ctx.gfx.get_next_frame();
+
+                let mut scene_encoder =
+                    ctx.gfx
+                        .device
+                        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                            label: Some("Scene command encoder"),
+                        });
+
+                game.update(ctx);
+                if let Some(scene) = game.scene() {
+                    let ptr = scene as *const Scene;
+                    if self.last_scene_ptr != Some(ptr) {
+                        let size = self.last_window_size;
+                        scene.camera.aspect = size.width as f32 / size.height as f32;
+                        scene.camera.update_matrix(&ctx.gfx.queue);
+                        scene.resize(ctx.gfx.device(), size.width, size.height);
+                        self.last_scene_ptr = Some(ptr);
+                    }
+                    scene.render(ctx, &mut scene_encoder, &view);
+                }
+                ctx.gfx.queue.submit(Some(scene_encoder.finish()));
+
                 let raw_input = ctx.egui_state.take_egui_input(&ctx.window);
                 let egui_ctx = ctx.egui_ctx.clone();
                 let full_output = egui_ctx.run(raw_input, |ui_ctx| {
                     game.ui(ctx, ui_ctx);
                 });
 
+                let mut ui_encoder =
+                    ctx.gfx
+                        .device
+                        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                            label: Some("UI command encoder"),
+                        });
+
                 ctx.egui_state
                     .handle_platform_output(&ctx.window, full_output.platform_output.clone());
                 ctx.egui_output = Some(full_output);
 
-                game.update(ctx);
-                game.render(ctx);
+                ctx.render_ui(&mut ui_encoder, &view);
+                ctx.gfx.queue.submit(Some(ui_encoder.finish()));
+
+                frame.present();
+
                 ctx.time.tick();
                 ctx.input.clear_frame_state();
 
@@ -294,6 +336,8 @@ pub fn run<G: Game>(
         game: None,
         config: Arc::new(config),
         params,
+        last_scene_ptr: None,
+        last_window_size: PhysicalSize::new(0, 0),
     };
     event_loop.run_app(&mut runner)
 }

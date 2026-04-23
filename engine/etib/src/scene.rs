@@ -9,13 +9,13 @@ use anyhow::Result;
 use cgmath::{Matrix4, Vector4};
 use wgpu::util::DeviceExt;
 
-use crate::Vertex;
 use crate::camera::Camera;
 use crate::cube::{
     Cube, CubeRaw, CullingPass, DynamicModel, DynamicScene, INDICES, ModelCube, VERTICES,
 };
 use crate::gfx::Gfx;
 use crate::hdr::{HdrLoader, HdrPipeline, TonemappingMode};
+use crate::{EngineContext, Vertex};
 use etib_core::bindgroup::BindGroupBuilder;
 use etib_core::pipeline::Pipeline;
 use etib_core::shader::Shader;
@@ -80,11 +80,12 @@ impl Scene {
     ///
     /// `peak_brightness_nits` controls HDR tonemapping (ignored in SDR mode).
     pub fn new(
-        gfx: &Gfx,
+        ctx: &EngineContext,
         camera: Camera,
         static_cubes: &[ModelCube],
         dynamic_max_instances: usize,
     ) -> Self {
+        let gfx = &ctx.gfx;
         let device = gfx.device();
 
         let tonemap_mode = if gfx.is_hdr_active {
@@ -316,12 +317,12 @@ impl Scene {
     ///    and the skybox (if set).
     /// 4. Tonemaps the HDR result to `swapchain_view`.
     pub fn render(
-        &mut self,
+        &self,
+        ctx: &EngineContext,
         encoder: &mut wgpu::CommandEncoder,
-        gfx: &Gfx,
-        swapchain_view: &wgpu::TextureView,
+        view: &wgpu::TextureView,
     ) {
-        let queue = &gfx.queue;
+        let queue = &ctx.gfx.queue;
 
         // --- Upload dynamic transforms + GPU culling (mutable, before render pass) ---
         self.dynamic_scene.update_gpu(queue);
@@ -341,7 +342,7 @@ impl Scene {
         {
             let color_attachment = Gfx::color_attachments_from_view(self.hdr.view());
             let depth_attachment = wgpu::RenderPassDepthStencilAttachment {
-                view: &gfx.depth_texture_view,
+                view: &ctx.gfx.depth_texture_view,
                 depth_ops: Some(wgpu::Operations {
                     load: wgpu::LoadOp::Clear(1.0),
                     store: wgpu::StoreOp::Store,
@@ -388,6 +389,6 @@ impl Scene {
         }
 
         // --- Tonemap HDR → swapchain ---
-        self.hdr.process(encoder, swapchain_view);
+        self.hdr.process(encoder, view);
     }
 }

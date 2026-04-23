@@ -4,6 +4,8 @@ use winit::keyboard::{KeyCode, PhysicalKey};
 
 use etib_core::bindgroup::{BindGroup, BindGroupBuilder};
 
+use crate::EngineContext;
+
 /// Enum representing the different camera modes
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CameraMode {
@@ -121,7 +123,7 @@ pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
 impl Camera {
     /// Create a new camera object
     pub fn new(
-        device: &wgpu::Device,
+        ctx: &EngineContext,
         eye: cgmath::Point3<f32>,
         target: cgmath::Point3<f32>,
         up: cgmath::Vector3<f32>,
@@ -154,14 +156,14 @@ impl Camera {
 
         let bind_group = BindGroupBuilder::new()
             .add_uniform_buffer(
-                device,
+                &ctx.gfx.device,
                 0,
                 bytemuck::bytes_of(&camera_raw),
                 wgpu::ShaderStages::VERTEX
                     | wgpu::ShaderStages::FRAGMENT
                     | wgpu::ShaderStages::COMPUTE,
             )
-            .build(device, Some("Camera Bind Group"));
+            .build(&ctx.gfx.device, Some("Camera Bind Group"));
 
         Self {
             eye,

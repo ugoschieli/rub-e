@@ -52,14 +52,6 @@ impl Game for RaytracingExample {
     fn update(&mut self, ctx: &mut etib::EngineContext) {
         todo!()
     }
-
-    fn render(&mut self, ctx: &mut etib::EngineContext) {
-        todo!()
-    }
-
-    fn resize(&mut self, ctx: &mut etib::EngineContext, size: winit::dpi::PhysicalSize<u32>) {
-        todo!()
-    }
 }
 
 impl RaytracingExample {

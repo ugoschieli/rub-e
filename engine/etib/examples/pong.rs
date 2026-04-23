@@ -4,7 +4,6 @@ use std::net::UdpSocket;
 use std::time::Duration;
 
 use cgmath::Vector3;
-use winit::dpi::PhysicalSize;
 use winit::event::DeviceEvent;
 use winit::keyboard::KeyCode;
 
@@ -424,12 +423,10 @@ impl Game for PongGame {
 
     fn init(ctx: &mut EngineContext, _params: ()) -> Self {
         ctx.set_window_title("Pong 3D");
-        let gfx = &ctx.gfx;
-        let device = gfx.device();
 
         let aspect = ctx.window_size().width as f32 / ctx.window_size().height as f32;
         let camera = Camera::new(
-            device,
+            ctx,
             CAM_EYE.into(),
             CAM_TARGET.into(),
             cgmath::Vector3::unit_y(),
@@ -452,7 +449,7 @@ impl Game for PongGame {
         let max_dyn =
             left_paddle.cube_count() + right_paddle.cube_count() + ball_model.cube_count() + 100; // room for score numbers
 
-        let mut scene = Scene::new(gfx, camera, &walls, max_dyn);
+        let mut scene = Scene::new(ctx, camera, &walls, max_dyn);
 
         let ball = Ball {
             p: Vector3::new(0.0, 0.0, 0.0),
@@ -494,8 +491,6 @@ impl Game for PongGame {
         } else {
             (None, None)
         };
-
-        // 3D Scoreboards
 
         scene.get_dynamic_mut(left_player.id).unwrap().position = Vector3::new(-PADDLE_X, 0.0, 0.0);
         scene.get_dynamic_mut(right_player.id).unwrap().position = Vector3::new(PADDLE_X, 0.0, 0.0);
@@ -674,31 +669,8 @@ impl Game for PongGame {
         });
     }
 
-    fn render(&mut self, ctx: &mut EngineContext) {
-        let (frame, view) = ctx.gfx.get_next_frame();
-
-        let mut encoder = ctx
-            .gfx
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Pong encoder"),
-            });
-
-        self.scene.render(&mut encoder, &ctx.gfx, &view);
-
-        // `ctx.window` isn't accessible, we changed render_ui to implicitly use it from context instead or we should export window access. Wait, game.rs `render_ui` expects `&Window`?
-        ctx.render_ui(&mut encoder, &view);
-
-        ctx.gfx.queue.submit(Some(encoder.finish()));
-        frame.present();
-    }
-
-    fn resize(&mut self, ctx: &mut EngineContext, size: PhysicalSize<u32>) {
-        ctx.gfx.reconfigure_surface_size(size);
-        let scene = &mut self.scene;
-        scene.camera.aspect = size.width as f32 / size.height as f32;
-        scene.camera.update_matrix(&ctx.gfx.queue);
-        scene.resize(ctx.gfx.device(), size.width, size.height);
+    fn scene(&mut self) -> Option<&mut etib::Scene> {
+        Some(&mut self.scene)
     }
 
     fn device_input(&mut self, _ctx: &mut EngineContext, _event: &DeviceEvent) {}

@@ -5,6 +5,8 @@
 //! position is defined relative to the model's local origin, and the group
 //! transform is applied on top every frame.
 
+use std::cell::Cell;
+
 use anyhow::Result;
 use cgmath::{Matrix4, Quaternion, Vector3, Vector4, Zero};
 
@@ -93,8 +95,8 @@ pub struct DynamicScene {
     models: Vec<Option<DynamicModel>>,
     gpu_buffer: wgpu::Buffer,
     max_instances: usize,
-    live_instance_count: u32,
-    dirty: bool,
+    live_instance_count: Cell<u32>,
+    dirty: Cell<bool>,
 }
 
 impl DynamicScene {
@@ -114,8 +116,8 @@ impl DynamicScene {
             models: Vec::new(),
             gpu_buffer,
             max_instances,
-            live_instance_count: 0,
-            dirty: false,
+            live_instance_count: Cell::new(0),
+            dirty: Cell::new(false),
         }
     }
 
@@ -140,12 +142,12 @@ impl DynamicScene {
 
         if let Some(pos) = self.models.iter().position(|m| m.is_none()) {
             self.models[pos] = Some(model);
-            self.dirty = true;
+            self.dirty.set(true);
             return pos;
         }
         let id = self.models.len();
         self.models.push(Some(model));
-        self.dirty = true;
+        self.dirty.set(true);
         id
     }
 
@@ -153,7 +155,7 @@ impl DynamicScene {
     pub fn remove(&mut self, id: usize) {
         if id < self.models.len() && self.models[id].is_some() {
             self.models[id] = None;
-            self.dirty = true;
+            self.dirty.set(true);
         }
     }
 
@@ -167,7 +169,7 @@ impl DynamicScene {
     /// Marks the scene dirty so changes are uploaded on the next [`update_gpu`] call.
     pub fn get_mut(&mut self, id: usize) -> Option<&mut DynamicModel> {
         let slot = self.models.get_mut(id)?.as_mut()?;
-        self.dirty = true;
+        self.dirty.set(true);
         Some(slot)
     }
 
@@ -175,8 +177,8 @@ impl DynamicScene {
     ///
     /// All live model cubes are packed contiguously into the buffer with their
     /// group transforms applied. Does nothing if nothing changed since the last call.
-    pub fn update_gpu(&mut self, queue: &wgpu::Queue) {
-        if !self.dirty {
+    pub fn update_gpu(&self, queue: &wgpu::Queue) {
+        if !self.dirty.get() {
             return;
         }
         let raw: Vec<CubeRaw> = self
@@ -185,17 +187,17 @@ impl DynamicScene {
             .filter_map(|m| m.as_ref())
             .flat_map(|m| m.to_raw_instances())
             .collect();
-        self.live_instance_count = raw.len() as u32;
+        self.live_instance_count.set(raw.len() as u32);
         if !raw.is_empty() {
             queue.write_buffer(&self.gpu_buffer, 0, bytemuck::cast_slice(&raw));
         }
-        self.dirty = false;
+        self.dirty.set(false);
     }
 
     /// Total number of live cube instances across all models.
     /// Use as the instance count in draw calls after [`update_gpu`].
     pub fn live_count(&self) -> u32 {
-        self.live_instance_count
+        self.live_instance_count.get()
     }
 
     /// The GPU instance buffer containing all live model instances.
