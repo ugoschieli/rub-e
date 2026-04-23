@@ -118,6 +118,21 @@ impl EngineContext {
             self.egui_renderer.free_texture(id);
         }
     }
+
+    /// Get the current fps
+    pub fn fps(&self) -> f32 {
+        self.time.fps()
+    }
+
+    /// Get the current frame delta
+    pub fn dt(&self) -> f32 {
+        self.time.dt
+    }
+
+    /// Get the current fps
+    pub fn now(&self) -> f32 {
+        TimeState::now()
+    }
 }
 
 /// The primary Trait provided by the library your primary game state struct must implement this

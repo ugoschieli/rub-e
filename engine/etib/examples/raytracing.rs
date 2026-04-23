@@ -1,9 +1,11 @@
 use std::sync::Arc;
 
+use etib::Game;
 use glam::Vec3;
 use winit::application::ApplicationHandler;
-use winit::event::WindowEvent;
+use winit::event::*;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
+use winit::keyboard::{KeyCode::*, PhysicalKey};
 use winit::platform::macos::WindowAttributesExtMacOS;
 use winit::window::{Fullscreen, Window, WindowId};
 
@@ -18,14 +20,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
     let event_loop = EventLoop::new()?;
     event_loop.set_control_flow(ControlFlow::Poll);
-    let mut app = App::default();
+    let mut app = RaytracingExample::default();
     event_loop.run_app(&mut app)?;
 
     Ok(())
 }
 
 #[derive(Default)]
-struct App {
+struct RaytracingExample {
     renderer: Option<Renderer>,
     rasterizing_pass: Option<RasterizerPass>,
     raytracing_pass: Option<RaytracingPass>,
@@ -40,7 +42,27 @@ struct App {
     input_state: InputState,
 }
 
-impl App {
+impl Game for RaytracingExample {
+    type InitParams = ();
+
+    fn init(ctx: &mut etib::EngineContext, params: Self::InitParams) -> Self {
+        todo!()
+    }
+
+    fn update(&mut self, ctx: &mut etib::EngineContext) {
+        todo!()
+    }
+
+    fn render(&mut self, ctx: &mut etib::EngineContext) {
+        todo!()
+    }
+
+    fn resize(&mut self, ctx: &mut etib::EngineContext, size: winit::dpi::PhysicalSize<u32>) {
+        todo!()
+    }
+}
+
+impl RaytracingExample {
     fn get_window(&self) -> Arc<Window> {
         self.window.as_ref().unwrap().clone()
     }
@@ -156,7 +178,7 @@ impl App {
     }
 }
 
-impl ApplicationHandler for App {
+impl ApplicationHandler for RaytracingExample {
     fn device_event(
         &mut self,
         _event_loop: &ActiveEventLoop,
@@ -200,27 +222,27 @@ impl ApplicationHandler for App {
         match event {
             WindowEvent::KeyboardInput {
                 event:
-                    winit::event::KeyEvent {
-                        physical_key: winit::keyboard::PhysicalKey::Code(key_code),
+                    KeyEvent {
+                        physical_key: PhysicalKey::Code(key_code),
                         state,
                         ..
                     },
                 ..
             } => {
-                let is_pressed = state == winit::event::ElementState::Pressed;
+                let is_pressed = state == ElementState::Pressed;
                 match key_code {
-                    winit::keyboard::KeyCode::KeyW => self.input_state.forward = is_pressed,
-                    winit::keyboard::KeyCode::KeyS => self.input_state.backward = is_pressed,
-                    winit::keyboard::KeyCode::KeyA => self.input_state.left = is_pressed,
-                    winit::keyboard::KeyCode::KeyD => self.input_state.right = is_pressed,
-                    winit::keyboard::KeyCode::Space => self.input_state.up = is_pressed,
-                    winit::keyboard::KeyCode::ShiftLeft => self.input_state.down = is_pressed,
+                    KeyW => self.input_state.forward = is_pressed,
+                    KeyS => self.input_state.backward = is_pressed,
+                    KeyA => self.input_state.left = is_pressed,
+                    KeyD => self.input_state.right = is_pressed,
+                    Space => self.input_state.up = is_pressed,
+                    ShiftLeft => self.input_state.down = is_pressed,
                     _ => {}
                 }
             }
             WindowEvent::MouseInput { state, button, .. } => {
-                if button == winit::event::MouseButton::Right {
-                    self.input_state.rmb_pressed = state == winit::event::ElementState::Pressed;
+                if button == MouseButton::Right {
+                    self.input_state.rmb_pressed = state == ElementState::Pressed;
                 }
             }
             WindowEvent::CloseRequested => event_loop.exit(),

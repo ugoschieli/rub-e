@@ -9,12 +9,13 @@ use anyhow::Result;
 use cgmath::{Matrix4, Vector4};
 use wgpu::util::DeviceExt;
 
+use crate::Vertex;
+use crate::camera::Camera;
 use crate::cube::{
-    Cube, CubeRaw, CullingPass, DynamicModel, DynamicScene, ModelCube, INDICES, VERTICES,
+    Cube, CubeRaw, CullingPass, DynamicModel, DynamicScene, INDICES, ModelCube, VERTICES,
 };
 use crate::gfx::Gfx;
 use crate::hdr::{HdrLoader, HdrPipeline, TonemappingMode};
-use crate::Vertex;
 use etib_core::bindgroup::BindGroupBuilder;
 use etib_core::pipeline::Pipeline;
 use etib_core::shader::Shader;
@@ -55,17 +56,17 @@ pub struct Scene {
     cull_pass: CullingPass,
     culling_bind_group: wgpu::BindGroup,
 
-    // Dynamic instances — rebuilt every frame
+    /// Dynamic instances — rebuilt every frame
     dynamic_scene: DynamicScene,
 
-    // Optional skybox
+    /// Optional skybox
     skybox: Option<SkyboxData>,
 
-    // HDR intermediate texture + tonemap pipeline
+    /// HDR intermediate texture + tonemap pipeline
     hdr: HdrPipeline,
 
-    // Stored for deferred skybox pipeline creation
-    camera_bind_group_layout: wgpu::BindGroupLayout,
+    /// The camera scene
+    pub camera: Camera,
 }
 
 impl Scene {
@@ -80,8 +81,7 @@ impl Scene {
     /// `peak_brightness_nits` controls HDR tonemapping (ignored in SDR mode).
     pub fn new(
         gfx: &Gfx,
-        peak_brightness_nits: f32,
-        camera_bind_group_layout: &wgpu::BindGroupLayout,
+        camera: Camera,
         static_cubes: &[ModelCube],
         dynamic_max_instances: usize,
     ) -> Self {
@@ -92,7 +92,12 @@ impl Scene {
         } else {
             TonemappingMode::Sdr
         };
-        let hdr = HdrPipeline::new(device, &gfx.surface_config, tonemap_mode, peak_brightness_nits);
+        let hdr = HdrPipeline::new(
+            device,
+            &gfx.surface_config,
+            tonemap_mode,
+            gfx.peak_brightness_nits,
+        );
         let target_format = hdr.format();
 
         // Shared unit-cube geometry
@@ -120,9 +125,8 @@ impl Scene {
             .collect();
         let total_instance_count = instance_data.len() as u32;
 
-        let static_usage = wgpu::BufferUsages::VERTEX
-            | wgpu::BufferUsages::STORAGE
-            | wgpu::BufferUsages::COPY_DST;
+        let static_usage =
+            wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST;
 
         let all_instances_buffer = if instance_data.is_empty() {
             device.create_buffer(&wgpu::BufferDescriptor {
@@ -160,7 +164,7 @@ impl Scene {
         let shader = Shader::new(CUBE_SHADER, device, Some("Cube Shader"));
         let pipeline = Pipeline::new_v2(
             device,
-            &[camera_bind_group_layout],
+            &[&camera.bind_group.layout],
             &[Vertex::desc(), Cube::desc()],
             &shader,
             target_format,
@@ -169,7 +173,7 @@ impl Scene {
             Some("Cubes Pipeline"),
         );
 
-        let cull_pass = CullingPass::new(device, camera_bind_group_layout);
+        let cull_pass = CullingPass::new(device, &camera.bind_group.layout);
         let culling_bind_group = cull_pass.create_bind_group(
             device,
             &all_instances_buffer,
@@ -192,7 +196,7 @@ impl Scene {
             dynamic_scene,
             skybox: None,
             hdr,
-            camera_bind_group_layout: camera_bind_group_layout.clone(),
+            camera,
         }
     }
 
@@ -238,14 +242,17 @@ impl Scene {
         let skybox_shader = Shader::new(SKYBOX_SHADER, device, Some("Skybox Shader"));
         let pipeline = Pipeline::new_skybox(
             device,
-            &[&self.camera_bind_group_layout, &bind_group.layout],
+            &[&self.camera.bind_group.layout, &bind_group.layout],
             &skybox_shader,
             self.hdr.format(),
             wgpu::TextureFormat::Depth32Float,
             Some("Skybox Pipeline"),
         );
 
-        self.skybox = Some(SkyboxData { pipeline, bind_group });
+        self.skybox = Some(SkyboxData {
+            pipeline,
+            bind_group,
+        });
         Ok(())
     }
 
@@ -313,7 +320,6 @@ impl Scene {
         encoder: &mut wgpu::CommandEncoder,
         gfx: &Gfx,
         swapchain_view: &wgpu::TextureView,
-        camera_bind_group: &wgpu::BindGroup,
     ) {
         let queue = &gfx.queue;
 
@@ -324,7 +330,7 @@ impl Scene {
             queue.write_buffer(&self.indirect_buffer, 4, bytemuck::bytes_of(&0u32));
             self.cull_pass.cull(
                 encoder,
-                camera_bind_group,
+                &self.camera.bind_group.bind_group,
                 &self.culling_bind_group,
                 self.total_instance_count,
             );
@@ -352,7 +358,7 @@ impl Scene {
 
             // Cube pipeline — shared by static and dynamic
             render_pass.set_pipeline(&self.pipeline.pipeline);
-            render_pass.set_bind_group(0, camera_bind_group, &[]);
+            render_pass.set_bind_group(0, &self.camera.bind_group.bind_group, &[]);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
 
@@ -375,7 +381,7 @@ impl Scene {
             // Skybox (rendered last, at the far plane)
             if let Some(skybox) = &self.skybox {
                 render_pass.set_pipeline(&skybox.pipeline.pipeline);
-                render_pass.set_bind_group(0, camera_bind_group, &[]);
+                render_pass.set_bind_group(0, &self.camera.bind_group.bind_group, &[]);
                 render_pass.set_bind_group(1, &skybox.bind_group.bind_group, &[]);
                 render_pass.draw(0..3, 0..1);
             }
