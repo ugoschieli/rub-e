@@ -219,11 +219,12 @@ function EditorCanvas({ exportFileName }: { exportFileName: string }) {
 
 export function EditorLayout({ exportFileName = "export" }: { exportFileName?: string }) {
   const canvasContainerRef = React.useRef<HTMLDivElement>(null)
-  const { cut, copy, paste } = useEditor() // ✅ add this
+  const { selected, cut, copy, paste, removeObject } = useEditor()
 
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement
+      const key = e.key.toLowerCase()
 
       const isTyping =
         target.tagName === "INPUT" ||
@@ -231,7 +232,6 @@ export function EditorLayout({ exportFileName = "export" }: { exportFileName?: s
         target.isContentEditable
 
       if (isTyping) return 
-      const key = e.key.toLowerCase()
 
       // CUT → Ctrl + X
       if ((e.ctrlKey||e.metaKey) && key === "x") {
@@ -251,8 +251,10 @@ export function EditorLayout({ exportFileName = "export" }: { exportFileName?: s
         paste()
       }
       // DELETE → Suppr 
-      if (key === "delete" ) {
+      if (key === "delete" && selected) {
         e.preventDefault()
+        removeObject(selected)
+        
       }
     }
     window.addEventListener("keydown", handleKeyDown)

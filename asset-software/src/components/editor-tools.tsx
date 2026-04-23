@@ -336,8 +336,12 @@ function AxisInput({
       <NumberInput
         className="w-full rounded pl-5 border border-zinc-800 text-right text-xs"
         step={0.1}
-        value={value}
-        onChange={(val) => onChange(val as number)}
+        value={Number.isFinite(value) ? value : 0}
+        onChange={(val) => {
+          const num = typeof val === "number" ? val : parseFloat(val as any)
+          if (!Number.isFinite(num)) return
+          onChange(num)
+        }}
       />
     </div>
   )
