@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { ChevronLeft } from "lucide-react"
+import { ChevronLeft, Box } from "lucide-react"
 import { useEditor } from "@/context/editor-context"
 import * as THREE from 'three'
 import { useIsMobile } from "@/hooks/use-mobile"
@@ -55,21 +55,6 @@ export function EditorNavbar() {
 
     mesh.position.y = 0.5
     addObject(mesh)
-  }
-
-  const addLight = () => {
-    const light = new THREE.PointLight(0xffffff, 10)
-
-    // Calculate next light number
-    const lightIndices = objects.map((obj) => {
-      const match = obj.name.match(/^Point Light\s+(\d+)$/)
-      return match ? parseInt(match[1], 10) : (obj.name === "Point Light" ? 1 : 0)
-    })
-    const maxIndex = Math.max(0, ...lightIndices)
-    light.name = `Point Light ${maxIndex + 1}`
-
-    light.position.set(2, 2, 2)
-    addObject(light)
   }
 
   const handleExport = async () => {
@@ -150,7 +135,6 @@ export function EditorNavbar() {
             </NavigationMenuTrigger>
             <NavigationMenuContent>
               <ul className="grid w-[200px] gap-1 p-2">
-                <div className="bg-border my-1 h-px" />
                 <ListItem onClick={cut} title="Cut" />
                 <ListItem onClick={copy} title="Copy" />
                 <ListItem onClick={paste} title="Paste" />
@@ -161,36 +145,34 @@ export function EditorNavbar() {
             </NavigationMenuContent>
           </NavigationMenuItem>
 
-          {/* + Add Menu */}
+          {/* Render Menu */}
           <NavigationMenuItem>
             <NavigationMenuTrigger className="h-8 bg-transparent px-3 text-sm font-normal text-zinc-100 hover:bg-zinc-800 hover:text-white">
-              Add
+              Render
             </NavigationMenuTrigger>
             <NavigationMenuContent>
               <ul className="grid w-[200px] gap-1 p-2">
-                <ListItem onClick={addCube} title="Cube" />
-                {/* <div className="bg-border my-1 h-px" />
-                <ListItem onClick={addLight} title="Light" /> */}
+                <ListItem 
+                  href="#" 
+                  title="Export Image"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    setIsExportDialogOpen(true)
+                  }} 
+                />
               </ul>
             </NavigationMenuContent>
           </NavigationMenuItem>
 
-          {/* View Menu */}
-          {/* <NavigationMenuItem>
-            <NavigationMenuTrigger className="h-8 bg-transparent px-3 text-sm font-normal text-zinc-100 hover:bg-zinc-800 hover:text-white">
-              View
-            </NavigationMenuTrigger>
-            <NavigationMenuContent>
-              <ul className="grid w-[200px] gap-1 p-2">
-                <ListItem href="#" title="Perspective" />
-                <ListItem href="#" title="Orthographic" />
-                <div className="bg-border my-1 h-px" />
-                <ListItem href="#" title="Top View" />
-                <ListItem href="#" title="Front View" />
-                <ListItem href="#" title="Side View" />
-              </ul>
-            </NavigationMenuContent>
-          </NavigationMenuItem> */}
+          {/* + Add Menu */}
+          <NavigationMenuItem>
+            <button
+              onClick={addCube}
+              className="h-8 bg-transparent px-3 text-sm font-normal text-zinc-100 hover:rounded-b-md hover:bg-zinc-800 hover:text-white"
+            >
+              Add Cube
+            </button>
+          </NavigationMenuItem>
 
         </NavigationMenuList>
       </NavigationMenu>
