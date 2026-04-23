@@ -1,14 +1,16 @@
-use crate::config::EngineConfig;
-use crate::input::InputState;
-use crate::time::TimeState;
-use crate::{Gfx, Scene};
 use std::sync::Arc;
+
 use winit::dpi::PhysicalSize;
 use winit::error::ExternalError;
 use winit::event::{DeviceEvent, DeviceId, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow};
 use winit::window::{CursorGrabMode, Window, WindowAttributes, WindowId};
 use winit::{application::ApplicationHandler, error::EventLoopError, event_loop::EventLoop};
+
+use crate::config::EngineConfig;
+use crate::input::InputState;
+use crate::time::TimeState;
+use crate::{Gfx, Scene};
 
 /// All engine-owned state passed to the game on every callback.
 ///

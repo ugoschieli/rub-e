@@ -1,5 +1,5 @@
 mod cube;
-/// GPU frustum culling compute pass
+/// GPU frustum culling compute passes (chunk-level + per-cube)
 pub mod culling;
 mod dynamic;
 mod model;

@@ -1,9 +1,9 @@
-use clap::Parser;
 use std::f32::consts::FRAC_PI_4;
 use std::net::UdpSocket;
 use std::time::Duration;
 
 use cgmath::Vector3;
+use clap::Parser;
 use winit::event::DeviceEvent;
 use winit::keyboard::KeyCode;
 
@@ -248,17 +248,13 @@ fn ball_speed(ball: &Ball) -> f32 {
 }
 
 fn reset_ball(ball: &mut Ball, toward_right: bool) {
-    ball.p.x = 0.0;
-    ball.p.y = 0.0;
-    ball.p.z = 0.0;
-    ball.v.z = 0.0;
+    ball.p = Vector3::new(0.0, 0.0, 0.0);
     let vx = if toward_right {
         BALL_SPEED_INIT
     } else {
         -BALL_SPEED_INIT
     };
-    ball.v.x = vx;
-    ball.v.y = BALL_SPEED_INIT * 0.4;
+    ball.v = Vector3::new(vx, BALL_SPEED_INIT * 0.4, 0.0);
 }
 
 fn step_physics(
@@ -340,9 +336,7 @@ fn step_physics(
     }
 
     // --- Ball movement ---
-    ball.p.x += ball.v.x * dt;
-    ball.p.y += ball.v.y * dt;
-    ball.p.z += ball.v.z * dt;
+    ball.p += ball.v * dt;
     ball.v.z -= BALL_GRAVITY * dt;
 
     // Floor bounce / clamp

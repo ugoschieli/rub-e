@@ -44,6 +44,13 @@ var<storage, read_write> visible_instances: array<CubeRaw>;
 @group(1) @binding(2)
 var<storage, read_write> draw_cmd: DrawIndexedIndirectArgs;
 
+// Chunk-visibility written by the chunk_cull pass that runs before this one.
+@group(1) @binding(3)
+var<storage, read> cube_chunk_ids: array<u32>;
+
+@group(1) @binding(4)
+var<storage, read> chunk_visible: array<u32>;
+
 fn normalize_plane(v: vec4<f32>) -> Plane {
     let len = length(v.xyz);
     return Plane(v.xyz / len, v.w / len);
@@ -103,11 +110,16 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         return;
     }
 
+    // 1. Chunk-level early exit — skip cubes whose entire chunk was culled.
+    if chunk_visible[cube_chunk_ids[index]] == 0u {
+        return;
+    }
+
     let instance = all_instances[index];
     let frustum = frustum_from_view_proj(camera.view_proj);
     let aabb = get_aabb_from_instance(instance.model);
 
-    // 1. Frustum Culling
+    // 2. Per-cube frustum culling
     if (intersects_aabb(frustum, aabb)) {
         let out_index = atomicAdd(&draw_cmd.instance_count, 1u);
         visible_instances[out_index] = instance;

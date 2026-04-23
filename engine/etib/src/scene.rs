@@ -3,7 +3,9 @@
 //! [`Scene`] is the single rendering entry point. It owns the render pipeline,
 //! GPU buffers, frustum culling, dynamic model management, the HDR intermediate
 //! texture, and the optional skybox. The caller only needs to load models,
-//! update transforms, and call [`Scene::render`] each frame.
+//! update transforms, and set the current scene with [`scene`](crate::game::Game::scene).
+
+use std::collections::HashMap;
 
 use anyhow::Result;
 use cgmath::{Matrix4, Vector4};
@@ -11,7 +13,8 @@ use wgpu::util::DeviceExt;
 
 use crate::camera::Camera;
 use crate::cube::{
-    Cube, CubeRaw, CullingPass, DynamicModel, DynamicScene, INDICES, ModelCube, VERTICES,
+    Cube, CubeRaw, ChunkCullingPass, ChunkRaw, CullingPass, DynamicModel, DynamicScene, INDICES,
+    ModelCube, VERTICES,
 };
 use crate::gfx::Gfx;
 use crate::hdr::{HdrLoader, HdrPipeline, TonemappingMode};
@@ -22,6 +25,9 @@ use etib_core::shader::Shader;
 
 const CUBE_SHADER: &str = include_str!("shaders/shader.wgsl");
 const SKYBOX_SHADER: &str = include_str!("shaders/skybox.wgsl");
+
+/// Each static chunk groups cubes in a 32×32 XZ tile (Y is unbounded).
+const CHUNK_SIZE: f32 = 32.0;
 
 struct SkyboxData {
     pipeline: Pipeline,
@@ -46,15 +52,28 @@ pub struct Scene {
     index_buffer: wgpu::Buffer,
     pipeline: Pipeline,
 
-    // Static instances — baked in at construction
-    // Kept alive so the GPU buffer remains valid for the culling compute shader bind group.
+    // Static instances — sorted by chunk, baked in at construction
+    // Kept alive so the GPU buffer remains valid for the culling bind group.
     #[allow(dead_code)]
     all_instances_buffer: wgpu::Buffer,
     visible_instances_buffer: wgpu::Buffer,
     indirect_buffer: wgpu::Buffer,
     total_instance_count: u32,
+
+    // Chunk-level culling (pass 1)
+    chunk_cull_pass: ChunkCullingPass,
+    chunk_culling_bind_group: wgpu::BindGroup,
+    num_chunks: u32,
+    #[allow(dead_code)]
+    chunks_buffer: wgpu::Buffer,
+    #[allow(dead_code)]
+    chunk_visible_buffer: wgpu::Buffer,
+
+    // Per-cube culling (pass 2)
     cull_pass: CullingPass,
     culling_bind_group: wgpu::BindGroup,
+    #[allow(dead_code)]
+    cube_chunk_ids_buffer: wgpu::Buffer,
 
     /// Dynamic instances — rebuilt every frame
     dynamic_scene: DynamicScene,
@@ -77,8 +96,6 @@ impl Scene {
     ///
     /// `dynamic_max_instances` caps the **total number of cubes** across all
     /// live dynamic models and pre-allocates the dynamic GPU buffer accordingly.
-    ///
-    /// `peak_brightness_nits` controls HDR tonemapping (ignored in SDR mode).
     pub fn new(
         ctx: &EngineContext,
         camera: Camera,
@@ -113,18 +130,72 @@ impl Scene {
             usage: wgpu::BufferUsages::INDEX,
         });
 
-        // Bake static cube positions into GPU instances
-        let instance_data: Vec<CubeRaw> = static_cubes
-            .iter()
-            .map(|c| {
-                Cube {
-                    model: Matrix4::from_translation(c.position),
-                    color: Vector4::new(c.color.x, c.color.y, c.color.z, 1.0),
-                }
-                .into_raw()
-            })
-            .collect();
+        // ---------------------------------------------------------------
+        // CPU chunking: sort cubes into 32×32 XZ tiles and compute AABBs.
+        // ---------------------------------------------------------------
+
+        // Map chunk key → indices into `static_cubes`
+        let mut chunk_map: HashMap<(i32, i32), Vec<usize>> = HashMap::new();
+        for (i, cube) in static_cubes.iter().enumerate() {
+            let cx = (cube.position.x / CHUNK_SIZE).floor() as i32;
+            let cz = (cube.position.z / CHUNK_SIZE).floor() as i32;
+            chunk_map.entry((cx, cz)).or_default().push(i);
+        }
+
+        // Deterministic chunk order
+        let mut chunk_keys: Vec<(i32, i32)> = chunk_map.keys().copied().collect();
+        chunk_keys.sort_unstable();
+
+        let mut instance_data: Vec<CubeRaw> = Vec::with_capacity(static_cubes.len());
+        let mut cube_chunk_ids: Vec<u32> = Vec::with_capacity(static_cubes.len());
+        let mut chunks_raw: Vec<ChunkRaw> = Vec::with_capacity(chunk_keys.len());
+
+        for (chunk_idx, key) in chunk_keys.iter().enumerate() {
+            let indices = &chunk_map[key];
+            let start_idx = instance_data.len() as u32;
+            let count = indices.len() as u32;
+
+            // Tight AABB over all cube faces in this chunk
+            let mut min = [f32::MAX; 3];
+            let mut max = [f32::MIN; 3];
+            for &i in indices {
+                let p = static_cubes[i].position;
+                min[0] = min[0].min(p.x - 0.5);
+                min[1] = min[1].min(p.y - 0.5);
+                min[2] = min[2].min(p.z - 0.5);
+                max[0] = max[0].max(p.x + 0.5);
+                max[1] = max[1].max(p.y + 0.5);
+                max[2] = max[2].max(p.z + 0.5);
+            }
+
+            for &i in indices {
+                let c = &static_cubes[i];
+                instance_data.push(
+                    Cube {
+                        model: Matrix4::from_translation(c.position),
+                        color: Vector4::new(c.color.x, c.color.y, c.color.z, 1.0),
+                    }
+                    .into_raw(),
+                );
+                cube_chunk_ids.push(chunk_idx as u32);
+            }
+
+            chunks_raw.push(ChunkRaw {
+                aabb_min: min,
+                _pad0: 0.0,
+                aabb_max: max,
+                start_idx,
+                count,
+                _pad1: [0; 3],
+            });
+        }
+
         let total_instance_count = instance_data.len() as u32;
+        let num_chunks = chunks_raw.len() as u32;
+
+        // ---------------------------------------------------------------
+        // GPU buffers
+        // ---------------------------------------------------------------
 
         let static_usage =
             wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST;
@@ -162,6 +233,48 @@ impl Scene {
                 | wgpu::BufferUsages::COPY_DST,
         });
 
+        let chunks_buffer = if chunks_raw.is_empty() {
+            device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("Chunks Buffer"),
+                size: 4,
+                usage: wgpu::BufferUsages::STORAGE,
+                mapped_at_creation: false,
+            })
+        } else {
+            device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Chunks Buffer"),
+                contents: bytemuck::cast_slice(&chunks_raw),
+                usage: wgpu::BufferUsages::STORAGE,
+            })
+        };
+
+        let chunk_visible_size = (chunks_raw.len() * size_of::<u32>()).max(4) as u64;
+        let chunk_visible_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Chunk Visible Buffer"),
+            size: chunk_visible_size,
+            usage: wgpu::BufferUsages::STORAGE,
+            mapped_at_creation: false,
+        });
+
+        let cube_chunk_ids_buffer = if cube_chunk_ids.is_empty() {
+            device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("Cube Chunk IDs Buffer"),
+                size: 4,
+                usage: wgpu::BufferUsages::STORAGE,
+                mapped_at_creation: false,
+            })
+        } else {
+            device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Cube Chunk IDs Buffer"),
+                contents: bytemuck::cast_slice(&cube_chunk_ids),
+                usage: wgpu::BufferUsages::STORAGE,
+            })
+        };
+
+        // ---------------------------------------------------------------
+        // Pipelines and bind groups
+        // ---------------------------------------------------------------
+
         let shader = Shader::new(CUBE_SHADER, device, Some("Cube Shader"));
         let pipeline = Pipeline::new_v2(
             device,
@@ -174,12 +287,21 @@ impl Scene {
             Some("Cubes Pipeline"),
         );
 
+        let chunk_cull_pass = ChunkCullingPass::new(device, &camera.bind_group.layout);
+        let chunk_culling_bind_group = chunk_cull_pass.create_bind_group(
+            device,
+            &chunks_buffer,
+            &chunk_visible_buffer,
+        );
+
         let cull_pass = CullingPass::new(device, &camera.bind_group.layout);
         let culling_bind_group = cull_pass.create_bind_group(
             device,
             &all_instances_buffer,
             &visible_instances_buffer,
             &indirect_buffer,
+            &cube_chunk_ids_buffer,
+            &chunk_visible_buffer,
         );
 
         let dynamic_scene = DynamicScene::new(device, dynamic_max_instances.max(1));
@@ -192,8 +314,14 @@ impl Scene {
             visible_instances_buffer,
             indirect_buffer,
             total_instance_count,
+            chunk_cull_pass,
+            chunk_culling_bind_group,
+            num_chunks,
+            chunks_buffer,
+            chunk_visible_buffer,
             cull_pass,
             culling_bind_group,
+            cube_chunk_ids_buffer,
             dynamic_scene,
             skybox: None,
             hdr,
@@ -312,10 +440,11 @@ impl Scene {
     ///
     /// Internally this:
     /// 1. Uploads changed dynamic transforms to the GPU.
-    /// 2. Runs the GPU frustum culling compute pass (if enabled).
-    /// 3. Opens an HDR render pass and draws static models, dynamic models,
+    /// 2. Runs the GPU chunk-level frustum culling pass.
+    /// 3. Runs the GPU per-cube frustum culling pass (skips cubes in culled chunks).
+    /// 4. Opens an HDR render pass and draws static models, dynamic models,
     ///    and the skybox (if set).
-    /// 4. Tonemaps the HDR result to `swapchain_view`.
+    /// 5. Tonemaps the HDR result to `swapchain_view`.
     pub fn render(
         &self,
         ctx: &EngineContext,
@@ -324,11 +453,22 @@ impl Scene {
     ) {
         let queue = &ctx.gfx.queue;
 
-        // --- Upload dynamic transforms + GPU culling (mutable, before render pass) ---
+        // --- Upload dynamic transforms (before render pass) ---
         self.dynamic_scene.update_gpu(queue);
 
         if self.total_instance_count > 0 {
+            // Reset the indirect instance_count to 0 before culling writes it.
             queue.write_buffer(&self.indirect_buffer, 4, bytemuck::bytes_of(&0u32));
+
+            // Pass 1: chunk-level culling — writes chunk_visible[]
+            self.chunk_cull_pass.cull(
+                encoder,
+                &self.camera.bind_group.bind_group,
+                &self.chunk_culling_bind_group,
+                self.num_chunks,
+            );
+
+            // Pass 2: per-cube culling — reads chunk_visible[], writes visible_instances[]
             self.cull_pass.cull(
                 encoder,
                 &self.camera.bind_group.bind_group,
@@ -338,7 +478,6 @@ impl Scene {
         }
 
         // --- Render pass on the HDR intermediate texture ---
-        // All borrows inside this block are shared; the mutable work above is done.
         {
             let color_attachment = Gfx::color_attachments_from_view(self.hdr.view());
             let depth_attachment = wgpu::RenderPassDepthStencilAttachment {
@@ -363,7 +502,7 @@ impl Scene {
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
 
-            // Static geometry — always drawn via indirect after GPU culling
+            // Static geometry — drawn via indirect after two-pass GPU culling
             if self.total_instance_count > 0 {
                 render_pass.set_vertex_buffer(1, self.visible_instances_buffer.slice(..));
                 render_pass.draw_indexed_indirect(&self.indirect_buffer, 0);
