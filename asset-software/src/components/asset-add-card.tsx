@@ -18,31 +18,15 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { handleGetAllProjects, handleAddAsset } from "@/components/services";
+import { handleAddAsset } from "@/components/services";
 import * as React from "react";
+import { useData } from "@/context/data-context";
 
 export function AssetAddCard({ onClose }: { onClose: () => void }) {
-  const [projects, setProjects] = React.useState<
-    { name: string; id: number }[]
-  >([]);
+  const { projects, refreshData } = useData();
   const [assetName, setAssetName] = React.useState("");
   const [selectedProjectId, setSelectedProject] = React.useState<number>();
   const [isSuccess, setIsSuccess] = React.useState(false);
-
-  React.useEffect(() => {
-    async function fetchProjects() {
-      try {
-        const projects = (await handleGetAllProjects()) as {
-          name: string;
-          id: number;
-        }[];
-        setProjects(projects);
-      } catch (err) {
-        console.error("Failed to fetch projects:", err);
-      }
-    }
-    fetchProjects();
-  }, []);
 
   const handleCreateAsset = async (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
@@ -51,18 +35,17 @@ export function AssetAddCard({ onClose }: { onClose: () => void }) {
       return;
     }
 
-    const newAsset = {
-      name: assetName,
-      project_name: selectedProjectId,
-      created_at: new Date().toISOString(),
-    };
-
-    handleAddAsset(assetName, selectedProjectId);
-    setIsSuccess(true);
-    setTimeout(() => {
-      setIsSuccess(false);
-      onClose();
-    }, 2000);
+    try {
+      await handleAddAsset(assetName, selectedProjectId);
+      await refreshData();
+      setIsSuccess(true);
+      setTimeout(() => {
+        setIsSuccess(false);
+        onClose();
+      }, 2000);
+    } catch (err) {
+      alert("Failed to create asset");
+    }
   };
 
   return (

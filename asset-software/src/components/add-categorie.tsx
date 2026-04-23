@@ -2,14 +2,21 @@
 import {FormEvent, useState} from "react";
 import { invoke } from '@tauri-apps/api/core';
 import { handleAddCategory } from './services';
+import { useData } from "@/context/data-context";
 
 export default function AddCategory() {
     const [name, setName] = useState("");
+    const { refreshData } = useData();
 
     const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
-        await handleAddCategory(name);
-        setName("");
+        try {
+            await handleAddCategory(name);
+            await refreshData();
+            setName("");
+        } catch (err) {
+            console.error("Failed to add category:", err);
+        }
     };
 
     return (

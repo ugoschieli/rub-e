@@ -27,12 +27,22 @@ import {
 } from "@/components/ui/sidebar"
 import { Project, Asset } from "@/types/types"
 import Link from "next/link"
-import AddProject from "@/components/add-project"
 import AddProjet from "@/components/add-project";
 import { handleDeleteProject } from "@/components/services";
+import { useData } from "@/context/data-context";
 
 export function NavProjects({ projects }: { projects: Project[] }) {
+  const { refreshData } = useData();
   if (!projects) return null
+
+  const onDelete = async (name: string) => {
+    try {
+      await handleDeleteProject(name);
+      await refreshData();
+    } catch (err) {
+      console.error("Failed to delete project:", err);
+    }
+  };
 
   return (
     <SidebarGroup className="group-data-[collapsible=icon]:hidden">
@@ -66,7 +76,7 @@ export function NavProjects({ projects }: { projects: Project[] }) {
                   <span>Share Project</span>
                 </DropdownMenuItem> */}
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => handleDeleteProject(project.name)}>
+                <DropdownMenuItem onClick={() => onDelete(project.name)}>
                   <Trash2 className="text-muted-foreground" />
                   <span>Delete Project</span>
                 </DropdownMenuItem>

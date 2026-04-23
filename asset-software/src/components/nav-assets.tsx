@@ -32,9 +32,20 @@ import {
 import AddCategory from "@/components/add-categorie"
 import { handleDeleteCategory } from "@/components/services"
 import { Asset, Category } from "@/types/types"
+import { useData } from "@/context/data-context"
 
 export function NavAssets({ assets, categories }: { assets: Asset[]; categories: Category[] }) {
+  const { refreshData } = useData();
   if (!assets || !categories) return null
+
+  const onDelete = async (name: string) => {
+    try {
+      await handleDeleteCategory(name);
+      await refreshData();
+    } catch (err) {
+      console.error("Failed to delete category:", err);
+    }
+  };
 
   return (
     <SidebarGroup>
@@ -72,7 +83,7 @@ export function NavAssets({ assets, categories }: { assets: Asset[]; categories:
                       <DropdownMenuContent className="w-48 rounded-lg">
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
-                          onClick={() => handleDeleteCategory(category.name)}
+                          onClick={() => onDelete(category.name)}
                         >
                           <Trash2 className="text-muted-foreground" />
                           <span>Delete Category</span>

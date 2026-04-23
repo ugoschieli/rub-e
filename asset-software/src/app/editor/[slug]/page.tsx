@@ -1,35 +1,13 @@
-"use client"
+import React from "react";
+import EditorClient from "./editor-client";
+import data_assets from "@/../config/data_assets.json";
 
-import { EditorNavbar } from "@/components/editor-navbar";
-import React, { useEffect } from "react";
-import { EditorLayout } from "@/components/editor-layout";
-import { EditorProvider, useEditor } from "@/context/editor-context";
-
-function EditorContent({ slug }: { slug: string }) {
-  const { loadAsset, scene, setAssetId } = useEditor()
-  
-  useEffect(() => {
-    if (scene) {
-      loadAsset(parseInt(slug))
-    } else {
-        setAssetId(parseInt(slug))
-    }
-  }, [slug, loadAsset, scene, setAssetId])
-
-  return (
-    <div className="h-screen w-full bg-black">
-      <EditorNavbar />
-      <EditorLayout />
-    </div>
-  )
+export async function generateStaticParams() {
+  return data_assets.map((asset) => ({
+    slug: asset.id.toString(),
+  }));
 }
 
 export default function EditorPage({ params }: { params: Promise<{ slug: string }> }) {
-  const { slug } = React.use(params)
-
-  return (
-    <EditorProvider>
-      <EditorContent slug={slug} />
-    </EditorProvider>
-  )
+  return <EditorClient params={params} />;
 }

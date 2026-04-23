@@ -42,6 +42,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@tauri-apps/cli": "^2.10.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
@@ -53,7 +54,7 @@
     "@vitejs/plugin-react": "^6.0.1",
     "@vitest/coverage-v8": "^4.1.4",
     "autoprefixer": "^10.4.22",
-    "baseline-browser-mapping": "^2.10.9",
+    "baseline-browser-mapping": "^2.10.21",
     "eslint": "^9",
     "eslint-config-next": "16.0.1",
     "jsdom": "^29.0.2",

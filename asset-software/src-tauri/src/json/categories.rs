@@ -46,12 +46,9 @@ fn save(path: &Path, items: &Vec<AssetCategory>) {
 
 pub fn init(path: &Path) {
     if !path.exists() {
-        let default_items = vec![AssetCategory::new(1, "Catégorie Exemple")];
+        let default_items: Vec<AssetCategory> = Vec::new();
         save(path, &default_items);
-        println!(
-            "Fichier categories créé avec une valeur par défaut à : {:?}",
-            path
-        );
+        println!("Fichier categories.json initialisé (vide) à : {:?}", path);
     }
 }
 

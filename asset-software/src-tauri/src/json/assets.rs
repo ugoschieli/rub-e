@@ -101,9 +101,9 @@ fn save(path: &Path, items: &Vec<Asset>) {
 
 pub fn init(path: &Path) {
     if !path.exists() {
-        let default_items = vec![Asset::new(1, "Exemple Asset", "assets/Exemple/Exemple.aaa")];
+        let default_items: Vec<Asset> = Vec::new();
         save(path, &default_items);
-        println!("Fichier assets créé avec une valeur par défaut.");
+        println!("Fichier assets.json initialisé (vide) à : {:?}", path);
     }
 }
 

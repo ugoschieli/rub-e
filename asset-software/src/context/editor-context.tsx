@@ -253,8 +253,10 @@ export function EditorProvider({ children }: { children: React.ReactNode }) {
     const content = lines.join("\n");
     try {
       await invoke("save_asset_content", { id: assetId, content });
+      console.log("Asset saved successfully");
     } catch (error) {
       console.error("Failed to save asset:", error);
+      throw error;
     }
   }, [assetId, objects]);
 

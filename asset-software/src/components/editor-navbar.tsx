@@ -118,7 +118,17 @@ export function EditorNavbar() {
             </NavigationMenuTrigger>
             <NavigationMenuContent>
               <ul className="grid w-[200px] gap-1 p-2">
-                <ListItem onClick={saveAsset} title="Save" />
+                <ListItem 
+                  onClick={async () => {
+                    try {
+                      await saveAsset();
+                      toast.success("Asset saved successfully");
+                    } catch (err) {
+                      toast.error("Failed to save asset");
+                    }
+                  }} 
+                  title="Save" 
+                />
                 <div className="bg-border my-1 h-px" />
                 <ListItem href="#" title="Import" />
                 <ListItem 
@@ -214,9 +224,13 @@ export function EditorNavbar() {
             {/* Save */}
             <Button
               className="bg-indigo-500 hover:bg-indigo-600 text-white"
-              onClick={() => {
-                saveAsset()
-                window.location.href = "/"
+              onClick={async () => {
+                try {
+                  await saveAsset()
+                  window.location.href = "/"
+                } catch (err) {
+                  toast.error("Failed to save asset before leaving")
+                }
               }}
             >
               Save

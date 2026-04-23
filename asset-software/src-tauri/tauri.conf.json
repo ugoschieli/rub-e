@@ -31,7 +31,10 @@
       "providerShortName": null,
       "signingIdentity": null
     },
-    "resources": [],
+    "resources": [
+      "../config",
+      "../assets"
+    ],
     "shortDescription": "",
     "linux": {
       "deb": {

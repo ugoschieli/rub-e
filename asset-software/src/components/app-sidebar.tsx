@@ -13,12 +13,11 @@ import {
 } from "@/components/ui/sidebar";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
-import data_assets from "@/../config/data_assets.json";
-import data_projects from "@/../config/data_projects.json";
-import data_categories from "@/../config/data_categories.json";
+import { useData } from "@/context/data-context";
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const [isDialogOpen, setIsDialogOpen] = React.useState(false);
+  const { assets, projects, categories } = useData();
 
   return (
     <Sidebar collapsible={undefined} {...props}>
@@ -28,8 +27,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
       <SidebarContent>
         <div className="space-y-7 p-2">
-          <NavAssets assets={data_assets} categories={data_categories} />
-          <NavProjects projects={data_projects} />
+          <NavAssets assets={assets} categories={categories} />
+          <NavProjects projects={projects} />
         </div>
 
         <div className="px-2">

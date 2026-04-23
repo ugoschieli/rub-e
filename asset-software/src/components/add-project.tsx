@@ -2,14 +2,21 @@
 import {FormEvent, useState} from "react";
 import { invoke } from '@tauri-apps/api/core';
 import { handleAddProject } from "./services";
+import { useData } from "@/context/data-context";
 
 export default function AddProjet() {
     const [name, setName] = useState("");
+    const { refreshData } = useData();
 
     const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
-        await handleAddProject(name);
-        setName("");
+        try {
+            await handleAddProject(name);
+            await refreshData();
+            setName("");
+        } catch (err) {
+            console.error("Failed to add project:", err);
+        }
     };
 
     return (

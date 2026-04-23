@@ -9,6 +9,21 @@
     "core:default",
     "dialog:default",
     "fs:default",
-    "fs:allow-write-text-file"
+    {
+      "identifier": "fs:allow-write-text-file",
+      "allow": [
+        { "path": "$APPLOCALDATA/**" },
+        { "path": "$RESOURCE/**" },
+        { "path": "$HOME/**" }
+      ]
+    },
+    {
+      "identifier": "fs:allow-read-text-file",
+      "allow": [
+        { "path": "$APPLOCALDATA/**" },
+        { "path": "$RESOURCE/**" },
+        { "path": "$HOME/**" }
+      ]
+    }
   ]
 }

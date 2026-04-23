@@ -46,12 +46,9 @@ fn save(path: &Path, items: &Vec<Project>) {
 
 pub fn init(path: &Path) {
     if !path.exists() {
-        let default_items = vec![Project::new(1, "Mon Premier Projet")];
+        let default_items: Vec<Project> = Vec::new();
         save(path, &default_items);
-        println!(
-            "Fichier projects créé avec une valeur par défaut à : {:?}",
-            path
-        );
+        println!("Fichier projects.json initialisé (vide) à : {:?}", path);
     }
 }
 
