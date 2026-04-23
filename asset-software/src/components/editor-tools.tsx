@@ -52,16 +52,6 @@ export function EditorTools() {
           </div>
         </div>
         <div className="flex-1 overflow-y-auto px-2">
-          {defaultCamera && (
-            <HierarchyCamera
-              icon={<Camera className="h-4 w-4 text-zinc-400" />}
-              label="Default Camera"
-              active={selected?.uuid === defaultCamera.uuid}
-              visible={true}
-              onClick={() => setSelected(defaultCamera)}
-            />
-          )}
-
           {objects.map((obj) => (
             <RecursiveHierarchyItem key={obj.uuid} obj={obj} depth={0} />
           ))}
@@ -158,7 +148,6 @@ export function EditorTools() {
                 )}
             </div>
 
-            <div className="h-px bg-zinc-800" />
 
             {/* Type
             <div className="space-y-2">
@@ -187,7 +176,6 @@ function RecursiveHierarchyItem({ obj, depth }: { obj: THREE.Object3D, depth: nu
   const getIcon = (obj: THREE.Object3D) => {
     if (obj instanceof THREE.Group) return <Folder className="h-4 w-4 text-blue-400" />
     if (obj instanceof THREE.Light) return <Lightbulb className="h-4 w-4 text-yellow-500" />
-    if (obj instanceof THREE.Camera) return <Camera className="h-4 w-4 text-zinc-400" />
     return <Box className="h-4 w-4 text-zinc-400" />
   }
 
@@ -285,32 +273,7 @@ function HierarchyItem({
     </div>
   )
 }
-function HierarchyCamera({
-  icon,
-  label,
-  active,
-  visible,
-  onClick
-}: {
-  icon: React.ReactNode
-  label: string
-  active?: boolean
-  visible: boolean
-  onClick: () => void
-}) {
-  return (
-    <div
-      onClick={onClick}
-      className={`group flex items-center justify-between rounded px-3 py-1.5 text-sm cursor-pointer mb-1 transition-colors ${active ? "bg-blue-600 text-white" : "text-zinc-300 hover:bg-zinc-800"
-        }`}
-    >
-      <div className="flex items-center gap-3 overflow-hidden">
-        {icon}
-        <span className="truncate">{label}</span>
-      </div>
-    </div>
-  )
-}
+
 function TransformInputGroup({
   label,
   values,

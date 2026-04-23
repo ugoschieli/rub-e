@@ -223,6 +223,14 @@ export function EditorLayout({ exportFileName = "export" }: { exportFileName?: s
 
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement
+
+      const isTyping =
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.isContentEditable
+
+      if (isTyping) return 
       const key = e.key.toLowerCase()
 
       // CUT → Ctrl + X
@@ -241,6 +249,10 @@ export function EditorLayout({ exportFileName = "export" }: { exportFileName?: s
       if ((e.ctrlKey||e.metaKey) && key === "v") {
         e.preventDefault()
         paste()
+      }
+      // DELETE → Suppr 
+      if (key === "delete" ) {
+        e.preventDefault()
       }
     }
     window.addEventListener("keydown", handleKeyDown)

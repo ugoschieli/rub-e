@@ -23,7 +23,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   return (
     <Sidebar collapsible={undefined} {...props}>
       <SidebarHeader className="w-full flex items-center justify-center">
-        <Image src="/favicon.ico" alt="Logo" width={60} height={60} />
+        <Image src="/RUB-E_LOGO3.svg" alt="Logo" width={200} height={100} />
       </SidebarHeader>
 
       <SidebarContent>
