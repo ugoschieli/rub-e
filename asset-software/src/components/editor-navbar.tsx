@@ -23,6 +23,8 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { toast } from "sonner"
+import { save } from "@tauri-apps/plugin-dialog"
 
 export function EditorNavbar() {
   const isMobile = useIsMobile()
@@ -55,17 +57,25 @@ export function EditorNavbar() {
     addObject(mesh)
   }
 
-
-const handleExport = () => {
+  const handleExport = async () => {
   const fileName = exportFileName.trim() || "export"
-  console.log("Export avec le nom:", fileName)
+  const filePath = await save({
+    defaultPath: `${fileName}.model`,
+    filters: [
+      {
+        name: "Model",
+        extensions: ["model"]
+      }
+    ]
+  })
+  if (!filePath) return
   const event = new CustomEvent("export-cubes-coordinates", {
-    detail: { fileName }
+    detail: { fileName, filePath }
   })
   window.dispatchEvent(event)
   setIsExportDialogOpen(false)
+  toast.success(`Model "${fileName}.model" exported successfully`)
 }
-
 
   return (
     <div className="relative z-50 flex items-center border-b border-zinc-800 bg-[#18181b] px-2">
@@ -95,7 +105,14 @@ const handleExport = () => {
               <ul className="grid w-[200px] gap-1 p-2">
                 <ListItem onClick={saveAsset} title="Save" />
                 <ListItem href="#" title="Import" />
-                <ListItem href="#" title="Export" />
+                <ListItem 
+                  href="#" 
+                  title="Export"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    setIsExportDialogOpen(true)
+                  }} 
+                />
               </ul>
             </NavigationMenuContent>
           </NavigationMenuItem>

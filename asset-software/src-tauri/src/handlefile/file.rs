@@ -1,8 +1,8 @@
-use crate::json::projects::get_projects; 
-use crate::json::assets::{get_assets, add_asset, add_project_to_asset, remove_asset}; 
-use crate::json::model::Project; 
-use std::path::{Path, PathBuf};
+use crate::json::assets::{add_asset, add_project_to_asset, get_assets, remove_asset};
+use crate::json::model::Project;
+use crate::json::projects::get_projects;
 use std::fs;
+use std::path::{Path, PathBuf};
 
 /// Sync assets on disk with the JSON database, adding new ones and removing missing ones
 pub fn sync_local_assets(assets_root: &Path, assets_db_path: &Path, projects_db_path: &Path) {
@@ -10,28 +10,40 @@ pub fn sync_local_assets(assets_root: &Path, assets_db_path: &Path, projects_db_
     let current_assets = get_assets(assets_db_path);
 
     let all_folder = assets_root.join("all");
-    scan_folder(&all_folder, assets_root, assets_db_path, &current_assets, None);
+    scan_folder(
+        &all_folder,
+        assets_root,
+        assets_db_path,
+        &current_assets,
+        None,
+    );
 
     for project in projects {
         let project_folder = assets_root.join(&project.name);
-        scan_folder(&project_folder, assets_root, assets_db_path, &current_assets, Some(project));
+        scan_folder(
+            &project_folder,
+            assets_root,
+            assets_db_path,
+            &current_assets,
+            Some(project),
+        );
     }
 }
 
-
 fn scan_folder(
-    folder_to_scan: &Path, 
-    assets_root: &Path, 
-    assets_db_path: &Path, 
-    current_assets: &[crate::json::model::Asset], 
-    project: Option<Project>
+    folder_to_scan: &Path,
+    assets_root: &Path,
+    assets_db_path: &Path,
+    current_assets: &[crate::json::model::Asset],
+    project: Option<Project>,
 ) {
     if let Ok(entries) = std::fs::read_dir(folder_to_scan) {
         for entry in entries {
             if let Ok(entry) = entry {
                 let path = entry.path();
                 if path.is_file() {
-                    let relative_path_str = path.strip_prefix(assets_root)
+                    let relative_path_str = path
+                        .strip_prefix(assets_root)
                         .unwrap()
                         .to_string_lossy()
                         .to_string();
@@ -40,16 +52,21 @@ fn scan_folder(
 
                     if !already_exists {
                         let asset_name = path.file_stem().unwrap().to_string_lossy().to_string();
-                        
+
                         if project.is_some() {
-                             println!("Nouvel asset projet trouvé : {}", relative_path_str);
+                            println!("Nouvel asset projet trouvé : {}", relative_path_str);
                         } else {
-                             println!("Nouvel asset orphelin trouvé (all) : {}", relative_path_str);
+                            println!("Nouvel asset orphelin trouvé (all) : {}", relative_path_str);
                         }
 
                         add_asset(assets_db_path, &asset_name, &relative_path_str);
                         if let Some(p) = &project {
-                            let _ = add_project_to_asset(assets_db_path, &asset_name, p.clone(), assets_root);
+                            let _ = add_project_to_asset(
+                                assets_db_path,
+                                &asset_name,
+                                p.clone(),
+                                assets_root,
+                            );
                         }
                     }
                 }
@@ -64,13 +81,20 @@ pub fn clean_missing_assets(assets_root: &Path, assets_db_path: &Path) {
     for asset in current_assets {
         let full_path = assets_root.join(&asset.path);
         if !full_path.exists() {
-            println!("Asset fantôme détecté (supprimé du disque) : {}. Suppression du JSON...", asset.name);
+            println!(
+                "Asset fantôme détecté (supprimé du disque) : {}. Suppression du JSON...",
+                asset.name
+            );
             remove_asset(assets_db_path, &asset.name);
         }
     }
 }
 
-pub fn create_asset_file(root_path: &Path, project_name: &str, asset_name: &str) -> Result<PathBuf, String> {
+pub fn create_asset_file(
+    root_path: &Path,
+    project_name: &str,
+    asset_name: &str,
+) -> Result<PathBuf, String> {
     let safe_project_name = sanitize_filename(project_name);
     let safe_asset_name = sanitize_filename(asset_name);
 
@@ -85,7 +109,7 @@ pub fn create_asset_file(root_path: &Path, project_name: &str, asset_name: &str)
     } else {
         format!("{}.model", safe_asset_name)
     };
-    
+
     let file_path = dest_folder.join(filename);
 
     fs::write(&file_path, "")
@@ -96,12 +120,12 @@ pub fn create_asset_file(root_path: &Path, project_name: &str, asset_name: &str)
 
 fn sanitize_filename(name: &str) -> String {
     name.replace(['/', '\\', ':', '*', '?', '"', '<', '>', '|'], "_")
-        .trim() 
+        .trim()
         .to_string()
 }
 
 #[cfg(test)]
-mod tests { 
+mod tests {
     use super::*;
     use std::fs;
 
@@ -122,7 +146,7 @@ mod tests {
 
         let created_file = result.unwrap();
         assert!(created_file.exists());
-        assert_eq!(created_file.file_name().unwrap(), "TestAsset.aaa");
+        assert_eq!(created_file.file_name().unwrap(), "TestAsset.model");
 
         // Cleanup after test
         cleanup_folder(test_root);

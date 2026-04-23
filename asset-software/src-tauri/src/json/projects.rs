@@ -1,11 +1,12 @@
+use super::model::Project;
 use std::fs;
 use std::path::Path;
-use super::model::Project;
-
 
 pub fn get_projects(path: &Path) -> Vec<Project> {
-    if !path.exists() { return Vec::new(); }
-    
+    if !path.exists() {
+        return Vec::new();
+    }
+
     let data = fs::read_to_string(path).unwrap_or_else(|_| "[]".to_string());
     serde_json::from_str(&data).unwrap_or_else(|_| Vec::new())
 }
@@ -14,7 +15,6 @@ pub fn get_project_by_id(path: &Path, id: u32) -> Option<Project> {
     let items = get_projects(path);
     items.into_iter().find(|p| p.id == id)
 }
-
 
 pub fn add_project(path: &Path, name: &str) -> Result<(), String> {
     let mut items = get_projects(path);
@@ -48,7 +48,10 @@ pub fn init(path: &Path) {
     if !path.exists() {
         let default_items = vec![Project::new(1, "Mon Premier Projet")];
         save(path, &default_items);
-        println!("Fichier projects créé avec une valeur par défaut à : {:?}", path);
+        println!(
+            "Fichier projects créé avec une valeur par défaut à : {:?}",
+            path
+        );
     }
 }
 
@@ -66,60 +69,59 @@ mod tests {
 
     #[test]
     fn test_add_and_get_project() {
-        let filename = "test_projects_add.json"; 
+        let filename = "test_projects_add.json";
         cleanup(filename);
         let path = PathBuf::from(filename);
-        
+
         add_project(&path, "Projet Alpha").unwrap();
-        
+
         let projects = get_projects(&path);
         assert_eq!(projects.len(), 1);
         assert_eq!(projects[0].name, "Projet Alpha");
         assert_eq!(projects[0].id, 1);
-        
+
         cleanup(filename);
     }
-    
 
     #[test]
     fn test_remove_project() {
         let filename = "test_projects_remove.json";
         cleanup(filename);
         let path = PathBuf::from(filename);
-        
+
         add_project(&path, "Projet A").unwrap();
         add_project(&path, "Projet B").unwrap();
-        
+
         remove_project(&path, "Projet A");
-        
+
         let projects = get_projects(&path);
         assert_eq!(projects.len(), 1);
         assert_eq!(projects[0].name, "Projet B");
-        
+
         cleanup(filename);
     }
 
     #[test]
     fn test_persistence() {
-        let filename = "test_projects_persist.json"; 
+        let filename = "test_projects_persist.json";
         cleanup(filename);
         let path = PathBuf::from(filename);
-        
+
         add_project(&path, "Persistent Project").unwrap();
         assert!(path.exists());
-        
+
         let loaded_projects = get_projects(&path);
         assert_eq!(loaded_projects[0].name, "Persistent Project");
-        
+
         cleanup(filename);
     }
-    
+
     #[test]
     fn test_init() {
         let filename = "test_projects_init.json";
         cleanup(filename);
         let path = PathBuf::from(filename);
-        
+
         assert!(!path.exists());
 
         init(&path);

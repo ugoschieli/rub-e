@@ -1,9 +1,9 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Project {
     pub id: u32,
-    pub name: String, 
+    pub name: String,
 }
 
 impl Project {

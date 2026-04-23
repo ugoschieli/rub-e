@@ -1,13 +1,13 @@
-use tauri::{AppHandle, path::BaseDirectory};
 use std::path::PathBuf;
+use tauri::{path::BaseDirectory, AppHandle};
 
 // Helper to get the correct path for the database files
 pub fn get_db_path(_app: &AppHandle, filename: &str) -> PathBuf {
     // DEBUG (cargo tauri dev)
     #[cfg(debug_assertions)]
     {
-        let mut path = std::env::current_dir().unwrap(); 
-        path.push("../config"); 
+        let mut path = std::env::current_dir().unwrap();
+        path.push("../config");
         path.push(filename);
         path
     }
@@ -26,8 +26,8 @@ pub fn get_folder_assets_path(_app: &AppHandle) -> PathBuf {
     // DEBUG (cargo tauri dev)
     #[cfg(debug_assertions)]
     {
-        let mut path = std::env::current_dir().unwrap(); 
-        path.push("../assets"); 
+        let mut path = std::env::current_dir().unwrap();
+        path.push("../assets");
         path
     }
 

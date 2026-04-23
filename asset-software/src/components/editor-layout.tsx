@@ -7,14 +7,22 @@ import { OrbitControls as DreiOrbitControls } from "@react-three/drei" // React 
 import { EditorTools } from "./editor-tools"
 import { useEditor } from "@/context/editor-context"
 import * as THREE from 'three'
+import { writeTextFile } from "@tauri-apps/plugin-fs"
 
 function ExportHandler({ exportFileName }: { exportFileName: string }) {
   const { objects } = useEditor()
   
   React.useEffect(() => {
-    const handleExport = (event: any) => {
+    const handleExport = async (event: any) => {
+      const filePath = event.detail?.filePath
       const fileName = event.detail?.fileName || "export"
-      const cubes: { position: { x: number; y: number; z: number }, color: { r: number; g: number; b: number } }[] = []
+
+      if (!filePath) return
+
+      const cubes: { 
+        position: { x: number; y: number; z: number }, 
+        color: { r: number; g: number; b: number } 
+      }[] = []
       
       objects.forEach((object) => {
         if (object instanceof THREE.Mesh && object.geometry instanceof THREE.BoxGeometry) {
@@ -43,26 +51,18 @@ function ExportHandler({ exportFileName }: { exportFileName: string }) {
       const fileContent = cubes.map(cube => 
         `${cube.position.x.toFixed(2)} ${cube.position.y.toFixed(2)} ${cube.position.z.toFixed(2)} ${cube.color.r.toFixed(3)} ${cube.color.g.toFixed(3)} ${cube.color.b.toFixed(3)}`
       ).join('\n')
-      
-      const blob = new Blob([fileContent], { type: 'text/plain' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `${fileName}.model`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
-      
-      console.log(`Exported ${cubes.length} cube(s):`, cubes)
+
+      await writeTextFile(filePath, fileContent)
+
+      console.log(`Exported ${cubes.length} cube(s) to`, filePath)
     }
     
     window.addEventListener('export-cubes-coordinates', handleExport)
     return () => window.removeEventListener('export-cubes-coordinates', handleExport)
   }, [objects, exportFileName])
-  
   return null
 }
+
 function SceneManager() {
   const { setScene, objects, addObject, setSelected } = useEditor()
   const { scene } = useThree()
