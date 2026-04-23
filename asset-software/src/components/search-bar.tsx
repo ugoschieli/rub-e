@@ -67,12 +67,12 @@ const SearchBar = () => {
         className="w-full"
       />
       {isDropdownOpen && results.length > 0 && (
-        <div className="absolute top-full left-0 w-full bg-white border border-gray-200 rounded-md mt-1 shadow-lg z-50 overflow-hidden">
+        <div className="absolute top-full left-0 w-full bg-popover border border-border rounded-md mt-1 shadow-lg z-50 overflow-hidden">
           <ul className="max-h-60 overflow-y-auto">
             {results.map((result, index) => (
               <li
                 key={`${result.type}-${result.id}-${index}`}
-                className="hover:bg-gray-100 transition-colors"
+                className="hover:bg-accent hover:text-accent-foreground transition-colors"
                 onClick={() => setIsDropdownOpen(false)}
               >
                 <Link
@@ -86,10 +86,10 @@ const SearchBar = () => {
                   className="block px-4 py-2"
                 >
                   <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium text-gray-900">
+                    <span className="text-sm font-medium">
                       {result.name}
                     </span>
-                    <span className="text-xs text-gray-500 uppercase">
+                    <span className="text-xs text-muted-foreground uppercase">
                       {result.type}
                     </span>
                   </div>
