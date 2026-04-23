@@ -23,12 +23,15 @@ import {
   handleDeleteAsset,
 } from "./services";
 import { Asset } from "@/types/types";
+import { refresh } from "next/cache";
+import { useData } from "@/context/data-context";
 
 type Item = { name: string; id: number };
 
 export function AssetOptionCard({ asset }: { asset: Asset }) {
   const [projects, setProjects] = React.useState<Item[]>([]);
   const [categories, setCategories] = React.useState<Item[]>([]);
+  const { refreshData } = useData();
 
   React.useEffect(() => {
     async function fetchProjects() {
@@ -38,7 +41,7 @@ export function AssetOptionCard({ asset }: { asset: Asset }) {
       } catch (err) {
         console.error("Failed to fetch projects:", err);
       }
-    } 
+    }
     fetchProjects();
   }, []);
 
@@ -59,6 +62,7 @@ export function AssetOptionCard({ asset }: { asset: Asset }) {
     try {
       console.log("Selecting project:", project);
       await handleAddProjectToAsset(asset.name, project);
+      await refreshData();
       // window.location.reload();
     } catch (err) {
       console.error("Error moving asset to project:", err);
@@ -69,6 +73,7 @@ export function AssetOptionCard({ asset }: { asset: Asset }) {
     try {
       console.log("Selecting category:", category);
       await handleAddCategoryToAsset(asset.name, category);
+      await refreshData();
     } catch (err) {
       console.error("Error changing asset category:", err);
     }

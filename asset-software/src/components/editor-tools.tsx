@@ -24,6 +24,16 @@ import { NumberInput } from "@heroui/react";
 
 export function EditorTools() {
   const { camera: defaultCamera, objects, selection, selected, setSelected, updateObject, removeObject, groupSelection, ungroupSelection } = useEditor()
+  const [hexValue, setHexValue] = React.useState("#ffffff")
+
+  React.useEffect(() => {
+    if (
+      selected instanceof THREE.Mesh &&
+      selected.material instanceof THREE.MeshStandardMaterial
+    ) {
+      setHexValue(`#${selected.material.color.getHexString()}`)
+    }
+  }, [selected])
   return (
     <aside className="flex w-80 flex-col border-l border-zinc-800 bg-[#18181b] h-full">
       {/* Section Objects */}
@@ -113,49 +123,60 @@ export function EditorTools() {
                 selected.material instanceof THREE.MeshStandardMaterial && (
                   <>
                     <HexColorPicker
-                      color={`#${selected.material.color.getHexString()}`}
+                      color={hexValue}
                       onChange={(hex) => {
-                        const color = new THREE.Color(hex)
+                        setHexValue(hex)
 
-                        selected.material.color.set(color)
+                        if (
+                          selected instanceof THREE.Mesh &&
+                          selected.material instanceof THREE.MeshStandardMaterial
+                        ) {
+                          const color = new THREE.Color(hex)
 
-                        selected.userData.color = {
-                          r: color.r,
-                          g: color.g,
-                          b: color.b
+                          selected.material.color.set(color)
+                          selected.userData.color = {
+                            r: color.r,
+                            g: color.g,
+                            b: color.b
+                          }
+
+                          updateObject(selected)
                         }
-                        updateObject(selected)
                       }}
-                      className="shadow-none! bg-[#18181b]! w-auto!" />
+                      className="shadow-none! bg-[#18181b]! w-auto!"
+                    />
+
                     <HexColorInput
                       prefixed
-                      alpha
-                      color={`#${selected.material.color.getHexString()}`}
+                      color={hexValue}
                       onChange={(hex) => {
-                        const color = new THREE.Color(hex)
+                        setHexValue(hex)
 
-                        selected.material.color.set(color)
+                        if (
+                          selected instanceof THREE.Mesh &&
+                          selected.material instanceof THREE.MeshStandardMaterial &&
+                          /^#([0-9A-F]{3}){1,2}$/i.test(hex)
+                        ) {
+                          const color = new THREE.Color(hex)
 
-                        selected.userData.color = {
-                          r: color.r,
-                          g: color.g,
-                          b: color.b
+                          selected.material.color.set(color)
+                          selected.userData.color = {
+                            r: color.r,
+                            g: color.g,
+                            b: color.b
+                          }
+
+                          updateObject(selected)
                         }
-                        updateObject(selected)
                       }}
-                      className="w-full rounded bg-zinc-900 border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 focus:border-blue-500 focus:outline-none" />
+                      className="w-full rounded bg-zinc-900 border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 focus:border-blue-500 focus:outline-none"
+                    />
                   </>
                 )}
             </div>
 
 
-            {/* Type
-            <div className="space-y-2">
-              <label className="text-xs text-zinc-400">Object Type</label>
-              <div className="text-sm font-medium text-zinc-200">
-                {selected.type}
-              </div>
-            </div> */}
+
           </div>
         ) : (
           <div className="px-4 py-8 text-sm text-zinc-500 text-center">

@@ -145,25 +145,6 @@ export function EditorNavbar() {
             </NavigationMenuContent>
           </NavigationMenuItem>
 
-          {/* Render Menu */}
-          <NavigationMenuItem>
-            <NavigationMenuTrigger className="h-8 bg-transparent px-3 text-sm font-normal text-zinc-100 hover:bg-zinc-800 hover:text-white">
-              Render
-            </NavigationMenuTrigger>
-            <NavigationMenuContent>
-              <ul className="grid w-[200px] gap-1 p-2">
-                <ListItem 
-                  href="#" 
-                  title="Export Image"
-                  onClick={(e) => {
-                    e.preventDefault()
-                    setIsExportDialogOpen(true)
-                  }} 
-                />
-              </ul>
-            </NavigationMenuContent>
-          </NavigationMenuItem>
-
           {/* + Add Menu */}
           <NavigationMenuItem>
             <button
