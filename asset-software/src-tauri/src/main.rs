@@ -4,7 +4,9 @@ mod handlefile;
 mod json;
 mod paths;
 
+#[cfg(not(debug_assertions))]
 use std::fs;
+#[cfg(not(debug_assertions))]
 use std::path::Path;
 
 #[cfg(not(debug_assertions))]
