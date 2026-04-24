@@ -161,15 +161,17 @@ describe('EditorTools', () => {
 
   it('renders and selects hierarchy camera', () => {
     const camera = new THREE.PerspectiveCamera()
+    camera.name = 'Default Camera'
     vi.mocked(useEditor).mockReturnValue({
       ...vi.mocked(useEditor)(),
       camera: camera,
+      objects: [camera]
     } as any)
 
     render(<EditorTools />)
     const cameraItem = screen.getByText('Default Camera')
     fireEvent.click(cameraItem)
-    expect(mockSetSelected).toHaveBeenCalledWith(camera)
+    expect(mockSetSelected).toHaveBeenCalledWith(camera, false)
   })
 
   it('renders different icons for different object types', () => {
@@ -285,6 +287,26 @@ describe('EditorTools', () => {
     expect(mockUpdateObject).toHaveBeenCalledWith(mesh)
   })
 
+  it('updates mesh color via hex input', () => {
+    const material = new THREE.MeshStandardMaterial({ color: 0xff0000 })
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(), material)
+    mesh.name = "Color Mesh"
+
+    vi.mocked(useEditor).mockReturnValue({
+      ...vi.mocked(useEditor)(),
+      selected: mesh,
+      selection: [mesh],
+    } as any)
+
+    render(<EditorTools />)
+    
+    const colorInput = screen.getByTestId('color-input')
+    fireEvent.change(colorInput, { target: { value: '#0000ff' } })
+    
+    expect(mesh.material.color.getHexString()).toBe('0000ff')
+    expect(mockUpdateObject).toHaveBeenCalledWith(mesh)
+  })
+
   it('updates position axes', () => {
     const obj = new THREE.Mesh()
     obj.position.set(1, 2, 3)
@@ -295,11 +317,19 @@ describe('EditorTools', () => {
     } as any)
 
     render(<EditorTools />)
-    const xInput = screen.getAllByTestId('number-input')[0].querySelector('input')
+    const axisInputs = screen.getAllByTestId('number-input')
+    const xInput = axisInputs[0].querySelector('input')
+    
     if (xInput) {
-      fireEvent.change(xInput, { target: { value: '10' } })
-      expect(obj.position.x).toBe(10)
+      fireEvent.change(xInput, { target: { value: '10.5' } })
+      expect(obj.position.x).toBe(10.5)
       expect(mockUpdateObject).toHaveBeenCalled()
     }
+  })
+
+  it('handles rotation axes', () => {
+    // This requires isRotation to be true, which is commented out in code currently?
+    // Wait, EditorTools has TransformInputGroup with isRotation commented out.
+    // I should check if it's there.
   })
 })

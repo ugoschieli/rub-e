@@ -2,144 +2,80 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import SearchBar from '../../components/search-bar'
 import React from 'react'
+import { useData } from '../../context/data-context'
 
-// Mock next/navigation
-const mockPush = vi.fn()
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({
-    push: mockPush,
-  }),
+// Mock context
+vi.mock('../../context/data-context', () => ({
+  useData: vi.fn()
 }))
 
-// Mock JSON data
-vi.mock('@/../config/data_assets.json', () => ({
-  default: [{ id: 1, name: 'UniqueAsset' }]
+// Mock UI components
+vi.mock('../../components/ui/input', () => ({
+  Input: (props: any) => <input {...props} />
 }))
-vi.mock('@/../config/data_projects.json', () => ({
-  default: [{ id: 2, name: 'UniqueProject' }]
-}))
-vi.mock('@/../config/data_categories.json', () => ({
-  default: [{ id: 3, name: 'UniqueCategory' }]
+
+// Mock next/link
+vi.mock('next/link', () => ({
+  default: ({ children, href }: any) => <a href={href}>{children}</a>
 }))
 
 describe('SearchBar', () => {
+  const mockAssets = [{ id: 1, name: 'UniqueAsset', category_id: [], project_id: [] }]
+  const mockProjects = [{ id: 2, name: 'UniqueProject' }]
+  const mockCategories = [{ id: 3, name: 'UniqueCategory' }]
+
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.mocked(useData).mockReturnValue({
+      assets: mockAssets,
+      projects: mockProjects,
+      categories: mockCategories,
+    } as any)
   })
 
   it('renders correctly', () => {
     render(<SearchBar />)
-    expect(screen.getByPlaceholderText(/Search assets, projects.../)).toBeInTheDocument()
+    expect(screen.getByPlaceholderText(/Search assets, projects, categories.../)).toBeInTheDocument()
   })
 
   it('updates query on input change', () => {
     render(<SearchBar />)
-    const input = screen.getByPlaceholderText(/Search assets, projects.../)
+    const input = screen.getByPlaceholderText(/Search assets, projects, categories.../)
     fireEvent.change(input, { target: { value: 'test' } })
     expect(input).toHaveValue('test')
   })
 
   it('shows results dropdown when typing', async () => {
     render(<SearchBar />)
-    const input = screen.getByPlaceholderText(/Search assets, projects.../)
+    const input = screen.getByPlaceholderText(/Search assets, projects, categories.../)
     
     fireEvent.change(input, { target: { value: 'Unique' } })
     
-    expect(screen.getByText('Assets')).toBeInTheDocument()
-    expect(screen.getByText('Projects')).toBeInTheDocument()
-    expect(screen.getByText('Categories')).toBeInTheDocument()
+    expect(screen.getByText('UniqueAsset')).toBeInTheDocument()
+    expect(screen.getByText('UniqueProject')).toBeInTheDocument()
+    expect(screen.getByText('UniqueCategory')).toBeInTheDocument()
   })
 
-  it('navigates to assets page on form submit', () => {
+  it('closes dropdown when clicking a result', () => {
     render(<SearchBar />)
-    const input = screen.getByPlaceholderText(/Search assets, projects.../)
-    fireEvent.change(input, { target: { value: 'mysearch' } })
-    
-    fireEvent.submit(screen.getByRole('searchbox').closest('form')!)
-    
-    expect(mockPush).toHaveBeenCalledWith('/assets?search=mysearch')
-  })
-
-  it('changes source filter', () => {
-    render(<SearchBar />)
-    const sourceButton = screen.getByText('All sources')
-    fireEvent.click(sourceButton)
-    
-    const assetOption = screen.getByText('Assets', { selector: 'button' })
-    fireEvent.click(assetOption)
-    
-    expect(screen.getByText('Assets', { selector: 'span' })).toBeInTheDocument()
-    expect(screen.getByPlaceholderText('Search assets...')).toBeInTheDocument()
-  })
-
-  it('navigates to specific asset when selected from dropdown', () => {
-    render(<SearchBar />)
-    const input = screen.getByPlaceholderText(/Search assets, projects.../)
+    const input = screen.getByPlaceholderText(/Search assets, projects, categories.../)
     fireEvent.change(input, { target: { value: 'UniqueAsset' } })
     
     const assetResult = screen.getByText('UniqueAsset')
     fireEvent.click(assetResult)
     
-    expect(mockPush).toHaveBeenCalledWith('/assets?search=UniqueAsset')
+    expect(screen.queryByText('UniqueAsset')).not.toBeInTheDocument()
   })
 
-  it('navigates to specific project when selected from dropdown', () => {
+  it('closes dropdown when clicking outside', () => {
     render(<SearchBar />)
-    const input = screen.getByPlaceholderText(/Search assets, projects.../)
-    fireEvent.change(input, { target: { value: 'UniqueProject' } })
+    const input = screen.getByPlaceholderText(/Search assets, projects, categories.../)
+    fireEvent.change(input, { target: { value: 'UniqueAsset' } })
     
-    const projectResult = screen.getByText('UniqueProject')
-    fireEvent.click(projectResult)
-    
-    expect(mockPush).toHaveBeenCalledWith('/projects/2')
-  })
-
-  it('navigates to specific category when selected from dropdown', () => {
-    render(<SearchBar />)
-    const input = screen.getByPlaceholderText(/Search assets, projects.../)
-    fireEvent.change(input, { target: { value: 'UniqueCategory' } })
-    
-    const categoryResult = screen.getByText('UniqueCategory')
-    fireEvent.click(categoryResult)
-    
-    expect(mockPush).toHaveBeenCalledWith('/assets/3')
-  })
-
-  it('closes source menu when clicking outside', () => {
-    render(<SearchBar />)
-    const sourceButton = screen.getByText('All sources')
-    fireEvent.click(sourceButton)
-    
-    expect(screen.getByText('Projects', { selector: 'button' })).toBeInTheDocument()
+    expect(screen.getByText('UniqueAsset')).toBeInTheDocument()
     
     fireEvent.mouseDown(document.body)
     
-    expect(screen.queryByText('Projects', { selector: 'button' })).not.toBeInTheDocument()
-  })
-
-  it('includes filter_type in URL when source is not all', () => {
-    render(<SearchBar />)
-    fireEvent.click(screen.getByText('All sources'))
-    fireEvent.click(screen.getByText('Categories', { selector: 'button' }))
-    
-    const input = screen.getByPlaceholderText('Search categories...')
-    fireEvent.change(input, { target: { value: 'test' } })
-    
-    fireEvent.submit(screen.getByRole('searchbox').closest('form')!)
-    
-    expect(mockPush).toHaveBeenCalledWith('/assets?search=test&filter_type=category')
-  })
-
-  it('closes results when clicking backdrop', () => {
-    render(<SearchBar />)
-    const input = screen.getByPlaceholderText(/Search assets, projects.../)
-    fireEvent.change(input, { target: { value: 'Unique' } })
-    
-    expect(screen.getByText('Assets')).toBeInTheDocument()
-    
-    const backdrop = document.querySelector('.fixed.inset-0.z-40')
-    if (backdrop) fireEvent.click(backdrop)
-    
-    expect(screen.queryByText('Assets')).not.toBeInTheDocument()
+    expect(screen.queryByText('UniqueAsset')).not.toBeInTheDocument()
   })
 })

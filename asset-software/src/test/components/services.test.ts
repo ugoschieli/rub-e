@@ -21,7 +21,7 @@ vi.mock('@tauri-apps/api/core', () => ({
 
 describe('services', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
+    vi.resetAllMocks()
   })
 
   describe('Assets Services', () => {
@@ -74,7 +74,7 @@ describe('services', () => {
     it('handleAddAsset handles error', async () => {
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
       vi.mocked(invoke).mockRejectedValue(new Error('Failed'))
-      await handleAddAsset('New Asset', 1)
+      await expect(handleAddAsset('New Asset', 1)).rejects.toThrow()
       expect(consoleSpy).toHaveBeenCalledWith('Failed to add asset:', expect.any(Error))
       consoleSpy.mockRestore()
     })
@@ -82,7 +82,7 @@ describe('services', () => {
     it('handleDeleteAsset handles error', async () => {
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
       vi.mocked(invoke).mockRejectedValue(new Error('Failed'))
-      await handleDeleteAsset('Asset to delete')
+      await expect(handleDeleteAsset('Asset to delete')).rejects.toThrow()
       expect(consoleSpy).toHaveBeenCalledWith('Failed to delete asset:', expect.any(Error))
       consoleSpy.mockRestore()
     })
@@ -106,7 +106,7 @@ describe('services', () => {
     it('handleUpdateAssetCategoryAndProject handles error', async () => {
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
       vi.mocked(invoke).mockRejectedValue(new Error('Failed'))
-      await handleUpdateAssetCategoryAndProject(1, 10, 20)
+      await expect(handleUpdateAssetCategoryAndProject(1, 10, 20)).rejects.toThrow()
       expect(consoleSpy).toHaveBeenCalledWith('Failed to update asset category and project:', expect.any(Error))
       consoleSpy.mockRestore()
     })
@@ -117,7 +117,7 @@ describe('services', () => {
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
       vi.mocked(invoke).mockRejectedValue(new Error('Failed'))
       const result = await handleGetAllCategories()
-      expect(result).toBeUndefined()
+      expect(result).toEqual([])
       expect(consoleSpy).toHaveBeenCalledWith('Failed to get all categories:', expect.any(Error))
       consoleSpy.mockRestore()
     })
@@ -125,7 +125,7 @@ describe('services', () => {
     it('handleAddCategory handles error', async () => {
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
       vi.mocked(invoke).mockRejectedValue(new Error('Failed'))
-      await handleAddCategory('New Cat')
+      await expect(handleAddCategory('New Cat')).rejects.toThrow()
       expect(consoleSpy).toHaveBeenCalledWith('Failed to add category:', expect.any(Error))
       consoleSpy.mockRestore()
     })
@@ -133,7 +133,7 @@ describe('services', () => {
     it('handleDeleteCategory handles error', async () => {
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
       vi.mocked(invoke).mockRejectedValue(new Error('Failed'))
-      await handleDeleteCategory('Cat to delete')
+      await expect(handleDeleteCategory('Cat to delete')).rejects.toThrow()
       expect(consoleSpy).toHaveBeenCalledWith('Failed to delete category:', expect.any(Error))
       consoleSpy.mockRestore()
     })
@@ -152,7 +152,7 @@ describe('services', () => {
     it('handleAddProject handles error', async () => {
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
       vi.mocked(invoke).mockRejectedValue(new Error('Failed'))
-      await handleAddProject('New Project')
+      await expect(handleAddProject('New Project')).rejects.toThrow()
       expect(consoleSpy).toHaveBeenCalledWith('Failed to add project:', expect.any(Error))
       consoleSpy.mockRestore()
     })
@@ -160,7 +160,7 @@ describe('services', () => {
     it('handleDeleteProject handles error', async () => {
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
       vi.mocked(invoke).mockRejectedValue(new Error('Failed'))
-      await handleDeleteProject('Project to delete')
+      await expect(handleDeleteProject('Project to delete')).rejects.toThrow()
       expect(consoleSpy).toHaveBeenCalledWith('Failed to delete project:', expect.any(Error))
       consoleSpy.mockRestore()
     })

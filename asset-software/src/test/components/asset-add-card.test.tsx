@@ -3,9 +3,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { AssetAddCard } from '../../components/asset-add-card'
 import * as services from '../../components/services'
 import React from 'react'
+import { useData } from '../../context/data-context'
+
+// Mock context
+vi.mock('../../context/data-context', () => ({
+  useData: vi.fn()
+}))
 
 vi.mock('../../components/services', () => ({
-  handleGetAllProjects: vi.fn(),
   handleAddAsset: vi.fn(),
 }))
 
@@ -20,18 +25,20 @@ vi.mock('../../components/ui/card', () => ({
 }))
 
 vi.mock('../../components/ui/select', () => ({
-  Select: ({ children, onValueChange }: any) => (
+  Select: ({ children, onValueChange, value }: any) => (
     <div data-testid="select">
-      <select onChange={(e) => onValueChange(e.target.value)}>
-        <option value="">Select a project</option>
-        <option value="1">Proj 1</option>
+      <select 
+        role="combobox" 
+        value={value} 
+        onChange={(e) => onValueChange(e.target.value)}
+      >
+        {children}
       </select>
-      {children}
     </div>
   ),
   SelectTrigger: ({ children }: any) => <div>{children}</div>,
   SelectValue: ({ placeholder }: any) => <span>{placeholder}</span>,
-  SelectContent: ({ children }: any) => <div>{children}</div>,
+  SelectContent: ({ children }: any) => <>{children}</>,
   SelectItem: ({ value, children }: any) => <option value={value}>{children}</option>,
 }))
 
@@ -49,18 +56,20 @@ vi.mock('../../components/ui/button', () => ({
 
 describe('AssetAddCard', () => {
   const mockOnClose = vi.fn()
+  const mockRefreshData = vi.fn()
 
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(services.handleGetAllProjects).mockResolvedValue([{ id: 1, name: 'Proj 1' }] as any)
+    vi.mocked(useData).mockReturnValue({
+      projects: [{ id: 1, name: 'Proj 1' }],
+      refreshData: mockRefreshData,
+    } as any)
   })
 
-  it('renders correctly and fetches projects', async () => {
+  it('renders correctly', () => {
     render(<AssetAddCard onClose={mockOnClose} />)
     expect(screen.getByText('Created asset')).toBeInTheDocument()
-    await waitFor(() => {
-      expect(services.handleGetAllProjects).toHaveBeenCalled()
-    })
+    expect(screen.getByText('Proj 1')).toBeInTheDocument()
   })
 
   it('calls handleAddAsset on create', async () => {
@@ -68,24 +77,15 @@ describe('AssetAddCard', () => {
     
     fireEvent.change(screen.getByPlaceholderText('Asset name'), { target: { value: 'New Asset' } })
     
-    const select = screen.getByRole('combobox') // Select is rendered as a select because of our mock
+    const select = screen.getByRole('combobox')
     fireEvent.change(select, { target: { value: '1' } })
     
-    fireEvent.click(screen.getByText('Create Asset'))
+    await act(async () => {
+      fireEvent.click(screen.getByText('Create Asset'))
+    })
     
     expect(services.handleAddAsset).toHaveBeenCalledWith('New Asset', 1)
-  })
-
-  it('handles error when fetching projects', async () => {
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    vi.mocked(services.handleGetAllProjects).mockRejectedValue(new Error('Fetch Error'))
-    
-    render(<AssetAddCard onClose={mockOnClose} />)
-    
-    await waitFor(() => {
-      expect(consoleSpy).toHaveBeenCalledWith('Failed to fetch projects:', expect.any(Error))
-    })
-    consoleSpy.mockRestore()
+    expect(mockRefreshData).toHaveBeenCalled()
   })
 
   it('shows alert if fields are empty', () => {
@@ -105,11 +105,13 @@ describe('AssetAddCard', () => {
     fireEvent.change(screen.getByPlaceholderText('Asset name'), { target: { value: 'New Asset' } })
     fireEvent.change(screen.getByRole('combobox'), { target: { value: '1' } })
     
-    fireEvent.click(screen.getByText('Create Asset'))
+    await act(async () => {
+      fireEvent.click(screen.getByText('Create Asset'))
+    })
     
     expect(services.handleAddAsset).toHaveBeenCalled()
     
-    act(() => {
+    await act(async () => {
         vi.advanceTimersByTime(2000)
     })
     

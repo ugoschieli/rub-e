@@ -3,6 +3,13 @@ import { describe, it, expect, vi } from 'vitest'
 import { NavAssets } from '../../components/nav-assets'
 import { handleDeleteCategory } from '../../components/services'
 import React from 'react'
+import { useData } from '../../context/data-context'
+
+vi.mock('../../context/data-context', () => ({
+  useData: vi.fn(() => ({
+    refreshData: vi.fn(),
+  })),
+}))
 
 vi.mock('../../components/services', () => ({
   handleDeleteCategory: vi.fn(),
@@ -39,6 +46,11 @@ vi.mock('../../components/ui/dropdown-menu', () => ({
   DropdownMenuSeparator: () => <hr />,
 }))
 
+// Mock next/link
+vi.mock('next/link', () => ({
+  default: ({ children, href }: any) => <a href={href}>{children}</a>
+}))
+
 describe('NavAssets', () => {
   const mockAssets = [{ id: 1, name: 'Asset 1', category_id: [], project_id: [] }]
   const mockCategories = [{ id: 1, name: 'Category 1' }]
@@ -48,10 +60,27 @@ describe('NavAssets', () => {
     expect(screen.getByText('Category 1')).toBeInTheDocument()
   })
 
-  it('calls handleDeleteCategory when clicking delete', () => {
+  it('calls handleDeleteCategory when clicking delete', async () => {
     render(<NavAssets assets={mockAssets} categories={mockCategories} />)
     const deleteButton = screen.getByText('Delete Category')
     fireEvent.click(deleteButton)
     expect(handleDeleteCategory).toHaveBeenCalledWith('Category 1')
+  })
+
+  it('handles delete failure', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.mocked(handleDeleteCategory).mockRejectedValue(new Error('Delete failed'))
+    
+    render(<NavAssets assets={mockAssets} categories={mockCategories} />)
+    const deleteButton = screen.getByText('Delete Category')
+    await fireEvent.click(deleteButton)
+    
+    expect(consoleSpy).toHaveBeenCalledWith('Failed to delete category:', expect.any(Error))
+    consoleSpy.mockRestore()
+  })
+
+  it('returns null if assets or categories are missing', () => {
+    const { container } = render(<NavAssets assets={null as any} categories={null as any} />)
+    expect(container).toBeEmptyDOMElement()
   })
 })

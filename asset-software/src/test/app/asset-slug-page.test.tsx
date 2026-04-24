@@ -1,26 +1,12 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, act } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
 import TagPage from '../../app/(main)/assets/[slug]/page'
-import React from 'react'
-import { useParams } from 'next/navigation'
+import React, { Suspense } from 'react'
+import { useData } from '../../context/data-context'
 
-// Mock next/navigation
-vi.mock('next/navigation', () => ({
-  useParams: vi.fn()
-}))
-
-// Mock config data
-vi.mock('../../../config/data_assets.json', () => ({
-  default: [
-    { id: 1, name: 'Asset 1', category_id: [{ id: 10 }] },
-    { id: 2, name: 'Asset 2', category_id: [{ id: 20 }] },
-  ]
-}))
-
-vi.mock('../../../config/data_categories.json', () => ({
-  default: [
-    { id: 10, name: 'Category 10' },
-  ]
+// Mock context
+vi.mock('../../context/data-context', () => ({
+  useData: vi.fn()
 }))
 
 // Mock components
@@ -28,21 +14,64 @@ vi.mock('@/components/asset-card', () => ({
   default: ({ asset }: any) => <div data-testid="asset-card">{asset.name}</div>
 }))
 
-describe('Asset Slug Page', () => {
-  it('renders assets for the given category slug', () => {
-    vi.mocked(useParams).mockReturnValue({ slug: '10' })
+// Mock next/link
+vi.mock('next/link', () => ({
+  default: ({ children, href }: any) => <a href={href}>{children}</a>
+}))
 
-    render(<TagPage />)
+describe('Asset Slug Page', () => {
+  const mockAssets = [
+    { id: 1, name: 'Asset 1', category_id: [{ id: 10, name: 'Cat 10' }], project_id: [] },
+    { id: 2, name: 'Asset 2', category_id: [{ id: 20, name: 'Cat 20' }], project_id: [] },
+  ]
+  const mockCategories = [
+    { id: 10, name: 'Category 10' },
+    { id: 30, name: 'Category 30' },
+  ]
+
+  it('renders assets for the given category slug', async () => {
+    vi.mocked(useData).mockReturnValue({ assets: mockAssets, categories: mockCategories } as any)
+    const params = Promise.resolve({ slug: '10' })
+
+    await act(async () => {
+      render(
+        <Suspense fallback={<div>Loading...</div>}>
+          <TagPage params={params} />
+        </Suspense>
+      )
+    })
     
     expect(screen.getByText('Asset 1')).toBeInTheDocument()
     expect(screen.queryByText('Asset 2')).not.toBeInTheDocument()
   })
 
-  it('renders "No assets found" when category has no assets', () => {
-    vi.mocked(useParams).mockReturnValue({ slug: '30' })
+  it('renders "No assets assigned" when category has no assets', async () => {
+    vi.mocked(useData).mockReturnValue({ assets: mockAssets, categories: mockCategories } as any)
+    const params = Promise.resolve({ slug: '30' })
 
-    render(<TagPage />)
+    await act(async () => {
+      render(
+        <Suspense fallback={<div>Loading...</div>}>
+          <TagPage params={params} />
+        </Suspense>
+      )
+    })
     
-    expect(screen.getByText(/No assets found/)).toBeInTheDocument()
+    expect(screen.getByText(/No assets assigned to this category/)).toBeInTheDocument()
+  })
+
+  it('renders "Category not found" when category slug is invalid', async () => {
+    vi.mocked(useData).mockReturnValue({ assets: mockAssets, categories: mockCategories } as any)
+    const params = Promise.resolve({ slug: '999' })
+
+    await act(async () => {
+      render(
+        <Suspense fallback={<div>Loading...</div>}>
+          <TagPage params={params} />
+        </Suspense>
+      )
+    })
+    
+    expect(screen.getByText(/Category not found/)).toBeInTheDocument()
   })
 })

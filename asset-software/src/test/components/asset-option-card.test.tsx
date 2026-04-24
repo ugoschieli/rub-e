@@ -3,6 +3,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { AssetOptionCard } from '../../components/asset-option-card'
 import * as services from '../../components/services'
 import React from 'react'
+import { useData } from '../../context/data-context'
+
+// Mock context
+vi.mock('../../context/data-context', () => ({
+  useData: vi.fn(() => ({
+    refreshData: vi.fn(),
+  })),
+}))
 
 vi.mock('../../components/services', () => ({
   handleGetAllCategories: vi.fn(),

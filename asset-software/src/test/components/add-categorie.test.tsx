@@ -2,6 +2,13 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { vi, describe, it, expect } from 'vitest'
 import AddCategory from '../../components/add-categorie'
 import * as services from '../../components/services'
+import { useData } from '../../context/data-context'
+
+vi.mock('../../context/data-context', () => ({
+  useData: vi.fn(() => ({
+    refreshData: vi.fn().mockResolvedValue(undefined),
+  })),
+}))
 
 vi.mock('../../components/services', () => ({
   handleAddCategory: vi.fn().mockResolvedValue(undefined),
