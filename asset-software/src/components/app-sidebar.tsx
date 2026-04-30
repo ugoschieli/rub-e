@@ -14,9 +14,11 @@ import {
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { useData } from "@/context/data-context";
+import { AssetImportCard } from "./asset-import-card";
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-  const [isDialogOpen, setIsDialogOpen] = React.useState(false);
+  const [isAddDialogOpen, setIsAddDialogOpen] = React.useState(false);
+  const [isImportDialogOpen, setIsImportDialogOpen] = React.useState(false);
   const { assets, projects, categories } = useData();
 
   return (
@@ -33,14 +35,26 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
         <div className="px-2">
           {/* Implémentation de la Modale */}
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
             <DialogTrigger asChild>
               <Button variant="outline" className="w-full">
                 Add Asset
               </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[425px]">
-              <AssetAddCard onClose={() => setIsDialogOpen(false)} />
+              <AssetAddCard onClose={() => setIsAddDialogOpen(false)} />
+            </DialogContent>
+          </Dialog>
+  
+          {/* Modale Import Asset */}
+          <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" className="w-full mt-3">
+                Import Asset
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[425px]">
+              <AssetImportCard onClose={() => setIsImportDialogOpen(false)} />
             </DialogContent>
           </Dialog>
         </div>

@@ -36,6 +36,53 @@ pub fn add_asset(app: AppHandle, name: String, project_id: u32) -> Result<(), St
 }
 
 #[tauri::command]
+pub fn import_asset(app: AppHandle, name: String, project_id: u32, origin_file_path: String) -> Result<(), String> {
+    
+    println!("Importing asset with name: {}, project_id: {}, origin_file_path: {}", name, project_id, origin_file_path);
+    
+    let assets_db_path = get_db_path(&app, "data_assets.json");
+    let projects_db_path = get_db_path(&app, "data_projects.json");
+
+    let target_project = json::projects::get_project_by_id(&projects_db_path, project_id)
+        .ok_or_else(|| "Projet introuvable".to_string())?;
+
+    let assets_root = get_folder_assets_path(&app);
+    let origin_path = std::path::Path::new(&origin_file_path);
+
+    if !origin_path.exists() {
+        return Err("Fichier source introuvable".to_string());
+    }
+
+    let destination_dir = assets_root.join(&target_project.name);
+    std::fs::create_dir_all(&destination_dir)
+        .map_err(|e| format!("Erreur lors de la création du dossier destination : {}", e))?;
+
+    let destination_file_name = match std::path::Path::new(&name).extension() {
+        Some(_) => name.clone(),
+        None => match origin_path.extension().and_then(|e| e.to_str()) {
+            Some(ext) => format!("{}.{}", name, ext),
+            None => name.clone(),
+        },
+    };
+
+    let destination_path = destination_dir.join(destination_file_name);
+
+    std::fs::copy(&origin_path, &destination_path)
+        .map_err(|e| format!("Erreur lors de la copie du fichier asset : {}", e))?;
+
+    let created_path_buf = destination_path
+        .strip_prefix(&assets_root)
+        .map_err(|e| format!("Erreur lors du traitement du chemin de l'asset : {}", e))?
+        .to_path_buf();
+    let path_str = created_path_buf.to_string_lossy().to_string();
+
+    json::assets::add_asset(&assets_db_path, &name, &path_str);
+    json::assets::add_project_to_asset(&assets_db_path, &name, target_project, &assets_root)?;
+
+    Ok(())
+}
+
+#[tauri::command]
 pub fn delete_asset(app: AppHandle, name: String) -> Result<(), String> {
     let assets_db_path = get_db_path(&app, "data_assets.json");
     let assets_root = get_folder_assets_path(&app);

@@ -10,6 +10,7 @@ pub fn register_handlers(builder: Builder<Wry>) -> Builder<Wry> {
         assets::get_all_assets,
         assets::get_asset_by_id,
         assets::add_asset,
+        assets::import_asset,
         assets::delete_asset,
         assets::add_category_to_asset,
         assets::add_project_to_asset,
