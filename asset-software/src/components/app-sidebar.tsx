@@ -15,7 +15,6 @@ import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { useData } from "@/context/data-context";
 import { AssetImportCard } from "./asset-import-card";
-import { DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const [isAddDialogOpen, setIsAddDialogOpen] = React.useState(false);
@@ -43,10 +42,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[425px]">
-              <DialogHeader>
-                <DialogTitle>Add Asset</DialogTitle>
-              </DialogHeader>
-
               <AssetAddCard onClose={() => setIsAddDialogOpen(false)} />
             </DialogContent>
           </Dialog>
@@ -59,9 +54,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[425px]">
-              <DialogHeader>
-                <DialogTitle>Import Asset</DialogTitle>
-              </DialogHeader>
               <AssetImportCard onClose={() => setIsImportDialogOpen(false)} />
             </DialogContent>
           </Dialog>

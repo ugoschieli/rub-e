@@ -68,7 +68,7 @@ describe('AssetAddCard', () => {
 
   it('renders correctly', () => {
     render(<AssetAddCard onClose={mockOnClose} />)
-    expect(screen.getByText('Created asset')).toBeInTheDocument()
+    expect(screen.getByText('Create asset')).toBeInTheDocument()
     expect(screen.getByText('Proj 1')).toBeInTheDocument()
   })
 
