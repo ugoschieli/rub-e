@@ -1,5 +1,9 @@
 .DS_Store
-/target
+.claude
+.idea
+target/
 *.model
 TODO.md
+config.json
+
 .vscode/
