@@ -26,6 +26,16 @@ export async function handleAddAsset(name: string, project_id: number) {
   }
 }
 
+export async function handleImportAsset(name: string, project_id: number, origin_file_path: string) {
+  try {
+    await invoke("import_asset", { name: name, projectId: project_id, originFilePath: origin_file_path });
+    console.log("Asset imported:", name);
+  } catch (err) {
+    alert(`Failed to import asset "${name}": ${err}`);
+    console.error("Failed to import asset:", err);
+  }
+}
+
 export async function handleDeleteAsset(name: string) {
   try {
     await invoke("delete_asset", { name: name });

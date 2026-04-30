@@ -15,43 +15,82 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { handleAddAsset } from "@/components/services";
+import { handleGetAllProjects, handleImportAsset } from "@/components/services";
 import * as React from "react";
+import { open } from "@tauri-apps/plugin-dialog";
 import { useData } from "@/context/data-context";
 
-export function AssetAddCard({ onClose }: { onClose: () => void }) {
-  const { projects, refreshData } = useData();
+export function AssetImportCard({ onClose }: { onClose: () => void }) {
+  const { refreshData } = useData();
+  const [projects, setProjects] = React.useState<{ name: string; id: number }[]>([]);
   const [assetName, setAssetName] = React.useState("");
   const [selectedProjectId, setSelectedProject] = React.useState<number>();
+  const [selectedFile, setSelectedFile] = React.useState<string | null>(null);
   const [isSuccess, setIsSuccess] = React.useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
-  const handleCreateAsset = async (e: React.MouseEvent<HTMLButtonElement>) => {
+  React.useEffect(() => {
+    async function fetchProjects() {
+      try {
+        const projects = (await handleGetAllProjects()) as {
+          name: string;
+          id: number;
+        }[];
+        setProjects(projects);
+      } catch (err) {
+        console.error("Failed to fetch projects:", err);
+      }
+    }
+    fetchProjects();
+  }, []);
+
+  const handleFileSelect = async () => {
+    const selected = await open({
+      multiple: false,
+      filters: [
+        {
+          name: "Model",
+          extensions: ["model"],
+        },
+      ],
+    });
+
+    if (typeof selected === "string") {
+      setSelectedFile(selected);
+    }
+  };
+
+  const handleAssetImport = async (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
-    if (!assetName || !selectedProjectId) {
+
+    if (!assetName || !selectedProjectId || !selectedFile) {
       alert("Please fill all fields!");
       return;
     }
 
     try {
-      await handleAddAsset(assetName, selectedProjectId);
+      await handleImportAsset(assetName, selectedProjectId, selectedFile);
+
       await refreshData();
+
       setIsSuccess(true);
+
       setTimeout(() => {
         setIsSuccess(false);
         onClose();
       }, 2000);
+
     } catch (err) {
-      alert("Failed to create asset");
+      alert("Failed to import asset");
     }
   };
 
   return (
     <Card className="w-full max-w-sm">
       <CardHeader>
-        <CardTitle>Create asset</CardTitle>
+        <CardTitle>Import asset</CardTitle>
         <CardDescription>Enter your asset details below</CardDescription>
       </CardHeader>
       <CardContent>
@@ -86,12 +125,32 @@ export function AssetAddCard({ onClose }: { onClose: () => void }) {
                 </SelectContent>
               </Select>
             </div>
+            {/* Asset Origine */}
+            <div className="grid w-full items-center gap-2">
+              <Label htmlFor="asset-origine">Origin Asset</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="asset-origine"
+                  placeholder="No .model file selected"
+                  value={selectedFile || ""}
+                  disabled
+                  className="flex-1"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleFileSelect}
+                >
+                  Select Asset
+                </Button>
+              </div>
+            </div>
           </div>
         </form>
       </CardContent>
       <CardFooter className="flex-col gap-2">
-        <Button type="submit" className="w-full" onClick={handleCreateAsset}>
-          Create Asset
+        <Button type="submit" className="w-full" onClick={handleAssetImport}>
+          Import asset
         </Button>
         <Button
           variant="outline"
