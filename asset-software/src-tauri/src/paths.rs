@@ -1,8 +1,5 @@
 use std::path::PathBuf;
-use tauri::AppHandle;
-
-#[cfg(not(debug_assertions))]
-use tauri::path::BaseDirectory;
+use tauri::{path::BaseDirectory, AppHandle, Manager};
 
 // Helper to get the correct path for the database files
 pub fn get_db_path(_app: &AppHandle, filename: &str) -> PathBuf {
