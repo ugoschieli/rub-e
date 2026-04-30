@@ -5,3 +5,5 @@ target/
 *.model
 TODO.md
 config.json
+
+.vscode/
