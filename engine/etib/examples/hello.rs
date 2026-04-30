@@ -1,7 +1,8 @@
+use std::path::Path;
+
 use cgmath::{InnerSpace, Rotation3};
 use clap::Parser;
 use log::info;
-use winit::dpi::PhysicalSize;
 use winit::event::{DeviceEvent, WindowEvent};
 use winit::keyboard::{KeyCode, PhysicalKey};
 
@@ -19,17 +20,16 @@ struct Args {
     isometric: bool,
 
     /// Model file to render as static geometry.
-    model_path: String,
+    model_root: String,
 }
 
 struct MyParams {
-    model_path: String,
+    model_root: String,
     is_isometric: bool,
 }
 
 struct MyGame {
     scene: etib::Scene,
-    camera: etib::camera::Camera,
     camera_controller: etib::camera::CameraController,
     cursor_grabbed: bool,
     frame_count: u32,
@@ -60,7 +60,7 @@ impl Game for MyGame {
 
         let camera = if params.is_isometric {
             etib::camera::Camera::new(
-                device,
+                ctx,
                 (50.0, 50.0, 50.0).into(),
                 (0.0, 0.0, 0.0).into(),
                 cgmath::Vector3::unit_y(),
@@ -71,7 +71,7 @@ impl Game for MyGame {
             )
         } else {
             etib::camera::Camera::new(
-                device,
+                ctx,
                 (0.0, 30.0, 80.0).into(),
                 (0.0, 10.0, 0.0).into(),
                 cgmath::Vector3::unit_y(),
@@ -83,21 +83,18 @@ impl Game for MyGame {
         };
 
         // Static model: load from file, fixed in place.
+        let map_path = Path::new(&params.model_root).join("world.model");
+        let cat_path = Path::new(&params.model_root).join("cat.model");
+
         let static_cubes =
-            etib::cube::load_model(&params.model_path).expect("Failed to load model file");
+            etib::cube::load_model(map_path.to_str().unwrap()).expect("Failed to load model file");
 
         // Dynamic model: same file, offset and animated each frame.
-        let mut orbiting = etib::cube::DynamicModel::load("models/cat.model")
+        let mut orbiting = etib::cube::DynamicModel::load(cat_path.to_str().unwrap())
             .expect("Failed to load dynamic model");
         orbiting.position = cgmath::Vector3::new(30.0, 0.0, 0.0);
 
-        let mut scene = etib::Scene::new(
-            gfx,
-            ctx.config.peak_brightness_nits,
-            &camera.bind_group.layout,
-            &static_cubes,
-            orbiting.cube_count().max(1),
-        );
+        let mut scene = etib::Scene::new(ctx, camera, &static_cubes, orbiting.cube_count().max(1));
         let orbiting_id = scene.add_dynamic(orbiting);
 
         scene
@@ -110,7 +107,6 @@ impl Game for MyGame {
             .expect("Failed to load skybox");
 
         MyGame {
-            camera,
             scene,
             camera_controller,
             cursor_grabbed: false,
@@ -125,22 +121,14 @@ impl Game for MyGame {
         self.time_elapsed += ctx.time.dt;
         let t = self.time_elapsed;
 
-        let scene = &mut self.scene;
-
-        if let Some(m) = scene.get_dynamic_mut(self.orbiting_id) {
+        if let Some(m) = self.scene.get_dynamic_mut(self.orbiting_id) {
             m.position.x = (t * 0.5).sin() * 30.0;
             m.position.z = (t * 0.5).cos() * 30.0;
             m.rotation = cgmath::Quaternion::from_angle_y(cgmath::Rad(-t * 0.5));
         }
-    }
-
-    fn render(&mut self, ctx: &mut EngineContext) {
-        let gfx = &ctx.gfx;
-        let (frame, view) = gfx.get_next_frame();
 
         self.frame_count += 1;
         self.fps_update_timer += ctx.time.dt;
-
         if self.fps_update_timer >= 0.5 {
             let fps = self.frame_count as f32 / self.fps_update_timer;
             ctx.set_window_title(&format!(
@@ -154,27 +142,11 @@ impl Game for MyGame {
         }
 
         self.camera_controller
-            .update_camera(&gfx.queue, &mut self.camera, ctx.time.dt);
-
-        let mut encoder = gfx
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("ETIB command encoder"),
-            });
-
-        self.scene
-            .render(&mut encoder, gfx, &view, &self.camera.bind_group.bind_group);
-
-        gfx.queue.submit(Some(encoder.finish()));
-        frame.present();
+            .update_camera(&ctx.gfx.queue, &mut self.scene.camera, ctx.time.dt);
     }
 
-    fn resize(&mut self, ctx: &mut EngineContext, size: PhysicalSize<u32>) {
-        ctx.gfx.reconfigure_surface_size(size);
-
-        self.camera.aspect = size.width as f32 / size.height as f32;
-        self.camera.update_matrix(&ctx.gfx.queue);
-        self.scene.resize(ctx.gfx.device(), size.width, size.height);
+    fn scene(&mut self) -> Option<&mut etib::Scene> {
+        Some(&mut self.scene)
     }
 
     fn device_input(&mut self, _ctx: &mut EngineContext, event: &DeviceEvent) {
@@ -228,7 +200,7 @@ fn main() -> anyhow::Result<()> {
 
     let params = MyParams {
         is_isometric: args.isometric,
-        model_path: args.model_path,
+        model_root: args.model_root,
     };
 
     etib::run::<MyGame>(config, Some(params))?;

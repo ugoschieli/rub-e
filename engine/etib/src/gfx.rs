@@ -22,6 +22,8 @@ pub struct Gfx {
     pub depth_texture_view: wgpu::TextureView,
     /// Whether HDR rendering is active
     pub is_hdr_active: bool,
+    /// HDR peak brightness in nits
+    pub peak_brightness_nits: f32,
 }
 
 impl Gfx {
@@ -75,6 +77,7 @@ impl Gfx {
             depth_texture,
             depth_texture_view,
             is_hdr_active,
+            peak_brightness_nits: config.peak_brightness_nits,
         }
     }
 

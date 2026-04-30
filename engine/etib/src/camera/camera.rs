@@ -4,6 +4,8 @@ use winit::keyboard::{KeyCode, PhysicalKey};
 
 use etib_core::bindgroup::{BindGroup, BindGroupBuilder};
 
+use crate::EngineContext;
+
 /// Enum representing the different camera modes
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CameraMode {
@@ -52,12 +54,17 @@ pub struct Camera {
     pub bind_group: BindGroup,
 }
 
+/// GPU-compatible camera uniform block uploaded to the vertex, fragment, and compute shaders each frame.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct CameraRaw {
+    /// Combined view-projection matrix.
     pub view_proj: [[f32; 4]; 4],
+    /// Transposed view matrix (its own inverse for orthonormal view matrices).
     pub inv_view: [[f32; 4]; 4],
+    /// Inverse projection matrix.
     pub inv_proj: [[f32; 4]; 4],
+    /// View-projection matrix from the previous frame (used for temporal reprojection).
     pub prev_view_proj: [[f32; 4]; 4],
 }
 
@@ -105,6 +112,10 @@ pub struct CameraController {
     zoom: f32,
 }
 
+/// Coordinate-system correction matrix that maps OpenGL clip space to wgpu/Vulkan clip space.
+///
+/// wgpu's NDC Z range is [0, 1] whereas OpenGL uses [-1, 1]. Multiplying a
+/// projection matrix by this constant brings it into wgpu's convention.
 pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
     1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.5, 1.0,
 );
@@ -112,7 +123,7 @@ pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
 impl Camera {
     /// Create a new camera object
     pub fn new(
-        device: &wgpu::Device,
+        ctx: &EngineContext,
         eye: cgmath::Point3<f32>,
         target: cgmath::Point3<f32>,
         up: cgmath::Vector3<f32>,
@@ -145,14 +156,14 @@ impl Camera {
 
         let bind_group = BindGroupBuilder::new()
             .add_uniform_buffer(
-                device,
+                &ctx.gfx.device,
                 0,
                 bytemuck::bytes_of(&camera_raw),
                 wgpu::ShaderStages::VERTEX
                     | wgpu::ShaderStages::FRAGMENT
                     | wgpu::ShaderStages::COMPUTE,
             )
-            .build(device, Some("Camera Bind Group"));
+            .build(&ctx.gfx.device, Some("Camera Bind Group"));
 
         Self {
             eye,

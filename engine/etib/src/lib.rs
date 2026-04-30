@@ -17,11 +17,15 @@ pub mod utils;
 pub mod config;
 /// An HDR pipeline implementation
 pub mod hdr;
+/// Module providing keyboard input state tracking
 pub mod input;
 pub mod sounds;
 /// Module containing the time management (delta time)
 pub mod time;
 mod vertex;
+
+/// Module containing the experimental raytracing renderer
+pub mod raytracing;
 
 pub use crate::game::*;
 pub use crate::gfx::*;

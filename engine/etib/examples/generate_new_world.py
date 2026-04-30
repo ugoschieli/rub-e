@@ -35,27 +35,8 @@ def generate_terrain(width=1000, depth=1000, y_base=0):
             total_relief = relief1 + relief2 + relief3
             y = y_base + int(total_relief * 2.0)  # More height variation
             
-            # New color palette: shades of blue and white for a snowy/icy look
-            height_factor = (y - y_base) / 15.0  # Normalize height for color
-            
-            # Base color: deep blue
-            r_base, g_base, b_base = 0.1, 0.3, 0.7
-            
-            # Add white "snow" at higher altitudes
-            snow_factor = max(0, height_factor - 0.3) * 2.0
-            r = r_base + (1.0 - r_base) * snow_factor
-            g = g_base + (1.0 - g_base) * snow_factor
-            b = b_base + (1.0 - b_base) * snow_factor
-            
-            # Add some random noise to colors
-            r += random.uniform(-0.05, 0.05)
-            g += random.uniform(-0.05, 0.05)
-            b += random.uniform(-0.05, 0.05)
-            
-            # Clamp colors
-            r = max(0.0, min(1.0, r))
-            g = max(0.0, min(1.0, g))
-            b = max(0.0, min(1.0, b))
+            # Sand yellow — uniform across all ground cubes
+            r, g, b = 0.85, 0.75, 0.45
             
             cubes.append((x, y, z, r, g, b))
     

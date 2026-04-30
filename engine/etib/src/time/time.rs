@@ -36,6 +36,14 @@ impl TimeState {
         self.current_fps
     }
 
+    /// Get the current time in seconds since EPOCH
+    pub fn now() -> f32 {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs_f32()
+    }
+
     /// Calculate the new frame time. MUST BE CALLED EACH FRAME
     pub fn tick(&mut self) {
         let now = std::time::Instant::now();

@@ -1041,6 +1041,7 @@ dependencies = [
  "env_logger",
  "etib-core",
  "glam",
+ "half",
  "image",
  "kira",
  "log",
@@ -1270,6 +1271,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f70749695b063ecbf6b62949ccccde2e733ec3ecbbd71d467dca4e5c6c97cca0"
 dependencies = [
  "mint",
+ "bytemuck",
 ]
 
 [[package]]
@@ -1350,6 +1352,7 @@ version = "2.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6ea2d84b969582b4b1864a92dc5d27cd2b77b622a8d79306834f1be5ba20d84b"
 dependencies = [
+ "bytemuck",
  "cfg-if",
  "crunchy",
  "num-traits",

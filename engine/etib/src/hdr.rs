@@ -41,6 +41,10 @@ pub struct HdrPipeline {
 }
 
 impl HdrPipeline {
+    /// Create a new HDR pipeline.
+    ///
+    /// `mode` selects ACES (SDR) or PQ (HDR) tonemapping.
+    /// `peak_brightness_nits` sets the display peak brightness for PQ mapping.
     pub fn new(
         device: &wgpu::Device,
         config: &wgpu::SurfaceConfiguration,
@@ -218,6 +222,7 @@ impl HdrPipeline {
     }
 }
 
+/// Utility that converts an equirectangular HDR image into a cubemap texture on the GPU.
 pub struct HdrLoader {
     texture_format: wgpu::TextureFormat,
     equirect_layout: wgpu::BindGroupLayout,
@@ -225,6 +230,7 @@ pub struct HdrLoader {
 }
 
 impl HdrLoader {
+    /// Create a new `HdrLoader`, uploading the equirectangular-to-cubemap compute shader.
     pub fn new(device: &wgpu::Device) -> Self {
         let module =
             device.create_shader_module(wgpu::include_wgsl!("./shaders/equirectangular.wgsl"));
@@ -278,6 +284,8 @@ impl HdrLoader {
         }
     }
 
+    /// Decode an equirectangular HDR image from `data` and convert it to a `dst_size×dst_size`
+    /// cubemap texture using a GPU compute shader.
     pub fn from_equirectangular_bytes(
         &self,
         device: &wgpu::Device,
