@@ -15,40 +15,40 @@ use etib::{EngineContext, Game, Scene};
 // ---------------------------------------------------------------------------
 // Field
 // ---------------------------------------------------------------------------
-const FIELD_HALF_W: f32 = 20.0;
-const FIELD_HALF_H: f32 = 12.0;
+const FIELD_HALF_W: f32 = 40.0;
+const FIELD_HALF_H: f32 = 24.0;
 
 // ---------------------------------------------------------------------------
 // Paddles
 // ---------------------------------------------------------------------------
-const PADDLE_X: f32 = 18.0;
-/// Half-height of a paddle in cube units (5 cubes → ±2.5).
-const PADDLE_HALF_H: f32 = 2.5;
-const PADDLE_SPEED: f32 = 12.0;
+const PADDLE_X: f32 = 36.0;
+/// Half-height of a paddle in cube units (9 cubes → ±4.5).
+const PADDLE_HALF_H: f32 = 4.5;
+const PADDLE_SPEED: f32 = 24.0;
 const SPEED_BOOST_MULTIPLIER: f32 = 2.0;
 const SPEED_BOOST_DURATION: f32 = 2.0;
 const SPEED_BOOST_COOLDOWN: f32 = 15.0;
 /// Maximum paddle center Y so the paddle never clips through a wall.
-/// Wall inner face: FIELD_HALF_H − 0.5. Outermost paddle cube face: center + PADDLE_HALF_H + 0.5.
-const PADDLE_MAX_Y: f32 = FIELD_HALF_H - PADDLE_HALF_H - 1.0;
+/// Wall inner face: FIELD_HALF_H − 1.0. Outermost paddle cube face: center + PADDLE_HALF_H + 1.0.
+const PADDLE_MAX_Y: f32 = FIELD_HALF_H - PADDLE_HALF_H - 2.0;
 
 // ---------------------------------------------------------------------------
 // Ball
 // ---------------------------------------------------------------------------
-const BALL_SPEED_INIT: f32 = 10.0;
-const BALL_SPEED_MAX: f32 = 40.0;
-const BALL_SPEED_INC: f32 = 1.5;
-const BALL_GRAVITY: f32 = 50.0;
-const BALL_LOB_SPEED: f32 = 30.0;
+const BALL_SPEED_INIT: f32 = 20.0;
+const BALL_SPEED_MAX: f32 = 80.0;
+const BALL_SPEED_INC: f32 = 3.0;
+const BALL_GRAVITY: f32 = 100.0;
+const BALL_LOB_SPEED: f32 = 60.0;
 const BALL_LOB_X_FACTOR: f32 = 0.9;
 /// Ball center Y limit so it never clips into a wall (wall face − ball radius).
-const WALL_LIMIT: f32 = FIELD_HALF_H - 1.0;
+const WALL_LIMIT: f32 = FIELD_HALF_H - 2.0;
 
 // ---------------------------------------------------------------------------
 // Camera  — perspective from a low angle to reveal cube depth
 // ---------------------------------------------------------------------------
-const CAM_EYE: (f32, f32, f32) = (0.0, -30.0, 20.0);
-const CAM_TARGET: (f32, f32, f32) = (0.0, 1.0, 0.0);
+const CAM_EYE: (f32, f32, f32) = (0.0, -60.0, 40.0);
+const CAM_TARGET: (f32, f32, f32) = (0.0, 2.0, 0.0);
 const CAM_FOVY: f32 = 55.0;
 
 // ---------------------------------------------------------------------------
@@ -63,96 +63,314 @@ fn unit_cube(x: f32, y: f32, z: f32, r: f32, g: f32, b: f32) -> ModelCube {
 }
 
 fn make_paddle(r: f32, g: f32, b: f32) -> DynamicModel {
-    let cubes = (-2..=2)
-        .map(|i| unit_cube(0.0, i as f32, 0.0, r, g, b))
-        .collect();
+    let mut cubes = Vec::new();
+    for y in -4..=4 {
+        for x in 0..=1 {
+            for z in 0..=1 {
+                cubes.push(unit_cube(x as f32, y as f32, z as f32, r, g, b));
+            }
+        }
+    }
     DynamicModel::from_cubes(cubes)
 }
 
 fn make_ball() -> DynamicModel {
-    DynamicModel::from_cubes(vec![unit_cube(0.0, 0.0, 0.0, 1.0, 0.95, 0.2)])
+    let mut cubes = Vec::new();
+    for x in 0..2 {
+        for y in 0..2 {
+            for z in 0..2 {
+                cubes.push(unit_cube(
+                    x as f32 - 0.5,
+                    y as f32 - 0.5,
+                    z as f32 - 0.5,
+                    1.0,
+                    0.95,
+                    0.2,
+                ));
+            }
+        }
+    }
+    DynamicModel::from_cubes(cubes)
 }
 
-/// Static geometry: top wall, bottom wall, and a centre dashed line.
+/// Static geometry: Marseille Orange Velodrome Stadium
 fn make_static_geometry() -> Vec<ModelCube> {
-    let mut cubes = Vec::new();
+    let mut grid: std::collections::HashMap<(i32, i32, i32), ModelCube> =
+        std::collections::HashMap::new();
+
+    let mut add_cube = |x: i32, y: i32, z: f32, r: f32, g: f32, b: f32| {
+        let key = (x, y, (z * 10.0).round() as i32);
+        grid.insert(key, unit_cube(x as f32, y as f32, z, r, g, b));
+    };
 
     let xi = -(FIELD_HALF_W as i32)..=(FIELD_HALF_W as i32);
     for x in xi {
         // Top wall
-        cubes.push(unit_cube(x as f32, FIELD_HALF_H, 0.0, 0.45, 0.45, 0.45));
+        add_cube(x, FIELD_HALF_H as i32, 0.0, 0.2, 0.2, 0.2);
         // Bottom wall
-        cubes.push(unit_cube(x as f32, -FIELD_HALF_H, 0.0, 0.45, 0.45, 0.45));
+        add_cube(x, -(FIELD_HALF_H as i32), 0.0, 0.2, 0.2, 0.2);
     }
 
-    // --- Grass Pitch Floor ---
-    let floor_z = -1.0;
+    // --- Grass Pitch Floor & Markings ---
+    let floor_z = -2.0; // Scaled down to match 2x
+
+    let mut circle_points = std::collections::HashSet::new();
+    for angle in 0..72 {
+        // Double points
+        let rad = angle as f32 * std::f32::consts::PI / 36.0;
+        let cx = (rad.cos() * 6.0).round() as i32; // Double radius
+        let cy = (rad.sin() * 6.0).round() as i32;
+        circle_points.insert((cx, cy));
+    }
+
     for x in -(FIELD_HALF_W as i32)..=(FIELD_HALF_W as i32) {
         for y in -(FIELD_HALF_H as i32)..=(FIELD_HALF_H as i32) {
-            // Create vertical alternating green stripes
-            let (r, g, b) = if x % 4 >= -1 && x % 4 <= 1 {
-                (0.1, 0.45, 0.1) // Dark green
+            let is_border_x = x == -(FIELD_HALF_W as i32) || x == FIELD_HALF_W as i32;
+            let is_border_y = y == -(FIELD_HALF_H as i32) || y == FIELD_HALF_H as i32;
+            let is_center_line = x == 0 || x == -1; // 2 wide
+            let is_circle = circle_points.contains(&(x, y));
+
+            let (r, g, b) = if is_border_x || is_border_y || is_center_line || is_circle {
+                (1.0, 1.0, 1.0) // White markings
+            } else if (x + FIELD_HALF_W as i32) % 12 >= 6 {
+                // Double stripe width
+                (0.1, 0.4, 0.1) // Dark green
             } else {
-                (0.15, 0.55, 0.15) // Light green
+                (0.15, 0.45, 0.15) // Light green
             };
-            cubes.push(unit_cube(x as f32, y as f32, floor_z, r, g, b));
+            add_cube(x, y, floor_z, r, g, b);
         }
     }
 
-    // --- Tennis Net ---
-    // At x=0, stretching from -FIELD_HALF_H to +FIELD_HALF_H
-    for y in -(FIELD_HALF_H as i32 - 1)..=(FIELD_HALF_H as i32 - 1) {
-        for z in 0..=3 {
-            // Checkered empty space to look like a net
+    // --- Goals Running the Entire Length of the Stadium ---
+    let goal_height = 6; // Double height
+    for y in -(FIELD_HALF_H as i32)..=(FIELD_HALF_H as i32) {
+        // Crossbars
+        add_cube(
+            -(FIELD_HALF_W as i32) - 1,
+            y,
+            goal_height as f32,
+            1.0,
+            1.0,
+            1.0,
+        );
+        add_cube(
+            FIELD_HALF_W as i32 + 1,
+            y,
+            goal_height as f32,
+            1.0,
+            1.0,
+            1.0,
+        );
+
+        // Nets (Checkerboard pattern)
+        for z in 0..goal_height {
             if (y + z) % 2 == 0 {
-                // Bright white net
-                cubes.push(unit_cube(0.0, y as f32, z as f32, 0.95, 0.95, 0.95));
+                add_cube(-(FIELD_HALF_W as i32) - 2, y, z as f32, 0.5, 0.5, 0.5);
+                add_cube(FIELD_HALF_W as i32 + 2, y, z as f32, 0.5, 0.5, 0.5);
             }
         }
     }
+    // Side posts
+    for z in 0..goal_height {
+        add_cube(
+            -(FIELD_HALF_W as i32) - 1,
+            FIELD_HALF_H as i32,
+            z as f32,
+            1.0,
+            1.0,
+            1.0,
+        );
+        add_cube(
+            -(FIELD_HALF_W as i32) - 1,
+            -(FIELD_HALF_H as i32),
+            z as f32,
+            1.0,
+            1.0,
+            1.0,
+        );
 
-    // --- Stadium Bleachers ---
-    let bleacher_rows = 6;
+        add_cube(
+            FIELD_HALF_W as i32 + 1,
+            FIELD_HALF_H as i32,
+            z as f32,
+            1.0,
+            1.0,
+            1.0,
+        );
+        add_cube(
+            FIELD_HALF_W as i32 + 1,
+            -(FIELD_HALF_H as i32),
+            z as f32,
+            1.0,
+            1.0,
+            1.0,
+        );
+    }
 
-    let color_red = (0.8, 0.2, 0.2);
-    let color_blue = (0.2, 0.4, 0.9);
-    let color_gray = (0.3, 0.3, 0.3);
+    // --- Orange Velodrome Stadium Bleachers ---
+    let sky_blue = (0.1, 0.6, 0.9);
+    let off_white = (0.85, 0.85, 0.85);
+    let text_color = sky_blue;
+    let concrete = (0.6, 0.6, 0.6);
+    let pure_white = (1.0, 1.0, 1.0);
 
-    for row in 1..=bleacher_rows {
-        let out_y_top = FIELD_HALF_H + row as f32;
-        let height_z = row as f32 * 1.0;
-        // Top Sideline (Audience)
-        for x in -(FIELD_HALF_W as i32 + row)..=(FIELD_HALF_W as i32 + row) {
-            let (r, g, b) = if (x + row) % 2 == 0 {
-                color_red
-            } else {
-                color_gray
-            };
-            cubes.push(unit_cube(x as f32, out_y_top, height_z, r, g, b));
-        }
+    let marseille = [
+        "111 010 110 111 111 1 100 100 111",
+        "101 101 101 100 100 1 100 100 100",
+        "101 111 110 111 111 1 100 100 111",
+        "101 101 101 001 100 1 100 100 100",
+        "101 101 101 111 111 1 111 111 111",
+    ];
 
-        let out_x_left = -FIELD_HALF_W - row as f32;
-        let out_x_right = FIELD_HALF_W + row as f32;
+    let om = ["111 111", "101 101", "101 101", "101 101", "111 101"];
 
-        // Left & Right Goal lines (Audience)
-        for y in -(FIELD_HALF_H as i32 + row - 1)..=(FIELD_HALF_H as i32 + row - 1) {
-            let (r, g, b) = if (y + row) % 2 == 0 {
-                color_blue
-            } else {
-                color_gray
-            };
-            cubes.push(unit_cube(out_x_left, y as f32, height_z, r, g, b));
+    let year_1899 = [
+        "010 111 111 111",
+        "110 101 101 101",
+        "010 111 111 111",
+        "010 101 001 001",
+        "111 111 111 111",
+    ];
 
-            let (r, g, b) = if (y + row) % 2 == 0 {
-                color_red
-            } else {
-                color_gray
-            };
-            cubes.push(unit_cube(out_x_right, y as f32, height_z, r, g, b));
+    let max_tiers = 3;
+    let rows_per_tier = [16, 24, 32]; // Double rows
+    let tier_gaps = [2, 4, 6];
+
+    let mut current_row = 1;
+    let mut current_z = 0.0;
+
+    for tier in 0..max_tiers {
+        let rows = rows_per_tier[tier];
+        let h_offset = tier_gaps[tier];
+        current_row += h_offset;
+
+        for r in 1..=rows {
+            let out_y_top = FIELD_HALF_H as i32 + current_row;
+            let out_x_left = -(FIELD_HALF_W as i32) - current_row;
+            let out_x_right = FIELD_HALF_W as i32 + current_row;
+
+            // Keep the slope consistent with doubled rows
+            let z_increment = 0.15 + (tier as f32 * 0.05);
+            current_z += z_increment;
+            let height_z = current_z;
+
+            let ext_x = FIELD_HALF_W as i32 + current_row;
+            let ext_y = FIELD_HALF_H as i32 + current_row;
+
+            // Top Sideline (Main Stand)
+            for x in -ext_x..=ext_x {
+                let mut color = off_white;
+
+                if tier == 1 && r >= 8 && r <= 16 {
+                    let text_row = (16 - r) / 2;
+                    let start_x = -32;
+                    if x >= start_x && x < start_x + 66 {
+                        let char_idx = ((x - start_x) / 2) as usize;
+                        let line = marseille[text_row as usize].as_bytes();
+                        if char_idx < line.len() && line[char_idx] == b'1' {
+                            color = text_color;
+                        }
+                    }
+                }
+
+                if (x + ext_x) % 24 == 0 {
+                    // Double concrete stairs
+                    color = concrete;
+                }
+
+                add_cube(x, out_y_top, height_z, color.0, color.1, color.2);
+            }
+
+            // Left & Right Goal lines
+            let side_start_y = -(FIELD_HALF_H as i32) - 20; // Start further back
+            for y in side_start_y..ext_y {
+                // LEFT STAND
+                let mut color_l = off_white;
+                if tier == 1 && r >= 8 && r <= 16 {
+                    let text_row = (16 - r) / 2;
+                    let start_y = -6;
+                    if y >= start_y && y < start_y + 14 {
+                        let char_idx = ((y - start_y) / 2) as usize;
+                        let line = om[text_row as usize].as_bytes();
+                        if char_idx < line.len() && line[char_idx] == b'1' {
+                            color_l = text_color;
+                        }
+                    }
+                }
+                if (y - side_start_y) % 24 == 0 {
+                    color_l = concrete;
+                }
+                add_cube(out_x_left, y, height_z, color_l.0, color_l.1, color_l.2);
+
+                // RIGHT STAND
+                let mut color_r = off_white;
+                if tier == 1 && r >= 8 && r <= 16 {
+                    let text_row = (16 - r) / 2;
+                    let start_y = 14;
+                    if y <= start_y && y > start_y - 30 {
+                        let char_idx = ((start_y - y) / 2) as usize;
+                        let line = year_1899[text_row as usize].as_bytes();
+                        if char_idx < line.len() && line[char_idx] == b'1' {
+                            color_r = text_color;
+                        }
+                    }
+                }
+                if (y - side_start_y) % 24 == 0 {
+                    color_r = concrete;
+                }
+                add_cube(out_x_right, y, height_z, color_r.0, color_r.1, color_r.2);
+            }
+
+            // Iconic Velodrome undulating roof smoothly connecting to the stands
+            if tier == 2 && r == rows {
+                let overhang_max = 40;
+                for overhang in 1..=overhang_max {
+                    let roof_y = out_y_top - overhang;
+                    let wave_amplitude = 6.0 * (overhang as f32 / overhang_max as f32);
+                    for x in -ext_x..=ext_x {
+                        let wave = (x as f32 * 0.075).sin() * wave_amplitude; // Halve frequency, double amplitude
+                        let roof_z = height_z + (overhang as f32 * 0.2) + wave;
+                        add_cube(x, roof_y, roof_z, pure_white.0, pure_white.1, pure_white.2);
+                    }
+                }
+
+                for overhang in 1..=overhang_max {
+                    let wave_amplitude = 6.0 * (overhang as f32 / overhang_max as f32);
+                    let roof_limit_y = out_y_top - overhang_max;
+                    for y in side_start_y..roof_limit_y {
+                        let roof_x_l = out_x_left + overhang;
+                        let wave_l = (y as f32 * 0.075).cos() * wave_amplitude;
+                        let roof_z_l = height_z + (overhang as f32 * 0.2) + wave_l;
+                        add_cube(
+                            roof_x_l,
+                            y,
+                            roof_z_l,
+                            pure_white.0,
+                            pure_white.1,
+                            pure_white.2,
+                        );
+
+                        let roof_x_r = out_x_right - overhang;
+                        let wave_r = (y as f32 * 0.075).cos() * wave_amplitude;
+                        let roof_z_r = height_z + (overhang as f32 * 0.2) + wave_r;
+                        add_cube(
+                            roof_x_r,
+                            y,
+                            roof_z_r,
+                            pure_white.0,
+                            pure_white.1,
+                            pure_white.2,
+                        );
+                    }
+                }
+            }
+
+            current_row += 1;
         }
     }
 
-    cubes
+    grid.into_values().collect()
 }
 
 // ---------------------------------------------------------------------------
@@ -202,7 +420,7 @@ fn make_score_model(score: u32, base_x: f32, color: Vector3<f32>) -> DynamicMode
     }
     let mut model = DynamicModel::from_cubes(cubes);
     // Float the score board in the air
-    model.position = Vector3::new(0.0, FIELD_HALF_H, 15.0);
+    model.position = Vector3::new(0.0, FIELD_HALF_H, 10.0);
     model
 }
 
@@ -219,6 +437,18 @@ struct PongGame {
     client_socket: Option<UdpSocket>,
     server_addr: Option<String>,
     seq_num: u32,
+
+    // Trail
+    trail_ids: Vec<usize>,
+    trail_idx: usize,
+    last_trail_pos: (i32, i32),
+    shadow_id: usize,
+
+    // Particles
+    particles: Vec<Particle>,
+
+    // Animation time
+    time: f32,
 }
 
 struct Ball {
@@ -237,6 +467,46 @@ struct Player {
     rendered_score: i32,
     id: usize,
     score_id: Option<usize>,
+}
+
+struct Particle {
+    id: usize,
+    velocity: Vector3<f32>,
+    life: f32,
+}
+
+fn spawn_explosion(
+    scene: &mut Scene,
+    particles: &mut Vec<Particle>,
+    origin: Vector3<f32>,
+    color: Vector3<f32>,
+) {
+    let num_particles = 60;
+    for i in 0..num_particles {
+        let mut model = DynamicModel::from_cubes(vec![unit_cube(
+            -0.5, -0.5, -0.5, color.x, color.y, color.z,
+        )]);
+        model.position = origin;
+        model.position.x += (i as f32 * 1.3).sin() * 2.0;
+        model.position.y += (i as f32 * 1.7).cos() * 2.0;
+        model.position.z += (i as f32 * 2.3).sin() * 2.0;
+
+        let id = scene.add_dynamic(model);
+
+        let angle1 = i as f32 * std::f32::consts::PI * 2.0 / num_particles as f32;
+        let angle2 = (i as f32 * 13.0).sin() * std::f32::consts::FRAC_PI_4;
+        let speed = 40.0 + (i as f32 * 7.0).sin().abs() * 60.0;
+
+        let vx = angle1.cos() * angle2.cos() * speed;
+        let vy = angle1.sin() * angle2.cos() * speed;
+        let vz = angle2.sin().abs() * speed + 20.0;
+
+        particles.push(Particle {
+            id,
+            velocity: Vector3::new(vx, vy, vz),
+            life: 1.0 + (i as f32 * 5.0).sin().abs() * 1.0,
+        });
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -309,31 +579,27 @@ fn step_physics(
     };
 
     // --- Paddle movement ---
-    if left_input.move_y > 0.0 {
-        left.y = (left.y + left_speed * dt).min(PADDLE_MAX_Y);
-    }
-    if left_input.move_y < 0.0 {
-        left.y = (left.y - left_speed * dt).max(-PADDLE_MAX_Y);
-    }
-    if left_input.move_x > 0.0 {
-        left.x = (left.x + left_speed * dt).min(-2.0); // Don't cross centre
-    }
-    if left_input.move_x < 0.0 {
-        left.x = (left.x - left_speed * dt).max(-FIELD_HALF_W + PADDLE_HALF_H);
+    let mut left_mx = left_input.move_x;
+    let mut left_my = left_input.move_y;
+    let left_mag = (left_mx * left_mx + left_my * left_my).sqrt();
+    if left_mag > 1.0 {
+        left_mx /= left_mag;
+        left_my /= left_mag;
     }
 
-    if right_input.move_y > 0.0 {
-        right.y = (right.y + right_speed * dt).min(PADDLE_MAX_Y);
+    left.x = (left.x + left_mx * left_speed * dt).clamp(-FIELD_HALF_W + 0.5, -2.0); // Don't cross centre
+    left.y = (left.y + left_my * left_speed * dt).clamp(-PADDLE_MAX_Y, PADDLE_MAX_Y);
+
+    let mut right_mx = right_input.move_x;
+    let mut right_my = right_input.move_y;
+    let right_mag = (right_mx * right_mx + right_my * right_my).sqrt();
+    if right_mag > 1.0 {
+        right_mx /= right_mag;
+        right_my /= right_mag;
     }
-    if right_input.move_y < 0.0 {
-        right.y = (right.y - right_speed * dt).max(-PADDLE_MAX_Y);
-    }
-    if right_input.move_x > 0.0 {
-        right.x = (right.x + right_speed * dt).min(FIELD_HALF_W - PADDLE_HALF_H);
-    }
-    if right_input.move_x < 0.0 {
-        right.x = (right.x - right_speed * dt).max(2.0); // Don't cross centre
-    }
+
+    right.x = (right.x + right_mx * right_speed * dt).clamp(2.0, FIELD_HALF_W - 1.5); // Don't cross centre
+    right.y = (right.y + right_my * right_speed * dt).clamp(-PADDLE_MAX_Y, PADDLE_MAX_Y);
 
     // --- Ball movement ---
     ball.p += ball.v * dt;
@@ -362,12 +628,12 @@ fn step_physics(
     // Ball can only hit paddles if it is low enough (e.g. not lobbed over them)
     let ball_is_hittable = ball.p.z < 3.0;
 
-    let left_contact = left.x + 1.0;
+    let left_contact = left.x + 2.5;
     if ball_is_hittable
         && ball.v.x < 0.0
         && ball.p.x <= left_contact
-        && ball.p.x > left.x - 2.0 // prevent tunneling
-        && (ball.p.y - left.y).abs() < PADDLE_HALF_H + 0.5
+        && ball.p.x > left.x + 0.0 // prevent hitting with back of paddle
+        && (ball.p.y - left.y).abs() <= PADDLE_HALF_H // prevent hitting with sides
     {
         ball.p.x = left_contact;
         let new_speed = (ball_speed(ball) + BALL_SPEED_INC).min(BALL_SPEED_MAX);
@@ -382,12 +648,12 @@ fn step_physics(
         ball.v.y = new_speed * angle.sin();
     }
 
-    let right_contact = right.x - 1.0;
+    let right_contact = right.x - 1.5;
     if ball_is_hittable
         && ball.v.x > 0.0
         && ball.p.x >= right_contact
-        && ball.p.x < right.x + 2.0 // prevent tunneling
-        && (ball.p.y - right.y).abs() < PADDLE_HALF_H + 0.5
+        && ball.p.x < right.x + 1.0 // prevent hitting with back of paddle
+        && (ball.p.y - right.y).abs() <= PADDLE_HALF_H // prevent hitting with sides
     {
         ball.p.x = right_contact;
         let new_speed = (ball_speed(ball) + BALL_SPEED_INC).min(BALL_SPEED_MAX);
@@ -441,7 +707,7 @@ impl Game for PongGame {
         let right_score_model = make_score_model(0, 10.0, right_color);
 
         let max_dyn =
-            left_paddle.cube_count() + right_paddle.cube_count() + ball_model.cube_count() + 100; // room for score numbers
+            left_paddle.cube_count() + right_paddle.cube_count() + ball_model.cube_count() + 100 + 2000; // room for score numbers and particles
 
         let mut scene = Scene::new(ctx, camera, &walls, max_dyn);
 
@@ -489,6 +755,30 @@ impl Game for PongGame {
         scene.get_dynamic_mut(left_player.id).unwrap().position = Vector3::new(-PADDLE_X, 0.0, 0.0);
         scene.get_dynamic_mut(right_player.id).unwrap().position = Vector3::new(PADDLE_X, 0.0, 0.0);
 
+        let mut trail_ids = Vec::new();
+        for _ in 0..10 {
+            let mut trail_cube = DynamicModel::from_cubes(vec![unit_cube(0.0, 0.0, 0.0, 5.0, 0.0, 0.0)]);
+            trail_cube.position = Vector3::new(0.0, 0.0, -100.0);
+            trail_ids.push(scene.add_dynamic(trail_cube));
+        }
+
+        let mut shadow_cubes = Vec::new();
+        for x in 0..2 {
+            for y in 0..2 {
+                shadow_cubes.push(unit_cube(
+                    x as f32 - 0.5,
+                    y as f32 - 0.5,
+                    0.0,
+                    0.05,
+                    0.05,
+                    0.05,
+                ));
+            }
+        }
+        let mut shadow_model = DynamicModel::from_cubes(shadow_cubes);
+        shadow_model.position = Vector3::new(0.0, 0.0, -100.0);
+        let shadow_id = scene.add_dynamic(shadow_model);
+
         PongGame {
             scene,
             ball,
@@ -497,11 +787,19 @@ impl Game for PongGame {
             client_socket,
             server_addr,
             seq_num: 0,
+            trail_ids,
+            trail_idx: 0,
+            last_trail_pos: (0, 0),
+            shadow_id,
+            particles: Vec::new(),
+            time: 0.0,
         }
     }
 
     fn update(&mut self, ctx: &mut EngineContext) {
         let dt = ctx.time.dt;
+        self.time += dt;
+        let prev_ball_pos = self.ball.p;
 
         // Apply local physics if NOT connected to a server
         if self.client_socket.is_none() {
@@ -528,6 +826,13 @@ impl Game for PongGame {
             let left_score_model = make_score_model(self.left_player.score, -10.0, left_color);
             self.left_player.score_id = Some(scene.add_dynamic(left_score_model));
             self.left_player.rendered_score = self.left_player.score as i32;
+
+            spawn_explosion(
+                scene,
+                &mut self.particles,
+                Vector3::new(FIELD_HALF_W, prev_ball_pos.y, prev_ball_pos.z),
+                left_color,
+            );
         }
 
         if self.right_player.score as i32 != self.right_player.rendered_score {
@@ -538,17 +843,113 @@ impl Game for PongGame {
             let right_score_model = make_score_model(self.right_player.score, 10.0, right_color);
             self.right_player.score_id = Some(scene.add_dynamic(right_score_model));
             self.right_player.rendered_score = self.right_player.score as i32;
+
+            spawn_explosion(
+                scene,
+                &mut self.particles,
+                Vector3::new(-FIELD_HALF_W, prev_ball_pos.y, prev_ball_pos.z),
+                right_color,
+            );
         }
 
         // --- Sync GPU transforms ---
         scene.get_dynamic_mut(self.ball.id).unwrap().position =
             Vector3::new(self.ball.p.x, self.ball.p.y, self.ball.p.z);
-        scene.get_dynamic_mut(self.left_player.id).unwrap().position =
-            Vector3::new(self.left_player.x, self.left_player.y, 0.0);
-        scene
-            .get_dynamic_mut(self.right_player.id)
-            .unwrap()
-            .position = Vector3::new(self.right_player.x, self.right_player.y, 0.0);
+            
+        let now = self.time;
+        let left_color = if self.left_player.boost_active {
+            let r = (now * 15.0).sin() * 0.5 + 0.5;
+            let g = (now * 15.0 + 2.094).sin() * 0.5 + 0.5;
+            let b = (now * 15.0 + 4.188).sin() * 0.5 + 0.5;
+            Vector3::new(r, g, b)
+        } else {
+            Vector3::new(0.2, 0.75, 1.0)
+        };
+        
+        let right_color = if self.right_player.boost_active {
+            let r = (now * 15.0).sin() * 0.5 + 0.5;
+            let g = (now * 15.0 + 2.094).sin() * 0.5 + 0.5;
+            let b = (now * 15.0 + 4.188).sin() * 0.5 + 0.5;
+            Vector3::new(r, g, b)
+        } else {
+            Vector3::new(1.0, 0.45, 0.1)
+        };
+
+        if let Some(left_model) = scene.get_dynamic_mut(self.left_player.id) {
+            left_model.position = Vector3::new(self.left_player.x, self.left_player.y, 0.0);
+            for cube in left_model.cubes_mut() {
+                cube.color = left_color;
+            }
+        }
+        if let Some(right_model) = scene.get_dynamic_mut(self.right_player.id) {
+            right_model.position = Vector3::new(self.right_player.x, self.right_player.y, 0.0);
+            for cube in right_model.cubes_mut() {
+                cube.color = right_color;
+            }
+        }
+
+        // --- Trail Update ---
+        let ball_grid_x = self.ball.p.x.round() as i32;
+        let ball_grid_y = self.ball.p.y.round() as i32;
+
+        if self.ball.p.z > 0.1 {
+            // Hide trail
+            for &trail_id in &self.trail_ids {
+                if let Some(model) = scene.get_dynamic_mut(trail_id) {
+                    model.position = Vector3::new(0.0, 0.0, -100.0);
+                }
+            }
+            // Show shadow
+            if let Some(shadow_model) = scene.get_dynamic_mut(self.shadow_id) {
+                shadow_model.position = Vector3::new(self.ball.p.x, self.ball.p.y, -1.95);
+            }
+            // Keep last_trail_pos updated
+            self.last_trail_pos = (ball_grid_x, ball_grid_y);
+        } else {
+            // Hide shadow
+            if let Some(shadow_model) = scene.get_dynamic_mut(self.shadow_id) {
+                shadow_model.position = Vector3::new(0.0, 0.0, -100.0);
+            }
+
+            if (ball_grid_x, ball_grid_y) != self.last_trail_pos {
+                self.last_trail_pos = (ball_grid_x, ball_grid_y);
+                let trail_id = self.trail_ids[self.trail_idx];
+                if let Some(model) = scene.get_dynamic_mut(trail_id) {
+                    model.position = Vector3::new(ball_grid_x as f32, ball_grid_y as f32, -1.95);
+                }
+                self.trail_idx = (self.trail_idx + 1) % 10;
+            }
+        }
+
+        // --- Particles Update ---
+        let mut i = 0;
+        while i < self.particles.len() {
+            self.particles[i].life -= dt;
+            if self.particles[i].life <= 0.0 {
+                scene.remove_dynamic(self.particles[i].id);
+                self.particles.swap_remove(i);
+            } else {
+                let p = &mut self.particles[i];
+                p.velocity.z -= BALL_GRAVITY * 1.5 * dt; // gravity
+                if let Some(model) = scene.get_dynamic_mut(p.id) {
+                    model.position += p.velocity * dt;
+                    
+                    // floor bounce
+                    if model.position.z < 0.0 {
+                        model.position.z = 0.0;
+                        p.velocity.z *= -0.5;
+                        p.velocity.x *= 0.8;
+                        p.velocity.y *= 0.8;
+                    }
+
+                    // optional: dim color over time
+                    if let Some(cube) = model.cubes_mut().first_mut() {
+                        cube.color *= 0.95;
+                    }
+                }
+                i += 1;
+            }
+        }
 
         // --- Networking Sync ---
         if let (Some(sock), Some(addr)) = (&self.client_socket, &self.server_addr) {
