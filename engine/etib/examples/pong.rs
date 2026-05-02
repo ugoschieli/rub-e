@@ -30,7 +30,7 @@ const SPEED_BOOST_DURATION: f32 = 2.0;
 const SPEED_BOOST_COOLDOWN: f32 = 15.0;
 const DASH_SPEED: f32 = 160.0;
 const DASH_DURATION: f32 = 0.15;
-const DASH_COOLDOWN: f32 = 1.2;
+const DASH_COOLDOWN: f32 = 3.0;
 
 /// Maximum paddle center Y so the paddle never clips through a wall.
 /// Wall inner face: FIELD_HALF_H − 1.0. Outermost paddle cube face: center + PADDLE_HALF_H + 1.0.
@@ -1178,7 +1178,6 @@ impl Game for PongGame {
                     self.left_player.boost_active = snap.left_boost_active;
                     self.right_player.boost_active = snap.right_boost_active;
 
-                    // Dash timers on client are just for visual state
                     self.left_player.dash_timer = if snap.left_dash_active { 0.1 } else { 0.0 };
                     self.right_player.dash_timer = if snap.right_dash_active { 0.1 } else { 0.0 };
 
@@ -1304,45 +1303,166 @@ impl Game for PongGame {
             return;
         }
 
-        // etib::egui::Area::new(etib::egui::Id::new("pong_debug_info")).show(ui_ctx, |ui| {
-        //     ui.with_layout(
-        //         etib::egui::Layout::left_to_right(etib::egui::Align::Center),
-        //         |ui| {
-        //             if ui.button("Randomize Ball").clicked() {
-        //                 let now = ctx.now();
-        //                 let r = (now * 13.0).sin().abs() as f32;
-        //                 let g = (now * 17.0).sin().abs() as f32;
-        //                 let b = (now * 19.0).sin().abs() as f32;
+        etib::egui::TopBottomPanel::bottom("powerups")
+            .frame(
+                etib::egui::Frame::NONE
+                    .fill(etib::egui::Color32::from_black_alpha(150))
+                    .inner_margin(10.0),
+            )
+            .show(ui_ctx, |ui| {
+                ui.columns(2, |cols| {
+                    // Left Player
+                    cols[0].vertical_centered(|ui| {
+                        ui.heading(
+                            etib::egui::RichText::new("PLAYER 1")
+                                .color(etib::egui::Color32::from_rgb(50, 190, 255)),
+                        );
+                        ui.horizontal(|ui| {
+                            ui.add_space(20.0);
+                            // Boost
+                            let p = &self.left_player;
+                            let (progress, text, color) = if p.boost_timer > 0.0 {
+                                (
+                                    p.boost_timer / SPEED_BOOST_DURATION,
+                                    format!("BOOST: ACTIVE {:.1}s", p.boost_timer),
+                                    etib::egui::Color32::GOLD,
+                                )
+                            } else if p.cooldown_timer > 0.0 {
+                                (
+                                    1.0 - (p.cooldown_timer / SPEED_BOOST_COOLDOWN),
+                                    format!("BOOST: COOLDOWN {:.1}s", p.cooldown_timer),
+                                    etib::egui::Color32::GRAY,
+                                )
+                            } else {
+                                (1.0, "BOOST: READY".to_string(), etib::egui::Color32::GREEN)
+                            };
+                            ui.add(
+                                etib::egui::ProgressBar::new(progress)
+                                    .text(
+                                        etib::egui::RichText::new(text)
+                                            .color(etib::egui::Color32::BLACK),
+                                    )
+                                    .fill(color)
+                                    .desired_width(180.0),
+                            );
 
-        //                 let scene = &mut self.scene;
-        //                 if let Some(ball) = scene.get_dynamic_mut(self.ball.id) {
-        //                     for cube in ball.cubes_mut() {
-        //                         cube.color = cgmath::Vector3::new(r, g, b);
-        //                     }
-        //                 }
-        //             }
+                            ui.add_space(20.0);
 
-        //             ui.separator();
-        //             ui.heading("Boosts:");
-        //             ui.label(format!(
-        //                 "Left Cooldown: {:.1}s",
-        //                 self.left_player.cooldown_timer.max(0.0)
-        //             ));
-        //             ui.label(format!(
-        //                 "Right Cooldown: {:.1}s",
-        //                 self.right_player.cooldown_timer.max(0.0)
-        //             ));
+                            // Dash
+                            let (progress, text, color) = if p.dash_timer > 0.0 {
+                                (
+                                    p.dash_timer / DASH_DURATION,
+                                    "DASHING!".to_string(),
+                                    etib::egui::Color32::WHITE,
+                                )
+                            } else if p.dash_cooldown > 0.0 {
+                                (
+                                    1.0 - (p.dash_cooldown / DASH_COOLDOWN),
+                                    format!("DASH: {:.1}s", p.dash_cooldown),
+                                    etib::egui::Color32::DARK_GRAY,
+                                )
+                            } else {
+                                (
+                                    1.0,
+                                    "DASH: READY".to_string(),
+                                    etib::egui::Color32::from_rgb(100, 255, 100),
+                                )
+                            };
+                            ui.add(
+                                etib::egui::ProgressBar::new(progress)
+                                    .text(
+                                        etib::egui::RichText::new(text)
+                                            .color(etib::egui::Color32::BLACK),
+                                    )
+                                    .fill(color)
+                                    .desired_width(180.0),
+                            );
+                        });
+                    });
 
-        //             ui.separator();
-        //             ui.heading("Ball Info:");
-        //             ui.label(format!("Speed X: {:.2}", self.ball.v.x));
-        //             ui.label(format!("Speed Y: {:.2}", self.ball.v.y));
+                    // Right Player
+                    cols[1].with_layout(
+                        etib::egui::Layout::top_down(etib::egui::Align::Max),
+                        |ui| {
+                            ui.heading(
+                                etib::egui::RichText::new("PLAYER 2")
+                                    .color(etib::egui::Color32::from_rgb(255, 115, 25)),
+                            );
+                            ui.horizontal(|ui| {
+                                // Align horizontal contents to the right
+                                ui.with_layout(
+                                    etib::egui::Layout::right_to_left(etib::egui::Align::Center),
+                                    |ui| {
+                                        ui.add_space(20.0);
+                                        // Dash
+                                        let p = &self.right_player;
+                                        let (progress, text, color) = if p.dash_timer > 0.0 {
+                                            (
+                                                p.dash_timer / DASH_DURATION,
+                                                "DASHING!".to_string(),
+                                                etib::egui::Color32::WHITE,
+                                            )
+                                        } else if p.dash_cooldown > 0.0 {
+                                            (
+                                                1.0 - (p.dash_cooldown / DASH_COOLDOWN),
+                                                format!("DASH: {:.1}s", p.dash_cooldown),
+                                                etib::egui::Color32::DARK_GRAY,
+                                            )
+                                        } else {
+                                            (
+                                                1.0,
+                                                "DASH: READY".to_string(),
+                                                etib::egui::Color32::from_rgb(100, 255, 100),
+                                            )
+                                        };
+                                        ui.add(
+                                            etib::egui::ProgressBar::new(progress)
+                                                .text(
+                                                    etib::egui::RichText::new(text)
+                                                        .color(etib::egui::Color32::BLACK),
+                                                )
+                                                .fill(color)
+                                                .desired_width(180.0),
+                                        );
 
-        //             ui.separator();
-        //             ui.label(format!("FPS: {:.0}", ctx.fps()));
-        //         },
-        //     );
-        // });
+                                        ui.add_space(20.0);
+
+                                        // Boost
+                                        let (progress, text, color) = if p.boost_timer > 0.0 {
+                                            (
+                                                p.boost_timer / SPEED_BOOST_DURATION,
+                                                format!("BOOST: ACTIVE {:.1}s", p.boost_timer),
+                                                etib::egui::Color32::GOLD,
+                                            )
+                                        } else if p.cooldown_timer > 0.0 {
+                                            (
+                                                1.0 - (p.cooldown_timer / SPEED_BOOST_COOLDOWN),
+                                                format!("BOOST: COOLDOWN {:.1}s", p.cooldown_timer),
+                                                etib::egui::Color32::GRAY,
+                                            )
+                                        } else {
+                                            (
+                                                1.0,
+                                                "BOOST: READY".to_string(),
+                                                etib::egui::Color32::GREEN,
+                                            )
+                                        };
+                                        ui.add(
+                                            etib::egui::ProgressBar::new(progress)
+                                                .text(
+                                                    etib::egui::RichText::new(text)
+                                                        .color(etib::egui::Color32::BLACK),
+                                                )
+                                                .fill(color)
+                                                .desired_width(180.0),
+                                        );
+                                    },
+                                );
+                            });
+                        },
+                    );
+                });
+            });
     }
 
     fn scene(&mut self) -> Option<&mut etib::Scene> {
