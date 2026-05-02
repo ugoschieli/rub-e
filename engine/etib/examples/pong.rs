@@ -28,6 +28,10 @@ const PADDLE_SPEED: f32 = 24.0;
 const SPEED_BOOST_MULTIPLIER: f32 = 2.0;
 const SPEED_BOOST_DURATION: f32 = 2.0;
 const SPEED_BOOST_COOLDOWN: f32 = 15.0;
+const DASH_SPEED: f32 = 160.0;
+const DASH_DURATION: f32 = 0.15;
+const DASH_COOLDOWN: f32 = 1.2;
+
 /// Maximum paddle center Y so the paddle never clips through a wall.
 /// Wall inner face: FIELD_HALF_H − 1.0. Outermost paddle cube face: center + PADDLE_HALF_H + 1.0.
 const PADDLE_MAX_Y: f32 = FIELD_HALF_H - PADDLE_HALF_H - 2.0;
@@ -500,6 +504,8 @@ struct Player {
     boost_active: bool,
     boost_timer: f32,
     cooldown_timer: f32,
+    dash_timer: f32,
+    dash_cooldown: f32,
     score: u32,
     rendered_score: i32,
     id: usize,
@@ -591,6 +597,20 @@ fn step_physics(
         }
     }
 
+    // --- Dash timers ---
+    if left.dash_cooldown > 0.0 {
+        left.dash_cooldown -= dt;
+    }
+    if left.dash_timer > 0.0 {
+        left.dash_timer -= dt;
+    }
+    if right.dash_cooldown > 0.0 {
+        right.dash_cooldown -= dt;
+    }
+    if right.dash_timer > 0.0 {
+        right.dash_timer -= dt;
+    }
+
     // --- Boost activation ---
     if left_input.boost_pressed && left.cooldown_timer <= 0.0 {
         left.boost_active = true;
@@ -603,12 +623,26 @@ fn step_physics(
         right.cooldown_timer = SPEED_BOOST_COOLDOWN;
     }
 
-    let left_speed = if left.boost_active {
+    // --- Dash activation ---
+    if left_input.dash_pressed && left.dash_cooldown <= 0.0 {
+        left.dash_timer = DASH_DURATION;
+        left.dash_cooldown = DASH_COOLDOWN;
+    }
+    if right_input.dash_pressed && right.dash_cooldown <= 0.0 {
+        right.dash_timer = DASH_DURATION;
+        right.dash_cooldown = DASH_COOLDOWN;
+    }
+
+    let left_speed = if left.dash_timer > 0.0 {
+        DASH_SPEED
+    } else if left.boost_active {
         PADDLE_SPEED * SPEED_BOOST_MULTIPLIER
     } else {
         PADDLE_SPEED
     };
-    let right_speed = if right.boost_active {
+    let right_speed = if right.dash_timer > 0.0 {
+        DASH_SPEED
+    } else if right.boost_active {
         PADDLE_SPEED * SPEED_BOOST_MULTIPLIER
     } else {
         PADDLE_SPEED
@@ -776,6 +810,8 @@ impl Game for PongGame {
             boost_active: false,
             boost_timer: 0.0,
             cooldown_timer: 0.0,
+            dash_timer: 0.0,
+            dash_cooldown: 0.0,
             score: 0,
             rendered_score: 0,
             id: scene.add_dynamic(left_paddle),
@@ -788,6 +824,8 @@ impl Game for PongGame {
             boost_active: false,
             boost_timer: 0.0,
             cooldown_timer: 0.0,
+            dash_timer: 0.0,
+            dash_cooldown: 0.0,
             score: 0,
             rendered_score: 0,
             id: scene.add_dynamic(right_paddle),
@@ -963,7 +1001,9 @@ impl Game for PongGame {
             Vector3::new(self.ball.p.x, self.ball.p.y, self.ball.p.z);
 
         let now = self.time;
-        let left_color = if self.left_player.boost_active {
+        let left_color = if self.left_player.dash_timer > 0.0 {
+            Vector3::new(1.0, 1.0, 1.0)
+        } else if self.left_player.boost_active {
             let r = (now * 15.0).sin() * 0.5 + 0.5;
             let g = (now * 15.0 + 2.094).sin() * 0.5 + 0.5;
             let b = (now * 15.0 + 4.188).sin() * 0.5 + 0.5;
@@ -972,7 +1012,9 @@ impl Game for PongGame {
             Vector3::new(0.2, 0.75, 1.0)
         };
 
-        let right_color = if self.right_player.boost_active {
+        let right_color = if self.right_player.dash_timer > 0.0 {
+            Vector3::new(1.0, 1.0, 1.0)
+        } else if self.right_player.boost_active {
             let r = (now * 15.0).sin() * 0.5 + 0.5;
             let g = (now * 15.0 + 2.094).sin() * 0.5 + 0.5;
             let b = (now * 15.0 + 4.188).sin() * 0.5 + 0.5;
@@ -1089,9 +1131,10 @@ impl Game for PongGame {
                 || ctx.input.is_key_pressed(KeyCode::ShiftRight);
             let mut boost_pressed = ctx.input.is_key_just_pressed(KeyCode::ControlLeft)
                 || ctx.input.is_key_just_pressed(KeyCode::Enter);
+            let mut dash_pressed = ctx.input.is_key_just_pressed(KeyCode::Space);
 
             // Gamepad input for client
-            if let Some((gx, gy, glob, gboost)) = PlayerInput::gamepad_input(ctx, 0) {
+            if let Some((gx, gy, glob, gboost, gdash)) = PlayerInput::gamepad_input(ctx, 0) {
                 if gy != 0.0 {
                     move_y = gy;
                 }
@@ -1100,6 +1143,7 @@ impl Game for PongGame {
                 }
                 lob_pressed |= glob;
                 boost_pressed |= gboost;
+                dash_pressed |= gdash;
             }
 
             let payload = PlayerInput {
@@ -1107,6 +1151,7 @@ impl Game for PongGame {
                 move_x,
                 lob_pressed,
                 boost_pressed,
+                dash_pressed,
                 sequence_number: self.seq_num,
             };
 
@@ -1133,6 +1178,10 @@ impl Game for PongGame {
                     self.left_player.boost_active = snap.left_boost_active;
                     self.right_player.boost_active = snap.right_boost_active;
 
+                    // Dash timers on client are just for visual state
+                    self.left_player.dash_timer = if snap.left_dash_active { 0.1 } else { 0.0 };
+                    self.right_player.dash_timer = if snap.right_dash_active { 0.1 } else { 0.0 };
+
                     self.left_player.score = snap.left_score;
                     self.right_player.score = snap.right_score;
                 }
@@ -1140,7 +1189,7 @@ impl Game for PongGame {
         }
     }
 
-    fn ui(&mut self, ctx: &mut EngineContext, ui_ctx: &etib::egui::Context) {
+    fn ui(&mut self, _ctx: &mut EngineContext, ui_ctx: &etib::egui::Context) {
         if !self.game_started {
             etib::egui::Area::new(etib::egui::Id::new("Main Menu"))
                 .anchor(etib::egui::Align2::CENTER_CENTER, [0.0, 0.0])
@@ -1314,11 +1363,15 @@ pub struct PlayerInput {
     pub move_x: f32, // -1.0 to 1.0 (Left, None, Right)
     pub lob_pressed: bool,
     pub boost_pressed: bool,
+    pub dash_pressed: bool,
     pub sequence_number: u32,
 }
 
 impl PlayerInput {
-    pub fn gamepad_input(ctx: &EngineContext, player_idx: usize) -> Option<(f32, f32, bool, bool)> {
+    pub fn gamepad_input(
+        ctx: &EngineContext,
+        player_idx: usize,
+    ) -> Option<(f32, f32, bool, bool, bool)> {
         let mut gamepads = ctx.gilrs.gamepads();
         let (_, gamepad) = gamepads.nth(player_idx)?;
 
@@ -1349,16 +1402,16 @@ impl PlayerInput {
         let lob = gamepad.is_pressed(gilrs::Button::RightTrigger2)
             || gamepad.is_pressed(gilrs::Button::RightTrigger)
             || gamepad.is_pressed(gilrs::Button::East);
-        let boost = gamepad.is_pressed(gilrs::Button::South)
-            || gamepad.is_pressed(gilrs::Button::LeftTrigger)
+        let boost = gamepad.is_pressed(gilrs::Button::LeftTrigger)
             || gamepad.is_pressed(gilrs::Button::LeftTrigger2);
+        let dash = gamepad.is_pressed(gilrs::Button::South);
 
-        Some((move_x, move_y, lob, boost))
+        Some((move_x, move_y, lob, boost, dash))
     }
 
     fn left_input(ctx: &EngineContext) -> Self {
-        let (mut move_x, mut move_y, mut lob_pressed, mut boost_pressed) =
-            Self::gamepad_input(ctx, 0).unwrap_or((0.0, 0.0, false, false));
+        let (mut move_x, mut move_y, mut lob_pressed, mut boost_pressed, mut dash_pressed) =
+            Self::gamepad_input(ctx, 0).unwrap_or((0.0, 0.0, false, false, false));
 
         if ctx.input.is_key_pressed(KeyCode::KeyW) {
             move_y = 1.0;
@@ -1374,19 +1427,21 @@ impl PlayerInput {
 
         lob_pressed |= ctx.input.is_key_pressed(KeyCode::ShiftLeft);
         boost_pressed |= ctx.input.is_key_just_pressed(KeyCode::ControlLeft);
+        dash_pressed |= ctx.input.is_key_just_pressed(KeyCode::Space);
 
         PlayerInput {
             move_y,
             move_x,
             lob_pressed,
             boost_pressed,
+            dash_pressed,
             sequence_number: 0,
         }
     }
 
     fn right_input(ctx: &EngineContext) -> Self {
-        let (mut move_x, mut move_y, mut lob_pressed, mut boost_pressed) =
-            Self::gamepad_input(ctx, 1).unwrap_or((0.0, 0.0, false, false));
+        let (mut move_x, mut move_y, mut lob_pressed, mut boost_pressed, mut dash_pressed) =
+            Self::gamepad_input(ctx, 1).unwrap_or((0.0, 0.0, false, false, false));
 
         if ctx.input.is_key_pressed(KeyCode::ArrowUp) {
             move_y = 1.0;
@@ -1402,12 +1457,14 @@ impl PlayerInput {
 
         lob_pressed |= ctx.input.is_key_pressed(KeyCode::ShiftRight);
         boost_pressed |= ctx.input.is_key_just_pressed(KeyCode::Enter);
+        dash_pressed |= ctx.input.is_key_just_pressed(KeyCode::Numpad0);
 
         PlayerInput {
             move_y,
             move_x,
             lob_pressed,
             boost_pressed,
+            dash_pressed,
             sequence_number: 0,
         }
     }
@@ -1419,8 +1476,10 @@ pub struct GameStateSnapshot {
     pub ball_vel: [f32; 3], // X, Y, Z - for client prediction
     pub left_pos: [f32; 2], // X, Y
     pub left_boost_active: bool,
+    pub left_dash_active: bool,
     pub right_pos: [f32; 2], // X, Y
     pub right_boost_active: bool,
+    pub right_dash_active: bool,
     pub left_score: u32,
     pub right_score: u32,
     pub auth_sequence_left: u32,
@@ -1470,6 +1529,8 @@ impl PongServer {
                 boost_active: false,
                 boost_timer: 0.0,
                 cooldown_timer: 0.0,
+                dash_timer: 0.0,
+                dash_cooldown: 0.0,
                 score: 0,
                 rendered_score: 0,
                 id: 0,
@@ -1481,6 +1542,8 @@ impl PongServer {
                 boost_active: false,
                 boost_timer: 0.0,
                 cooldown_timer: 0.0,
+                dash_timer: 0.0,
+                dash_cooldown: 0.0,
                 score: 0,
                 rendered_score: 0,
                 id: 0,
@@ -1580,8 +1643,10 @@ impl PongServer {
             ball_vel: [self.ball.v.x, self.ball.v.y, self.ball.v.z],
             left_pos: [self.left_player.x, self.left_player.y],
             left_boost_active: self.left_player.boost_active,
+            left_dash_active: self.left_player.dash_timer > 0.0,
             right_pos: [self.right_player.x, self.right_player.y],
             right_boost_active: self.right_player.boost_active,
+            right_dash_active: self.right_player.dash_timer > 0.0,
             left_score: self.left_player.score,
             right_score: self.right_player.score,
             auth_sequence_left: self
