@@ -103,6 +103,7 @@ impl Game for MyGame {
                 &gfx.queue,
                 include_bytes!("../examples/sky.hdr"),
                 1080,
+                cgmath::SquareMatrix::identity(),
             )
             .expect("Failed to load skybox");
 

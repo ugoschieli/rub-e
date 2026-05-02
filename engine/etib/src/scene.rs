@@ -343,6 +343,7 @@ impl Scene {
         queue: &wgpu::Queue,
         bytes: &[u8],
         cubemap_resolution: u32,
+        rotation: cgmath::Matrix4<f32>,
     ) -> Result<()> {
         let loader = HdrLoader::new(device);
         let sky_texture = loader.from_equirectangular_bytes(
@@ -352,6 +353,8 @@ impl Scene {
             cubemap_resolution,
             Some("Skybox Texture"),
         )?;
+
+        let rotation_raw: [[f32; 4]; 4] = rotation.into();
 
         let bind_group = BindGroupBuilder::new()
             .add_cube_texture(
@@ -364,6 +367,12 @@ impl Scene {
                 1,
                 sky_texture.sampler().clone(),
                 wgpu::SamplerBindingType::NonFiltering,
+                wgpu::ShaderStages::FRAGMENT,
+            )
+            .add_uniform_buffer(
+                device,
+                2,
+                bytemuck::bytes_of(&rotation_raw),
                 wgpu::ShaderStages::FRAGMENT,
             )
             .build(device, Some("Skybox Bind Group"));

@@ -2,7 +2,7 @@ use std::f32::consts::FRAC_PI_4;
 use std::net::UdpSocket;
 use std::time::Duration;
 
-use cgmath::Vector3;
+use cgmath::{Rotation3, Vector3};
 use clap::Parser;
 use winit::event::DeviceEvent;
 use winit::keyboard::KeyCode;
@@ -123,22 +123,38 @@ fn make_static_geometry() -> Vec<ModelCube> {
         circle_points.insert((cx, cy));
     }
 
-    for x in -(FIELD_HALF_W as i32)..=(FIELD_HALF_W as i32) {
-        for y in -(FIELD_HALF_H as i32)..=(FIELD_HALF_H as i32) {
-            let is_border_x = x == -(FIELD_HALF_W as i32) || x == FIELD_HALF_W as i32;
-            let is_border_y = y == -(FIELD_HALF_H as i32) || y == FIELD_HALF_H as i32;
-            let is_center_line = x == 0 || x == -1; // 2 wide
-            let is_circle = circle_points.contains(&(x, y));
+    let grass_start_x = -(FIELD_HALF_W as i32) - 40;
+    let grass_end_x = (FIELD_HALF_W as i32) + 40;
+    let grass_start_y = -(FIELD_HALF_H as i32) - 60; // Extend towards the camera
+    let grass_end_y = (FIELD_HALF_H as i32) + 40;
 
-            let (r, g, b) = if is_border_x || is_border_y || is_center_line || is_circle {
-                (1.0, 1.0, 1.0) // White markings
-            } else if (x + FIELD_HALF_W as i32) % 12 >= 6 {
-                // Double stripe width
-                (0.1, 0.4, 0.1) // Dark green
+    for x in grass_start_x..=grass_end_x {
+        for y in grass_start_y..=grass_end_y {
+            let is_pitch_x = x >= -(FIELD_HALF_W as i32) && x <= (FIELD_HALF_W as i32);
+            let is_pitch_y = y >= -(FIELD_HALF_H as i32) && y <= (FIELD_HALF_H as i32);
+
+            if is_pitch_x && is_pitch_y {
+                let is_border_x = x == -(FIELD_HALF_W as i32) || x == FIELD_HALF_W as i32;
+                let is_border_y = y == -(FIELD_HALF_H as i32) || y == FIELD_HALF_H as i32;
+                let is_center_line = x == 0 || x == -1; // 2 wide
+                let is_circle = circle_points.contains(&(x, y));
+
+                let (r, g, b) = if is_border_x || is_border_y || is_center_line || is_circle {
+                    (1.0, 1.0, 1.0) // White markings
+                } else if (x + FIELD_HALF_W as i32) % 12 >= 6 {
+                    (0.1, 0.4, 0.1) // Dark green
+                } else {
+                    (0.15, 0.45, 0.15) // Light green
+                };
+                add_cube(x, y, floor_z, r, g, b);
             } else {
-                (0.15, 0.45, 0.15) // Light green
-            };
-            add_cube(x, y, floor_z, r, g, b);
+                // Outside pitch, just regular grass stripes
+                if (x + grass_end_x) % 12 >= 6 {
+                    add_cube(x, y, floor_z, 0.1, 0.4, 0.1);
+                } else {
+                    add_cube(x, y, floor_z, 0.15, 0.45, 0.15);
+                }
+            }
         }
     }
 
@@ -235,7 +251,7 @@ fn make_static_geometry() -> Vec<ModelCube> {
 
     let max_tiers = 3;
     let rows_per_tier = [16, 24, 32]; // Double rows
-    let tier_gaps = [2, 4, 6];
+    let tier_gaps = [0, 0, 0];
 
     let mut current_row = 1;
     let mut current_z = 0.0;
@@ -377,9 +393,9 @@ fn make_static_geometry() -> Vec<ModelCube> {
 // 3D Score Rendering
 // ---------------------------------------------------------------------------
 
-fn make_digit_cubes(digit: char, offset_x: f32, color: Vector3<f32>) -> Vec<ModelCube> {
+fn make_char_cubes(c: char, offset_x: f32, color: Vector3<f32>) -> Vec<ModelCube> {
     let mut cubes = Vec::new();
-    let map = match digit {
+    let map = match c.to_ascii_uppercase() {
         '0' => [1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1],
         '1' => [0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0],
         '2' => [1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1],
@@ -390,6 +406,11 @@ fn make_digit_cubes(digit: char, offset_x: f32, color: Vector3<f32>) -> Vec<Mode
         '7' => [1, 1, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1],
         '8' => [1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1],
         '9' => [1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1],
+        'P' => [1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 0, 1, 0, 0],
+        'O' => [1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1],
+        'N' => [1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1],
+        'G' => [1, 1, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 1, 1, 1],
+        'D' => [1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 1, 0],
         _ => [0; 15],
     };
 
@@ -415,13 +436,23 @@ fn make_score_model(score: u32, base_x: f32, color: Vector3<f32>) -> DynamicMode
     let mut cubes = Vec::new();
     let mut offset_x = base_x;
     for c in s.chars() {
-        cubes.extend(make_digit_cubes(c, offset_x, color));
+        cubes.extend(make_char_cubes(c, offset_x, color));
         offset_x += 4.0; // Spacing between digits
     }
     let mut model = DynamicModel::from_cubes(cubes);
     // Float the score board in the air
     model.position = Vector3::new(0.0, FIELD_HALF_H, 10.0);
     model
+}
+
+fn make_text_model(text: &str, base_x: f32, color: Vector3<f32>) -> DynamicModel {
+    let mut cubes = Vec::new();
+    let mut offset_x = base_x;
+    for c in text.chars() {
+        cubes.extend(make_char_cubes(c, offset_x, color));
+        offset_x += 4.0;
+    }
+    DynamicModel::from_cubes(cubes)
 }
 
 // ---------------------------------------------------------------------------
@@ -432,6 +463,10 @@ struct PongGame {
     ball: Ball,
     left_player: Player,
     right_player: Player,
+
+    game_started: bool,
+    paused: bool,
+    prev_start_pressed: bool,
 
     // Networking
     client_socket: Option<UdpSocket>,
@@ -449,6 +484,8 @@ struct PongGame {
 
     // Animation time
     time: f32,
+
+    title_id: usize,
 }
 
 struct Ball {
@@ -483,9 +520,8 @@ fn spawn_explosion(
 ) {
     let num_particles = 60;
     for i in 0..num_particles {
-        let mut model = DynamicModel::from_cubes(vec![unit_cube(
-            -0.5, -0.5, -0.5, color.x, color.y, color.z,
-        )]);
+        let mut model =
+            DynamicModel::from_cubes(vec![unit_cube(-0.5, -0.5, -0.5, color.x, color.y, color.z)]);
         model.position = origin;
         model.position.x += (i as f32 * 1.3).sin() * 2.0;
         model.position.y += (i as f32 * 1.7).cos() * 2.0;
@@ -633,7 +669,8 @@ fn step_physics(
         && ball.v.x < 0.0
         && ball.p.x <= left_contact
         && ball.p.x > left.x + 0.0 // prevent hitting with back of paddle
-        && (ball.p.y - left.y).abs() <= PADDLE_HALF_H // prevent hitting with sides
+        && (ball.p.y - left.y).abs() <= PADDLE_HALF_H
+    // prevent hitting with sides
     {
         ball.p.x = left_contact;
         let new_speed = (ball_speed(ball) + BALL_SPEED_INC).min(BALL_SPEED_MAX);
@@ -653,7 +690,8 @@ fn step_physics(
         && ball.v.x > 0.0
         && ball.p.x >= right_contact
         && ball.p.x < right.x + 1.0 // prevent hitting with back of paddle
-        && (ball.p.y - right.y).abs() <= PADDLE_HALF_H // prevent hitting with sides
+        && (ball.p.y - right.y).abs() <= PADDLE_HALF_H
+    // prevent hitting with sides
     {
         ball.p.x = right_contact;
         let new_speed = (ball_speed(ball) + BALL_SPEED_INC).min(BALL_SPEED_MAX);
@@ -706,10 +744,25 @@ impl Game for PongGame {
         let left_score_model = make_score_model(0, -10.0, left_color);
         let right_score_model = make_score_model(0, 10.0, right_color);
 
-        let max_dyn =
-            left_paddle.cube_count() + right_paddle.cube_count() + ball_model.cube_count() + 100 + 2000; // room for score numbers and particles
+        let max_dyn = left_paddle.cube_count()
+            + right_paddle.cube_count()
+            + ball_model.cube_count()
+            + 100
+            + 2000; // room for score numbers and particles
 
         let mut scene = Scene::new(ctx, camera, &walls, max_dyn);
+
+        let gfx = &ctx.gfx;
+        let device = gfx.device();
+        scene
+            .set_skybox_from_bytes(
+                device,
+                &gfx.queue,
+                include_bytes!("sky.hdr"),
+                1080,
+                cgmath::Matrix4::from_angle_x(cgmath::Deg(-75.0)),
+            )
+            .expect("Failed to load skybox");
 
         let ball = Ball {
             p: Vector3::new(0.0, 0.0, 0.0),
@@ -752,13 +805,22 @@ impl Game for PongGame {
             (None, None)
         };
 
-        scene.get_dynamic_mut(left_player.id).unwrap().position = Vector3::new(-PADDLE_X, 0.0, 0.0);
-        scene.get_dynamic_mut(right_player.id).unwrap().position = Vector3::new(PADDLE_X, 0.0, 0.0);
+        // Hide models initially for the startup scene
+        scene.get_dynamic_mut(left_player.id).unwrap().position = Vector3::new(0.0, 0.0, 1000.0);
+        scene.get_dynamic_mut(right_player.id).unwrap().position = Vector3::new(0.0, 0.0, 1000.0);
+        scene.get_dynamic_mut(ball.id).unwrap().position = Vector3::new(0.0, 0.0, 1000.0);
+        if let Some(id) = left_player.score_id {
+            scene.get_dynamic_mut(id).unwrap().position = Vector3::new(0.0, 0.0, 1000.0);
+        }
+        if let Some(id) = right_player.score_id {
+            scene.get_dynamic_mut(id).unwrap().position = Vector3::new(0.0, 0.0, 1000.0);
+        }
 
         let mut trail_ids = Vec::new();
         for _ in 0..10 {
-            let mut trail_cube = DynamicModel::from_cubes(vec![unit_cube(0.0, 0.0, 0.0, 5.0, 0.0, 0.0)]);
-            trail_cube.position = Vector3::new(0.0, 0.0, -100.0);
+            let mut trail_cube =
+                DynamicModel::from_cubes(vec![unit_cube(0.0, 0.0, 0.0, 5.0, 0.0, 0.0)]);
+            trail_cube.position = Vector3::new(0.0, 0.0, 1000.0);
             trail_ids.push(scene.add_dynamic(trail_cube));
         }
 
@@ -776,14 +838,22 @@ impl Game for PongGame {
             }
         }
         let mut shadow_model = DynamicModel::from_cubes(shadow_cubes);
-        shadow_model.position = Vector3::new(0.0, 0.0, -100.0);
+        shadow_model.position = Vector3::new(0.0, 0.0, 1000.0);
         let shadow_id = scene.add_dynamic(shadow_model);
+
+        let title_model = make_text_model("PONG 3D", -14.0, Vector3::new(0.0, 0.8, 1.0));
+        let mut title_dynamic = title_model;
+        title_dynamic.position = Vector3::new(0.0, 0.0, 15.0); // Center of field, floating
+        let title_id = scene.add_dynamic(title_dynamic);
 
         PongGame {
             scene,
             ball,
             left_player,
             right_player,
+            game_started: false,
+            paused: false,
+            prev_start_pressed: false,
             client_socket,
             server_addr,
             seq_num: 0,
@@ -793,12 +863,48 @@ impl Game for PongGame {
             shadow_id,
             particles: Vec::new(),
             time: 0.0,
+            title_id,
         }
     }
 
     fn update(&mut self, ctx: &mut EngineContext) {
         let dt = ctx.time.dt;
         self.time += dt;
+
+        if self.game_started {
+            if let Some(m) = self.scene.get_dynamic_mut(self.title_id) {
+                m.position.z = 1000.0;
+            }
+        } else {
+            // Floating animation for the title
+            if let Some(m) = self.scene.get_dynamic_mut(self.title_id) {
+                m.position.z = 15.0 + (self.time * 2.0).sin() * 2.0;
+                m.rotation =
+                    cgmath::Quaternion::from_angle_z(cgmath::Deg((self.time * 20.0).sin() * 5.0));
+            }
+        }
+
+        if !self.game_started {
+            return;
+        }
+
+        let mut start_pressed = false;
+        for (_, gamepad) in ctx.gilrs.gamepads() {
+            if gamepad.is_pressed(gilrs::Button::Start) {
+                start_pressed = true;
+            }
+        }
+        let start_just_pressed = start_pressed && !self.prev_start_pressed;
+        self.prev_start_pressed = start_pressed;
+
+        if ctx.input.is_key_just_pressed(KeyCode::Escape) || start_just_pressed {
+            self.paused = !self.paused;
+        }
+
+        if self.paused {
+            return;
+        }
+
         let prev_ball_pos = self.ball.p;
 
         // Apply local physics if NOT connected to a server
@@ -855,7 +961,7 @@ impl Game for PongGame {
         // --- Sync GPU transforms ---
         scene.get_dynamic_mut(self.ball.id).unwrap().position =
             Vector3::new(self.ball.p.x, self.ball.p.y, self.ball.p.z);
-            
+
         let now = self.time;
         let left_color = if self.left_player.boost_active {
             let r = (now * 15.0).sin() * 0.5 + 0.5;
@@ -865,7 +971,7 @@ impl Game for PongGame {
         } else {
             Vector3::new(0.2, 0.75, 1.0)
         };
-        
+
         let right_color = if self.right_player.boost_active {
             let r = (now * 15.0).sin() * 0.5 + 0.5;
             let g = (now * 15.0 + 2.094).sin() * 0.5 + 0.5;
@@ -896,7 +1002,7 @@ impl Game for PongGame {
             // Hide trail
             for &trail_id in &self.trail_ids {
                 if let Some(model) = scene.get_dynamic_mut(trail_id) {
-                    model.position = Vector3::new(0.0, 0.0, -100.0);
+                    model.position = Vector3::new(0.0, 0.0, 1000.0);
                 }
             }
             // Show shadow
@@ -908,7 +1014,7 @@ impl Game for PongGame {
         } else {
             // Hide shadow
             if let Some(shadow_model) = scene.get_dynamic_mut(self.shadow_id) {
-                shadow_model.position = Vector3::new(0.0, 0.0, -100.0);
+                shadow_model.position = Vector3::new(0.0, 0.0, 1000.0);
             }
 
             if (ball_grid_x, ball_grid_y) != self.last_trail_pos {
@@ -933,7 +1039,7 @@ impl Game for PongGame {
                 p.velocity.z -= BALL_GRAVITY * 1.5 * dt; // gravity
                 if let Some(model) = scene.get_dynamic_mut(p.id) {
                     model.position += p.velocity * dt;
-                    
+
                     // floor bounce
                     if model.position.z < 0.0 {
                         model.position.z = 0.0;
@@ -1035,45 +1141,159 @@ impl Game for PongGame {
     }
 
     fn ui(&mut self, ctx: &mut EngineContext, ui_ctx: &etib::egui::Context) {
-        etib::egui::Area::new(etib::egui::Id::new("pong_debug_info")).show(ui_ctx, |ui| {
-            ui.with_layout(
-                etib::egui::Layout::left_to_right(etib::egui::Align::Center),
-                |ui| {
-                    if ui.button("Randomize Ball").clicked() {
-                        let now = ctx.now();
-                        let r = (now * 13.0).sin().abs() as f32;
-                        let g = (now * 17.0).sin().abs() as f32;
-                        let b = (now * 19.0).sin().abs() as f32;
+        if !self.game_started {
+            etib::egui::Area::new(etib::egui::Id::new("Main Menu"))
+                .anchor(etib::egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                .show(ui_ctx, |ui| {
+                    ui.vertical_centered(|ui| {
+                        ui.add_space(100.0);
 
-                        let scene = &mut self.scene;
-                        if let Some(ball) = scene.get_dynamic_mut(self.ball.id) {
-                            for cube in ball.cubes_mut() {
-                                cube.color = cgmath::Vector3::new(r, g, b);
+                        let btn_size = etib::egui::vec2(250.0, 60.0);
+                        if ui
+                            .add_sized(
+                                btn_size,
+                                etib::egui::Button::new(
+                                    etib::egui::RichText::new("START GAME").size(28.0),
+                                ),
+                            )
+                            .clicked()
+                        {
+                            self.game_started = true;
+
+                            // Restore score positions
+                            if let Some(id) = self.left_player.score_id {
+                                if let Some(model) = self.scene.get_dynamic_mut(id) {
+                                    model.position = Vector3::new(0.0, FIELD_HALF_H, 10.0);
+                                }
+                            }
+                            if let Some(id) = self.right_player.score_id {
+                                if let Some(model) = self.scene.get_dynamic_mut(id) {
+                                    model.position = Vector3::new(0.0, FIELD_HALF_H, 10.0);
+                                }
                             }
                         }
-                    }
+                        ui.add_space(15.0);
+                        if ui
+                            .add_sized(
+                                btn_size,
+                                etib::egui::Button::new(
+                                    etib::egui::RichText::new("EXIT").size(28.0),
+                                ),
+                            )
+                            .clicked()
+                        {
+                            std::process::exit(0);
+                        }
+                        ui.add_space(20.0);
+                    });
+                });
+            return;
+        }
 
-                    ui.separator();
-                    ui.heading("Boosts:");
-                    ui.label(format!(
-                        "Left Cooldown: {:.1}s",
-                        self.left_player.cooldown_timer.max(0.0)
-                    ));
-                    ui.label(format!(
-                        "Right Cooldown: {:.1}s",
-                        self.right_player.cooldown_timer.max(0.0)
-                    ));
+        if self.paused {
+            etib::egui::Window::new("Pause Menu")
+                .anchor(etib::egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                .collapsible(false)
+                .resizable(false)
+                .title_bar(false)
+                .frame(etib::egui::Frame::NONE.fill(etib::egui::Color32::from_black_alpha(100)))
+                .show(ui_ctx, |ui| {
+                    ui.vertical_centered(|ui| {
+                        ui.add_space(20.0);
+                        ui.label(
+                            etib::egui::RichText::new("PAUSED")
+                                .size(40.0)
+                                .strong()
+                                .color(etib::egui::Color32::from_rgb(255, 180, 50)),
+                        );
+                        ui.add_space(30.0);
 
-                    ui.separator();
-                    ui.heading("Ball Info:");
-                    ui.label(format!("Speed X: {:.2}", self.ball.v.x));
-                    ui.label(format!("Speed Y: {:.2}", self.ball.v.y));
+                        let btn_size = etib::egui::vec2(220.0, 50.0);
+                        if ui
+                            .add_sized(
+                                btn_size,
+                                etib::egui::Button::new(
+                                    etib::egui::RichText::new("RESUME").size(24.0),
+                                ),
+                            )
+                            .clicked()
+                        {
+                            self.paused = false;
+                        }
+                        ui.add_space(10.0);
+                        if ui
+                            .add_sized(
+                                btn_size,
+                                etib::egui::Button::new(
+                                    etib::egui::RichText::new("RESTART").size(24.0),
+                                ),
+                            )
+                            .clicked()
+                        {
+                            self.paused = false;
+                            self.left_player.score = 0;
+                            self.right_player.score = 0;
+                            self.left_player.y = 0.0;
+                            self.right_player.y = 0.0;
+                            reset_ball(&mut self.ball, true);
+                        }
+                        ui.add_space(10.0);
+                        if ui
+                            .add_sized(
+                                btn_size,
+                                etib::egui::Button::new(
+                                    etib::egui::RichText::new("QUIT").size(24.0),
+                                ),
+                            )
+                            .clicked()
+                        {
+                            std::process::exit(0);
+                        }
+                        ui.add_space(20.0);
+                    });
+                });
+            return;
+        }
 
-                    ui.separator();
-                    ui.label(format!("FPS: {:.0}", ctx.fps()));
-                },
-            );
-        });
+        // etib::egui::Area::new(etib::egui::Id::new("pong_debug_info")).show(ui_ctx, |ui| {
+        //     ui.with_layout(
+        //         etib::egui::Layout::left_to_right(etib::egui::Align::Center),
+        //         |ui| {
+        //             if ui.button("Randomize Ball").clicked() {
+        //                 let now = ctx.now();
+        //                 let r = (now * 13.0).sin().abs() as f32;
+        //                 let g = (now * 17.0).sin().abs() as f32;
+        //                 let b = (now * 19.0).sin().abs() as f32;
+
+        //                 let scene = &mut self.scene;
+        //                 if let Some(ball) = scene.get_dynamic_mut(self.ball.id) {
+        //                     for cube in ball.cubes_mut() {
+        //                         cube.color = cgmath::Vector3::new(r, g, b);
+        //                     }
+        //                 }
+        //             }
+
+        //             ui.separator();
+        //             ui.heading("Boosts:");
+        //             ui.label(format!(
+        //                 "Left Cooldown: {:.1}s",
+        //                 self.left_player.cooldown_timer.max(0.0)
+        //             ));
+        //             ui.label(format!(
+        //                 "Right Cooldown: {:.1}s",
+        //                 self.right_player.cooldown_timer.max(0.0)
+        //             ));
+
+        //             ui.separator();
+        //             ui.heading("Ball Info:");
+        //             ui.label(format!("Speed X: {:.2}", self.ball.v.x));
+        //             ui.label(format!("Speed Y: {:.2}", self.ball.v.y));
+
+        //             ui.separator();
+        //             ui.label(format!("FPS: {:.0}", ctx.fps()));
+        //         },
+        //     );
+        // });
     }
 
     fn scene(&mut self) -> Option<&mut etib::Scene> {
