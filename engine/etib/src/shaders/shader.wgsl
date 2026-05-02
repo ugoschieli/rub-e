@@ -60,7 +60,7 @@ const kd: f32 = 0.5; // diffuse coefficient
 const ks: f32 = 0.4; // specular coefficient
 const shininess: f32 = 32.0; // specular shininess
 
-const light_position: vec3<f32> = vec3<f32>(10.0, 20.0, 10.0);
+const light_position: vec3<f32> = vec3<f32>(0.0, -150.0, 100.0);
 const light_color: vec3<f32> = vec3<f32>(1.0, 1.0, 1.0);
 const camera_position: vec3<f32> = vec3<f32>(0.0, 10.0, 40.0);
 

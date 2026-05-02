@@ -98,7 +98,8 @@ fn make_ball() -> DynamicModel {
 }
 
 /// Static geometry: Marseille Orange Velodrome Stadium
-fn make_static_geometry() -> Vec<ModelCube> {
+fn make_static_geometry() -> (Vec<ModelCube>, Vec<Vector3<f32>>) {
+    let mut seats = Vec::new();
     let mut grid: std::collections::HashMap<(i32, i32, i32), ModelCube> =
         std::collections::HashMap::new();
 
@@ -300,6 +301,9 @@ fn make_static_geometry() -> Vec<ModelCube> {
                 }
 
                 add_cube(x, out_y_top, height_z, color.0, color.1, color.2);
+                if x % 2 == 0 && (tier < 2 || r < rows - 15) {
+                    seats.push(Vector3::new(x as f32, out_y_top as f32, height_z + 1.0));
+                }
             }
 
             // Left & Right Goal lines
@@ -322,6 +326,14 @@ fn make_static_geometry() -> Vec<ModelCube> {
                     color_l = concrete;
                 }
                 add_cube(out_x_left, y, height_z, color_l.0, color_l.1, color_l.2);
+                if y % 2 == 0 && (tier < 2 || r < rows - 15) {
+                    // Avoid net area
+                    let is_net_y = y >= -(FIELD_HALF_H as i32) && y <= (FIELD_HALF_H as i32);
+                    let is_net_x = out_x_left.abs() <= (FIELD_HALF_W as i32 + 3);
+                    if !(is_net_y && is_net_x) {
+                        seats.push(Vector3::new(out_x_left as f32, y as f32, height_z + 1.0));
+                    }
+                }
 
                 // RIGHT STAND
                 let mut color_r = off_white;
@@ -340,6 +352,14 @@ fn make_static_geometry() -> Vec<ModelCube> {
                     color_r = concrete;
                 }
                 add_cube(out_x_right, y, height_z, color_r.0, color_r.1, color_r.2);
+                if y % 2 == 0 && (tier < 2 || r < rows - 15) {
+                    // Avoid net area
+                    let is_net_y = y >= -(FIELD_HALF_H as i32) && y <= (FIELD_HALF_H as i32);
+                    let is_net_x = out_x_right.abs() <= (FIELD_HALF_W as i32 + 3);
+                    if !(is_net_y && is_net_x) {
+                        seats.push(Vector3::new(out_x_right as f32, y as f32, height_z + 1.0));
+                    }
+                }
             }
 
             // Iconic Velodrome undulating roof smoothly connecting to the stands
@@ -390,7 +410,7 @@ fn make_static_geometry() -> Vec<ModelCube> {
         }
     }
 
-    grid.into_values().collect()
+    (grid.into_values().collect(), seats)
 }
 
 // ---------------------------------------------------------------------------
@@ -423,8 +443,8 @@ fn make_char_cubes(c: char, offset_x: f32, color: Vector3<f32>) -> Vec<ModelCube
             if map[(4 - y) * 3 + x] == 1 {
                 cubes.push(unit_cube(
                     offset_x + x as f32,
+                    y as f32 - 2.5,
                     0.0,
-                    y as f32 - 4.0,
                     color.x,
                     color.y,
                     color.z,
@@ -438,14 +458,20 @@ fn make_char_cubes(c: char, offset_x: f32, color: Vector3<f32>) -> Vec<ModelCube
 fn make_score_model(score: u32, base_x: f32, color: Vector3<f32>) -> DynamicModel {
     let s = score.to_string();
     let mut cubes = Vec::new();
-    let mut offset_x = base_x;
+
+    // Calculate total width to center the text
+    let char_width = 3.0;
+    let spacing = 1.0;
+    let total_width = s.len() as f32 * char_width + (s.len() as f32 - 1.0) * spacing;
+    let mut offset_x = base_x - total_width / 2.0;
+
     for c in s.chars() {
         cubes.extend(make_char_cubes(c, offset_x, color));
-        offset_x += 4.0; // Spacing between digits
+        offset_x += char_width + spacing; // Spacing between digits
     }
     let mut model = DynamicModel::from_cubes(cubes);
-    // Float the score board in the air
-    model.position = Vector3::new(0.0, FIELD_HALF_H, 10.0);
+    // Move score to the bottom of the stadium, lying on the ground
+    model.position = Vector3::new(0.0, -FIELD_HALF_H - 5.0, 0.0);
     model
 }
 
@@ -490,6 +516,7 @@ struct PongGame {
     time: f32,
 
     title_id: usize,
+    spectators: Vec<Spectator>,
 }
 
 struct Ball {
@@ -516,6 +543,14 @@ struct Particle {
     id: usize,
     velocity: Vector3<f32>,
     life: f32,
+}
+
+struct Spectator {
+    id: usize,
+    base_pos: Vector3<f32>,
+    phase: f32,
+    speed: f32,
+    jump_timer: f32,
 }
 
 fn spawn_explosion(
@@ -772,7 +807,7 @@ impl Game for PongGame {
         let right_color = Vector3::new(1.0, 0.45, 0.1);
 
         let ball_model = make_ball();
-        let walls = make_static_geometry();
+        let (walls, seat_positions) = make_static_geometry();
         let left_paddle = make_paddle(left_color.x, left_color.y, left_color.z);
         let right_paddle = make_paddle(right_color.x, right_color.y, right_color.z);
         let left_score_model = make_score_model(0, -10.0, left_color);
@@ -782,7 +817,8 @@ impl Game for PongGame {
             + right_paddle.cube_count()
             + ball_model.cube_count()
             + 100
-            + 2000; // room for score numbers and particles
+            + 2000
+            + 10000; // room for score numbers, particles and many spectators (2 cubes each)
 
         let mut scene = Scene::new(ctx, camera, &walls, max_dyn);
 
@@ -884,6 +920,62 @@ impl Game for PongGame {
         title_dynamic.position = Vector3::new(0.0, 0.0, 15.0); // Center of field, floating
         let title_id = scene.add_dynamic(title_dynamic);
 
+        let mut spectators = Vec::new();
+
+        // Limit spectators to avoid hitting max_dyn (each takes 2 dynamic cubes)
+        let num_spectators = seat_positions.len().min(4000);
+        let skin_tones = [
+            Vector3::new(1.0, 0.8, 0.6),
+            Vector3::new(0.8, 0.6, 0.4),
+            Vector3::new(0.6, 0.4, 0.2),
+        ];
+        let jersey_colors = [
+            Vector3::new(1.0, 1.0, 1.0), // White
+            Vector3::new(0.4, 0.8, 1.0), // Marseille Blue
+            Vector3::new(0.1, 0.1, 0.1), // Dark
+        ];
+
+        for i in 0..num_spectators {
+            let pos = seat_positions[i * (seat_positions.len() / num_spectators)];
+
+            // Pseudo-random selection
+            let jersey_color = jersey_colors[i % jersey_colors.len()];
+            let skin_tone = skin_tones[(i / 3) % skin_tones.len()];
+            let phase = ((i * 555) % 100) as f32 / 100.0 * std::f32::consts::PI * 2.0;
+            let speed = 1.5 + ((i * 777) % 100) as f32 / 100.0 * 2.0;
+
+            // 2-cube model: body + head
+            let mut cubes = Vec::new();
+            cubes.push(unit_cube(
+                0.0,
+                0.0,
+                0.0,
+                jersey_color.x,
+                jersey_color.y,
+                jersey_color.z,
+            ));
+            cubes.push(unit_cube(
+                0.0,
+                0.0,
+                1.0,
+                skin_tone.x,
+                skin_tone.y,
+                skin_tone.z,
+            ));
+
+            let mut dynamic_model = DynamicModel::from_cubes(cubes);
+            dynamic_model.position = pos;
+            dynamic_model.position.z = 1000.0;
+            let id = scene.add_dynamic(dynamic_model);
+            spectators.push(Spectator {
+                id,
+                base_pos: pos,
+                phase,
+                speed,
+                jump_timer: 0.0,
+            });
+        }
+
         PongGame {
             scene,
             ball,
@@ -902,6 +994,7 @@ impl Game for PongGame {
             particles: Vec::new(),
             time: 0.0,
             title_id,
+            spectators,
         }
     }
 
@@ -970,13 +1063,20 @@ impl Game for PongGame {
             let left_score_model = make_score_model(self.left_player.score, -10.0, left_color);
             self.left_player.score_id = Some(scene.add_dynamic(left_score_model));
             self.left_player.rendered_score = self.left_player.score as i32;
-
             spawn_explosion(
                 scene,
                 &mut self.particles,
                 Vector3::new(FIELD_HALF_W, prev_ball_pos.y, prev_ball_pos.z),
                 left_color,
             );
+
+            for s in &mut self.spectators {
+                let is_left_side = s.base_pos.x < -FIELD_HALF_W;
+                let is_central = s.base_pos.y > FIELD_HALF_H;
+                if is_left_side || (is_central && s.id % 3 == 0) {
+                    s.jump_timer = 1.0;
+                }
+            }
         }
 
         if self.right_player.score as i32 != self.right_player.rendered_score {
@@ -987,13 +1087,20 @@ impl Game for PongGame {
             let right_score_model = make_score_model(self.right_player.score, 10.0, right_color);
             self.right_player.score_id = Some(scene.add_dynamic(right_score_model));
             self.right_player.rendered_score = self.right_player.score as i32;
-
             spawn_explosion(
                 scene,
                 &mut self.particles,
                 Vector3::new(-FIELD_HALF_W, prev_ball_pos.y, prev_ball_pos.z),
                 right_color,
             );
+
+            for s in &mut self.spectators {
+                let is_right_side = s.base_pos.x > FIELD_HALF_W;
+                let is_central = s.base_pos.y > FIELD_HALF_H;
+                if is_right_side || (is_central && s.id % 3 == 0) {
+                    s.jump_timer = 1.0;
+                }
+            }
         }
 
         // --- Sync GPU transforms ---
@@ -1096,6 +1203,24 @@ impl Game for PongGame {
                     }
                 }
                 i += 1;
+            }
+        }
+
+        // --- Spectators Update ---
+        if self.game_started {
+            for s in &mut self.spectators {
+                if s.jump_timer > 0.0 {
+                    s.jump_timer -= dt * 2.0;
+                }
+                if let Some(model) = scene.get_dynamic_mut(s.id) {
+                    let jump = if s.jump_timer > 0.0 {
+                        (s.jump_timer * std::f32::consts::PI).sin() * 2.0
+                    } else {
+                        0.0
+                    };
+                    let bob = (self.time * s.speed + s.phase).sin() * 0.2;
+                    model.position.z = s.base_pos.z + bob + jump;
+                }
             }
         }
 
@@ -1211,12 +1336,12 @@ impl Game for PongGame {
                             // Restore score positions
                             if let Some(id) = self.left_player.score_id {
                                 if let Some(model) = self.scene.get_dynamic_mut(id) {
-                                    model.position = Vector3::new(0.0, FIELD_HALF_H, 10.0);
+                                    model.position = Vector3::new(0.0, -FIELD_HALF_H - 5.0, 0.0);
                                 }
                             }
                             if let Some(id) = self.right_player.score_id {
                                 if let Some(model) = self.scene.get_dynamic_mut(id) {
-                                    model.position = Vector3::new(0.0, FIELD_HALF_H, 10.0);
+                                    model.position = Vector3::new(0.0, -FIELD_HALF_H - 5.0, 0.0);
                                 }
                             }
                         }
