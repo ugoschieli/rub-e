@@ -25,6 +25,8 @@ pub struct EngineContext {
     pub time: TimeState,
     /// Keyboard input state for the current frame
     pub input: InputState,
+    /// Gamepad input state tracker
+    pub gilrs: gilrs::Gilrs,
     /// Engine configuration (vsync, HDR, …)
     pub config: Arc<EngineConfig>,
     // window is NOT exposed directly — engine handles it
@@ -192,6 +194,8 @@ impl<G: Game> ApplicationHandler for EngineRunner<G> {
 
         let gfx = Gfx::new(window.clone(), &self.config);
 
+        let gilrs = gilrs::Gilrs::new().expect("Failed to initialize gilrs");
+
         let egui_renderer = egui_wgpu::Renderer::new(
             gfx.device(),
             gfx.surface_config.format,
@@ -201,6 +205,7 @@ impl<G: Game> ApplicationHandler for EngineRunner<G> {
             gfx,
             time: TimeState::new(),
             input: InputState::default(),
+            gilrs,
             config: self.config.clone(),
             window: window.clone(),
             egui_ctx,
@@ -252,6 +257,9 @@ impl<G: Game> ApplicationHandler for EngineRunner<G> {
             }
             WindowEvent::RedrawRequested => {
                 let (frame, view) = ctx.gfx.get_next_frame();
+
+                // Pump gamepad events
+                while let Some(_) = ctx.gilrs.next_event() {}
 
                 let mut scene_encoder =
                     ctx.gfx

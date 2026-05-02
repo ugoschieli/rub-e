@@ -578,10 +578,22 @@ impl Game for PongGame {
                 move_x = -1.0;
             }
 
-            let lob_pressed = ctx.input.is_key_pressed(KeyCode::ShiftLeft)
+            let mut lob_pressed = ctx.input.is_key_pressed(KeyCode::ShiftLeft)
                 || ctx.input.is_key_pressed(KeyCode::ShiftRight);
-            let boost_pressed = ctx.input.is_key_just_pressed(KeyCode::ControlLeft)
+            let mut boost_pressed = ctx.input.is_key_just_pressed(KeyCode::ControlLeft)
                 || ctx.input.is_key_just_pressed(KeyCode::Enter);
+
+            // Gamepad input for client
+            if let Some((gx, gy, glob, gboost)) = PlayerInput::gamepad_input(ctx, 0) {
+                if gy != 0.0 {
+                    move_y = gy;
+                }
+                if gx != 0.0 {
+                    move_x = gx;
+                }
+                lob_pressed |= glob;
+                boost_pressed |= gboost;
+            }
 
             let payload = PlayerInput {
                 move_y,
@@ -685,46 +697,96 @@ pub struct PlayerInput {
 }
 
 impl PlayerInput {
+    pub fn gamepad_input(ctx: &EngineContext, player_idx: usize) -> Option<(f32, f32, bool, bool)> {
+        let mut gamepads = ctx.gilrs.gamepads();
+        let (_, gamepad) = gamepads.nth(player_idx)?;
+
+        let mut move_y = gamepad.value(gilrs::Axis::LeftStickY);
+        let mut move_x = gamepad.value(gilrs::Axis::LeftStickX);
+
+        if gamepad.is_pressed(gilrs::Button::DPadUp) {
+            move_y = 1.0;
+        }
+        if gamepad.is_pressed(gilrs::Button::DPadDown) {
+            move_y = -1.0;
+        }
+        if gamepad.is_pressed(gilrs::Button::DPadRight) {
+            move_x = 1.0;
+        }
+        if gamepad.is_pressed(gilrs::Button::DPadLeft) {
+            move_x = -1.0;
+        }
+
+        // Deadzone check
+        if move_y.abs() < 0.1 {
+            move_y = 0.0;
+        }
+        if move_x.abs() < 0.1 {
+            move_x = 0.0;
+        }
+
+        let lob = gamepad.is_pressed(gilrs::Button::RightTrigger2)
+            || gamepad.is_pressed(gilrs::Button::RightTrigger)
+            || gamepad.is_pressed(gilrs::Button::East);
+        let boost = gamepad.is_pressed(gilrs::Button::South)
+            || gamepad.is_pressed(gilrs::Button::LeftTrigger)
+            || gamepad.is_pressed(gilrs::Button::LeftTrigger2);
+
+        Some((move_x, move_y, lob, boost))
+    }
+
     fn left_input(ctx: &EngineContext) -> Self {
+        let (mut move_x, mut move_y, mut lob_pressed, mut boost_pressed) =
+            Self::gamepad_input(ctx, 0).unwrap_or((0.0, 0.0, false, false));
+
+        if ctx.input.is_key_pressed(KeyCode::KeyW) {
+            move_y = 1.0;
+        } else if ctx.input.is_key_pressed(KeyCode::KeyS) {
+            move_y = -1.0;
+        }
+
+        if ctx.input.is_key_pressed(KeyCode::KeyD) {
+            move_x = 1.0;
+        } else if ctx.input.is_key_pressed(KeyCode::KeyA) {
+            move_x = -1.0;
+        }
+
+        lob_pressed |= ctx.input.is_key_pressed(KeyCode::ShiftLeft);
+        boost_pressed |= ctx.input.is_key_just_pressed(KeyCode::ControlLeft);
+
         PlayerInput {
-            move_y: if ctx.input.is_key_pressed(KeyCode::KeyW) {
-                1.0
-            } else if ctx.input.is_key_pressed(KeyCode::KeyS) {
-                -1.0
-            } else {
-                0.0
-            },
-            move_x: if ctx.input.is_key_pressed(KeyCode::KeyD) {
-                1.0
-            } else if ctx.input.is_key_pressed(KeyCode::KeyA) {
-                -1.0
-            } else {
-                0.0
-            },
-            lob_pressed: ctx.input.is_key_pressed(KeyCode::ShiftLeft),
-            boost_pressed: ctx.input.is_key_just_pressed(KeyCode::ControlLeft),
+            move_y,
+            move_x,
+            lob_pressed,
+            boost_pressed,
             sequence_number: 0,
         }
     }
 
     fn right_input(ctx: &EngineContext) -> Self {
+        let (mut move_x, mut move_y, mut lob_pressed, mut boost_pressed) =
+            Self::gamepad_input(ctx, 1).unwrap_or((0.0, 0.0, false, false));
+
+        if ctx.input.is_key_pressed(KeyCode::ArrowUp) {
+            move_y = 1.0;
+        } else if ctx.input.is_key_pressed(KeyCode::ArrowDown) {
+            move_y = -1.0;
+        }
+
+        if ctx.input.is_key_pressed(KeyCode::ArrowRight) {
+            move_x = 1.0;
+        } else if ctx.input.is_key_pressed(KeyCode::ArrowLeft) {
+            move_x = -1.0;
+        }
+
+        lob_pressed |= ctx.input.is_key_pressed(KeyCode::ShiftRight);
+        boost_pressed |= ctx.input.is_key_just_pressed(KeyCode::Enter);
+
         PlayerInput {
-            move_y: if ctx.input.is_key_pressed(KeyCode::ArrowUp) {
-                1.0
-            } else if ctx.input.is_key_pressed(KeyCode::ArrowDown) {
-                -1.0
-            } else {
-                0.0
-            },
-            move_x: if ctx.input.is_key_pressed(KeyCode::ArrowRight) {
-                1.0
-            } else if ctx.input.is_key_pressed(KeyCode::ArrowLeft) {
-                -1.0
-            } else {
-                0.0
-            },
-            lob_pressed: ctx.input.is_key_pressed(KeyCode::ShiftRight),
-            boost_pressed: ctx.input.is_key_just_pressed(KeyCode::Enter),
+            move_y,
+            move_x,
+            lob_pressed,
+            boost_pressed,
             sequence_number: 0,
         }
     }
