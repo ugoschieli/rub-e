@@ -258,3 +258,51 @@ pub const INDICES: &[u16] = &[
     20, 21, 22, // Triangle 1
     20, 22, 23, // Triangle 2
 ];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_cube_new() {
+        let cube = Cube::new();
+        assert_eq!(cube.model, cgmath::Matrix4::zero());
+        assert_eq!(cube.color, cgmath::Vector4::zero());
+    }
+
+    #[test]
+    fn test_cube_into_raw() {
+        let cube = Cube {
+            model: cgmath::Matrix4::from_scale(2.0),
+            color: cgmath::Vector4::new(1.0, 0.5, 0.2, 1.0),
+        };
+        let raw = cube.into_raw();
+        let bytes = bytemuck::bytes_of(&raw);
+        let floats: &[f32] = bytemuck::cast_slice(bytes);
+        // The struct has model (16 floats) then color (4 floats)
+        assert_eq!(floats[0], 2.0); // model[0][0]
+        assert_eq!(floats[16], 1.0); // color.r
+        assert_eq!(floats[17], 0.5); // color.g
+        assert_eq!(floats[18], 0.2); // color.b
+    }
+
+    #[test]
+    fn test_cube_default() {
+        let cube = Cube::default();
+        assert_eq!(cube.model, cgmath::Matrix4::zero());
+        assert_eq!(cube.color, cgmath::Vector4::zero());
+    }
+
+    #[test]
+    fn test_cube_desc() {
+        let desc = Cube::desc();
+        assert_eq!(desc.array_stride, std::mem::size_of::<CubeRaw>() as u64);
+        assert_eq!(desc.step_mode, wgpu::VertexStepMode::Instance);
+        assert_eq!(desc.attributes.len(), 5);
+    }
+
+    #[test]
+    fn test_create_instance_buffer() {
+        Cube::create_instance_buffer(); // It's a no-op, just call it for coverage
+    }
+}

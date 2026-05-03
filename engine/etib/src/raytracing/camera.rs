@@ -123,3 +123,48 @@ impl Camera {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_camera_default() {
+        let cam = Camera::default();
+        assert_eq!(cam.pos, glam::Vec3::ZERO);
+        assert_eq!(cam.yaw, -std::f32::consts::FRAC_PI_2);
+        assert_eq!(cam.pitch, 0.0);
+    }
+
+    #[test]
+    fn test_camera_update() {
+        let mut cam = Camera::default();
+        let mut frame_count = 10;
+        let speed = 1.0;
+
+        let mut input = InputState::default();
+        input.forward = true;
+
+        cam.update(&input, speed, &mut frame_count);
+        
+        // Since yaw is -PI/2 (facing -Z), forward should be -Z
+        assert!(cam.pos.z < 0.0);
+        assert_eq!(frame_count, 0); // Frame count is reset when moving
+        
+        // Move back
+        let old_pos = cam.pos;
+        input.forward = false;
+        input.backward = true;
+        
+        frame_count = 10;
+        cam.update(&input, speed, &mut frame_count);
+        assert!(cam.pos.z > old_pos.z);
+        assert_eq!(frame_count, 0);
+
+        // No input, frame count should not reset
+        input.backward = false;
+        frame_count = 10;
+        cam.update(&input, speed, &mut frame_count);
+        assert_eq!(frame_count, 10);
+    }
+}

@@ -8,3 +8,6 @@ bytemuck = { workspace = true }
 log = { workspace = true }
 naga = { workspace = true }
 wgpu = { workspace = true }
+
+[dev-dependencies]
+pollster = "0.4"

@@ -298,3 +298,63 @@ impl CullingPass {
         pass.dispatch_workgroups(workgroups, 1, 1);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_chunk_raw_layout() {
+        let chunk = ChunkRaw {
+            aabb_min: [-1.0, -1.0, -1.0],
+            _pad0: 0.0,
+            aabb_max: [1.0, 1.0, 1.0],
+            start_idx: 100,
+            count: 50,
+            _pad1: [0; 3],
+        };
+        
+        assert_eq!(chunk.start_idx, 100);
+        assert_eq!(chunk.count, 50);
+        assert_eq!(chunk.aabb_min, [-1.0, -1.0, -1.0]);
+        assert_eq!(std::mem::size_of::<ChunkRaw>(), 48); // 12 * 4 bytes
+    }
+
+    #[test]
+    fn test_culling_pipelines_headless() {
+        let instance = wgpu::Instance::default();
+        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::LowPower,
+            compatible_surface: None,
+            force_fallback_adapter: false,
+        }));
+        
+        if let Ok(adapter) = adapter {
+            let (device, _) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default())).unwrap();
+            
+            // Need a dummy layout for camera
+            let entries = [
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }
+            ];
+            let camera_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: None,
+                entries: &entries,
+            });
+            
+            let chunk_pass = ChunkCullingPass::new(&device, &camera_layout);
+            let _cull_pass = CullingPass::new(&device, &camera_layout);
+            
+            // Ensure we created the passes without panicking
+            assert!(true);
+        }
+    }
+}

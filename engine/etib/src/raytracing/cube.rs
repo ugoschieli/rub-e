@@ -300,3 +300,59 @@ pub const CUBE_INDICES: &[u16] = &[
     16, 17, 18, 16, 18, 19, // right
     20, 21, 22, 20, 22, 23, // left
 ];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_cube_to_uniform() {
+        let pos = Vec3::new(1.0, 2.0, 3.0);
+        let cube = Cube::new(pos, 0.5, Material::Lambertian(Vec3::new(0.1, 0.2, 0.3)));
+        let uniform = cube.to_uniform();
+        
+        assert_eq!(uniform.center, pos);
+        assert_eq!(uniform.size, 0.5);
+        assert_eq!(uniform.mat.mat_type, MAT_LAMBERTIAN);
+        assert_eq!(uniform.mat.albedo, Vec3::new(0.1, 0.2, 0.3));
+    }
+
+    #[test]
+    fn test_material_to_uniform() {
+        let mat = Material::Metal(Vec3::new(1.0, 1.0, 1.0), 0.5).to_uniform();
+        assert_eq!(mat.mat_type, MAT_METAL);
+        assert_eq!(mat.roughness, 0.5);
+
+        let mat = Material::Dielectric(1.5).to_uniform();
+        assert_eq!(mat.mat_type, MAT_DIELECTRIC);
+        assert_eq!(mat.refraction_index, 1.5);
+
+        let mat = Material::Emissive(Vec3::new(1.0, 0.0, 0.0)).to_uniform();
+        assert_eq!(mat.mat_type, MAT_EMISSIVE);
+        assert_eq!(mat.albedo, Vec3::new(1.0, 0.0, 0.0));
+    }
+
+    #[test]
+    fn test_world_to_uniform() {
+        let cubes = vec![
+            Cube::new(Vec3::ZERO, 1.0, Material::Dielectric(1.5)),
+            Cube::new(Vec3::new(1.0, 0.0, 0.0), 0.5, Material::Emissive(Vec3::ONE)),
+        ];
+        let world = World::new(&cubes);
+        
+        let uniforms = world.to_uniform();
+        assert_eq!(uniforms.len(), 2);
+        assert_eq!(uniforms[0].mat.mat_type, MAT_DIELECTRIC);
+        assert_eq!(uniforms[1].mat.mat_type, MAT_EMISSIVE);
+        
+        let light_indices = world.get_light_indices();
+        assert_eq!(light_indices, vec![1]);
+    }
+
+    #[test]
+    fn test_vertex_desc() {
+        let desc = Vertex::desc();
+        assert_eq!(desc.array_stride, std::mem::size_of::<Vertex>() as wgpu::BufferAddress);
+        assert_eq!(desc.attributes.len(), 2);
+    }
+}

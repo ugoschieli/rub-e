@@ -391,3 +391,45 @@ impl HdrLoader {
         Ok(dst)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_hdr_headless() {
+        let instance = wgpu::Instance::default();
+        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::LowPower,
+            compatible_surface: None,
+            force_fallback_adapter: false,
+        }));
+        
+        if let Ok(adapter) = adapter {
+            let (device, _) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default())).unwrap();
+            
+            // Test HdrLoader pipeline creation
+            let _loader = HdrLoader::new(&device);
+            
+            // Test HdrPipeline
+            let config = wgpu::SurfaceConfiguration {
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                format: wgpu::TextureFormat::Rgba8Unorm,
+                width: 100,
+                height: 100,
+                present_mode: wgpu::PresentMode::Fifo,
+                alpha_mode: wgpu::CompositeAlphaMode::Auto,
+                view_formats: vec![],
+                desired_maximum_frame_latency: 2,
+            };
+            
+            let pipeline = HdrPipeline::new(&device, &config, TonemappingMode::Sdr, 1000.0);
+            assert_eq!(pipeline.format(), wgpu::TextureFormat::Rgba16Float);
+            
+            // Test pipeline resize
+            let mut pipeline = pipeline;
+            pipeline.resize(&device, 200, 200);
+            assert_eq!(pipeline.width, 200);
+        }
+    }
+}

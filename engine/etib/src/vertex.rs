@@ -39,3 +39,20 @@ impl Vertex {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_vertex_desc() {
+        let desc = Vertex::desc();
+        assert_eq!(desc.array_stride, std::mem::size_of::<Vertex>() as u64);
+        assert_eq!(desc.step_mode, wgpu::VertexStepMode::Vertex);
+        assert_eq!(desc.attributes.len(), 3);
+        
+        assert_eq!(desc.attributes[0].shader_location, 0);
+        assert_eq!(desc.attributes[1].shader_location, 1);
+        assert_eq!(desc.attributes[2].shader_location, 2);
+    }
+}

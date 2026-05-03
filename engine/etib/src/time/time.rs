@@ -60,3 +60,58 @@ impl TimeState {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_time_state_new() {
+        let state = TimeState::new();
+        assert_eq!(state.frame_count, 0);
+        assert_eq!(state.current_fps, 0.0);
+        assert_eq!(state.dt, 0.0);
+    }
+
+    #[test]
+    fn test_time_state_now() {
+        let now1 = TimeState::now();
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        let now2 = TimeState::now();
+        assert!(now2 >= now1);
+        assert!(now2 > 0.0);
+    }
+
+    #[test]
+    fn test_time_state_tick() {
+        let mut state = TimeState::new();
+        let initial_last_frame = state.last_frame_time;
+
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        state.tick();
+
+        assert!(state.dt > 0.0);
+        assert_eq!(state.frame_count, 1);
+        assert!(state.last_frame_time > initial_last_frame);
+    }
+
+    #[test]
+    fn test_time_state_default_and_fps() {
+        let state = TimeState::default();
+        assert_eq!(state.fps(), 0.0);
+    }
+
+    #[test]
+    fn test_time_state_fps_update() {
+        let mut state = TimeState::new();
+        // Force fps_update_time to be > 0.5s ago
+        state.fps_update_time = std::time::Instant::now() - std::time::Duration::from_millis(600);
+        state.frame_count = 30;
+        
+        state.tick();
+        
+        // FPS should be updated now (approx 30 / 0.6 = 50)
+        assert!(state.fps() > 0.0);
+        assert_eq!(state.frame_count, 0); // Frame count should reset
+    }
+}

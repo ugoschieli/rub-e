@@ -25,18 +25,21 @@ impl InputState {
         self.just_released.contains(&PhysicalKey::Code(key))
     }
 
-    /// Helper invoked by the engine to process Winit keyboard events.
     pub(crate) fn process_keyboard_event(&mut self, event: &winit::event::KeyEvent) {
-        let is_pressed = event.state == winit::event::ElementState::Pressed;
+        self.process_key_event(event.state, event.physical_key);
+    }
+
+    pub(crate) fn process_key_event(&mut self, state: winit::event::ElementState, physical_key: PhysicalKey) {
+        let is_pressed = state == winit::event::ElementState::Pressed;
 
         if is_pressed {
             // insert returns true if the value was not already present
-            if self.pressed.insert(event.physical_key) {
-                self.just_pressed.insert(event.physical_key);
+            if self.pressed.insert(physical_key) {
+                self.just_pressed.insert(physical_key);
             }
         } else {
-            self.pressed.remove(&event.physical_key);
-            self.just_released.insert(event.physical_key);
+            self.pressed.remove(&physical_key);
+            self.just_released.insert(physical_key);
         }
     }
 
@@ -44,5 +47,46 @@ impl InputState {
     pub(crate) fn clear_frame_state(&mut self) {
         self.just_pressed.clear();
         self.just_released.clear();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use winit::event::ElementState;
+
+    #[test]
+    fn test_input_state() {
+        let mut state = InputState::default();
+        let key = KeyCode::KeyA;
+        let physical = PhysicalKey::Code(key);
+
+        assert!(!state.is_key_pressed(key));
+        assert!(!state.is_key_just_pressed(key));
+
+        // Press A
+        state.process_key_event(ElementState::Pressed, physical);
+        assert!(state.is_key_pressed(key));
+        assert!(state.is_key_just_pressed(key));
+        assert!(!state.is_key_just_released(key));
+
+        // Press A again (auto-repeat)
+        state.clear_frame_state();
+        state.process_key_event(ElementState::Pressed, physical);
+        assert!(state.is_key_pressed(key));
+        assert!(!state.is_key_just_pressed(key)); // Not JUST pressed
+        assert!(!state.is_key_just_released(key));
+
+        // Release A
+        state.clear_frame_state();
+        state.process_key_event(ElementState::Released, physical);
+        assert!(!state.is_key_pressed(key));
+        assert!(!state.is_key_just_pressed(key));
+        assert!(state.is_key_just_released(key));
+
+        // Next frame
+        state.clear_frame_state();
+        assert!(!state.is_key_pressed(key));
+        assert!(!state.is_key_just_released(key));
     }
 }

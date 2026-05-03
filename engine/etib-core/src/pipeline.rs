@@ -248,3 +248,52 @@ impl Pipeline {
         Pipeline { layout, pipeline }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_pipeline_headless() {
+        let instance = wgpu::Instance::default();
+        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::LowPower,
+            compatible_surface: None,
+            force_fallback_adapter: false,
+        }));
+        
+        if let Ok(adapter) = adapter {
+            let (device, _) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default())).unwrap();
+            
+            let shader = Shader::new(
+                "@vertex fn vs_main() -> @builtin(position) vec4<f32> { return vec4<f32>(0.0); } @fragment fn fs_main() -> @location(0) vec4<f32> { return vec4<f32>(1.0); }",
+                &device,
+                Some("Test Shader"),
+            );
+            
+            let pipeline = Pipeline::new_v2(
+                &device,
+                &[],
+                &[],
+                &shader,
+                wgpu::TextureFormat::Rgba8Unorm,
+                None,
+                wgpu::PrimitiveTopology::TriangleList,
+                Some("Test Pipeline"),
+            );
+
+            assert!(true); // If it didn't panic, creation succeeded
+            
+            let skybox_pipeline = Pipeline::new_skybox(
+                &device,
+                &[],
+                &shader,
+                wgpu::TextureFormat::Rgba8Unorm,
+                wgpu::TextureFormat::Depth32Float,
+                Some("Test Skybox Pipeline"),
+            );
+            
+            assert!(true);
+        }
+    }
+}

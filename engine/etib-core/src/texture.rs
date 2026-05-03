@@ -124,3 +124,48 @@ impl CubeTexture {
         &self.sampler
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_texture_headless() {
+        let instance = wgpu::Instance::default();
+        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::LowPower,
+            compatible_surface: None,
+            force_fallback_adapter: false,
+        }));
+        
+        if let Ok(adapter) = adapter {
+            let (device, _) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default())).unwrap();
+            
+            let tex = Texture::new(
+                &device, 
+                256, 
+                256, 
+                wgpu::TextureFormat::Rgba8Unorm, 
+                wgpu::TextureUsages::TEXTURE_BINDING, 
+                Some("Test Texture")
+            );
+
+            assert_eq!(tex.texture.width(), 256);
+            assert_eq!(tex.texture.height(), 256);
+
+            let cube = CubeTexture::create_2d(
+                &device,
+                128,
+                128,
+                wgpu::TextureFormat::Rgba8Unorm,
+                1,
+                wgpu::TextureUsages::TEXTURE_BINDING,
+                wgpu::FilterMode::Linear,
+                Some("Test Cube")
+            );
+
+            assert_eq!(cube.texture().width(), 128);
+            assert_eq!(cube.texture().depth_or_array_layers(), 6);
+        }
+    }
+}

@@ -224,3 +224,38 @@ impl BindGroupBuilder {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_bindgroup_builder_headless() {
+        let instance = wgpu::Instance::default();
+        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::LowPower,
+            compatible_surface: None,
+            force_fallback_adapter: false,
+        }));
+        
+        if let Ok(adapter) = adapter {
+            let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default())).unwrap();
+            
+            let data = [1.0f32, 2.0, 3.0, 4.0];
+            let bytes = bytemuck::cast_slice(&data);
+
+            let bg = BindGroupBuilder::new()
+                .add_uniform_buffer(&device, 0, bytes, wgpu::ShaderStages::COMPUTE)
+                .build(&device, Some("test bg"));
+            
+            assert!(bg.get_buffer(0).is_some());
+            assert!(bg.get_buffer(1).is_none());
+
+            let new_data = [5.0f32, 6.0, 7.0, 8.0];
+            bg.write_buffer(&queue, 0, bytemuck::cast_slice(&new_data));
+            
+            // Warning condition
+            bg.write_buffer(&queue, 1, bytemuck::cast_slice(&new_data));
+        }
+    }
+}

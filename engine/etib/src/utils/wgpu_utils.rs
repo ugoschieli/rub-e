@@ -183,3 +183,52 @@ pub fn create_depth_texture(
 
     (texture, view)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_detect_hdr_support() {
+        let caps = wgpu::SurfaceCapabilities {
+            formats: vec![
+                wgpu::TextureFormat::Bgra8UnormSrgb,
+                wgpu::TextureFormat::Rgba16Float,
+            ],
+            present_modes: vec![],
+            alpha_modes: vec![],
+            usages: wgpu::TextureUsages::empty(),
+        };
+        assert_eq!(detect_hdr_support(&caps), Some(wgpu::TextureFormat::Rgba16Float));
+
+        let caps_no_hdr = wgpu::SurfaceCapabilities {
+            formats: vec![wgpu::TextureFormat::Bgra8UnormSrgb],
+            present_modes: vec![],
+            alpha_modes: vec![],
+            usages: wgpu::TextureUsages::empty(),
+        };
+        assert_eq!(detect_hdr_support(&caps_no_hdr), None);
+    }
+
+    #[test]
+    fn test_wgpu_utils_headless() {
+        let instance = create_instance();
+        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::LowPower,
+            compatible_surface: None,
+            force_fallback_adapter: false,
+        }));
+        
+        if let Ok(adapter) = adapter {
+            let (device, _) = pollster::block_on(create_device(&adapter)).unwrap();
+            
+            let (gbuffer_tex, _) = create_gbuffer_texture(&device, 100, 100, wgpu::TextureFormat::Rgba8Unorm, "test");
+            assert_eq!(gbuffer_tex.width(), 100);
+            
+            let (depth_tex, _) = create_depth_texture(&device, 100, 100);
+            assert_eq!(depth_tex.width(), 100);
+        } else {
+            println!("No adapter found, skipping headless test.");
+        }
+    }
+}

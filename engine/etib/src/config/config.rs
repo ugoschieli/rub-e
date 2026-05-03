@@ -73,3 +73,64 @@ impl EngineConfig {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+    use tempfile::NamedTempFile;
+
+    #[test]
+    fn test_engine_config_default() {
+        let config = EngineConfig::default();
+        assert_eq!(config.vsync, true);
+        assert_eq!(config.hdr_mode, HdrMode::Auto);
+        assert_eq!(config.peak_brightness_nits, 1000.0);
+    }
+
+    #[test]
+    fn test_load_from_file_valid() {
+        let mut file = NamedTempFile::new().unwrap();
+        writeln!(
+            file,
+            r#"{{
+                "vsync": false,
+                "hdr_mode": "enabled",
+                "peak_brightness_nits": 800.0
+            }}"#
+        )
+        .unwrap();
+
+        let config = EngineConfig::load_from_file(file.path().to_str().unwrap());
+        assert_eq!(config.vsync, false);
+        assert_eq!(config.hdr_mode, HdrMode::Enabled);
+        assert_eq!(config.peak_brightness_nits, 800.0);
+    }
+
+    #[test]
+    fn test_load_from_file_missing() {
+        let config = EngineConfig::load_from_file("nonexistent_file_path_12345.json");
+        assert_eq!(config.vsync, true); // fallback to default
+    }
+
+    #[test]
+    fn test_load_from_file_invalid_json() {
+        let mut file = NamedTempFile::new().unwrap();
+        writeln!(file, r#"{{"vsync": "invalid_type"}}"#).unwrap();
+
+        let config = EngineConfig::load_from_file(file.path().to_str().unwrap());
+        assert_eq!(config.vsync, true); // fallback to default
+    }
+
+    #[test]
+    fn test_load_from_file_empty_json() {
+        // This triggers serde's default attribute functions
+        let mut file = NamedTempFile::new().unwrap();
+        writeln!(file, r#"{{}}"#).unwrap();
+
+        let config = EngineConfig::load_from_file(file.path().to_str().unwrap());
+        assert_eq!(config.vsync, true);
+        assert_eq!(config.hdr_mode, HdrMode::Auto);
+        assert_eq!(config.peak_brightness_nits, 1000.0);
+    }
+}

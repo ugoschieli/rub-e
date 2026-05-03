@@ -353,3 +353,51 @@ impl CameraController {
         camera.update_matrix(queue);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_camera_controller_new() {
+        let controller = CameraController::new(10.0, 0.5);
+        assert_eq!(controller.speed, 10.0);
+        assert_eq!(controller.sensitivity, 0.5);
+        assert_eq!(controller.mode, CameraMode::FirstPerson);
+        assert_eq!(controller.yaw, -std::f32::consts::FRAC_PI_2);
+        assert_eq!(controller.pitch, 0.0);
+    }
+
+    #[test]
+    fn test_camera_controller_mouse() {
+        let mut controller = CameraController::new(10.0, 0.1);
+        
+        // Test first person
+        controller.process_mouse(10.0, 5.0);
+        assert!(controller.yaw > -std::f32::consts::FRAC_PI_2);
+        assert!(controller.pitch < 0.0);
+        
+        // Test isometric ignores mouse
+        controller.mode = CameraMode::Isometric;
+        let yaw_before = controller.yaw;
+        controller.process_mouse(10.0, 5.0);
+        assert_eq!(controller.yaw, yaw_before);
+    }
+
+    #[test]
+    fn test_camera_controller_scroll() {
+        let mut controller = CameraController::new(10.0, 0.1);
+        
+        // Test first person speed change
+        controller.process_scroll(&MouseScrollDelta::LineDelta(0.0, 1.0));
+        assert_eq!(controller.speed, 10.5);
+        
+        // Test isometric zoom
+        controller.mode = CameraMode::Isometric;
+        controller.process_scroll(&MouseScrollDelta::LineDelta(0.0, 1.0));
+        assert!(controller.zoom < 1.0); // zoom in
+        
+        controller.process_scroll(&MouseScrollDelta::LineDelta(0.0, -1.0));
+        assert!(controller.zoom > 1.0); // zoom out
+    }
+}

@@ -964,6 +964,7 @@ dependencies = [
  "bytemuck",
  "log",
  "naga",
+ "pollster",
  "wgpu",
 ]
 

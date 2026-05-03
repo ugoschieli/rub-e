@@ -207,3 +207,39 @@ impl DynamicScene {
         &self.gpu_buffer
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_dynamic_model() {
+        let cubes = vec![
+            ModelCube {
+                position: Vector3::new(1.0, 2.0, 3.0),
+                color: Vector3::new(0.5, 0.5, 0.5),
+            },
+        ];
+        
+        let mut model = DynamicModel::from_cubes(cubes);
+        assert_eq!(model.cube_count(), 1);
+        
+        model.position = Vector3::new(10.0, 0.0, 0.0);
+        
+        {
+            let mut raw = model.to_raw_instances();
+            let instance = raw.next().unwrap();
+            let bytes = bytemuck::bytes_of(&instance);
+            let float_array: &[f32] = bytemuck::cast_slice(bytes);
+            assert_eq!(float_array[12], 11.0);
+            assert_eq!(float_array[13], 2.0);
+        }
+        
+        model.cubes_mut()[0].position.x = 5.0;
+        let mut raw2 = model.to_raw_instances();
+        let instance2 = raw2.next().unwrap();
+        let bytes2 = bytemuck::bytes_of(&instance2);
+        let float_array2: &[f32] = bytemuck::cast_slice(bytes2);
+        assert_eq!(float_array2[12], 15.0);
+    }
+}
