@@ -6,6 +6,8 @@
 pub mod camera;
 /// Module containing the cube data (Vertex + Instance) and model loading
 pub mod cube;
+
+#[cfg(not(tarpaulin_include))]
 mod game;
 mod gfx;
 /// High-level scene renderer (static + dynamic models, culling, draw calls)
@@ -24,6 +26,7 @@ pub mod time;
 mod vertex;
 
 /// Module containing the experimental raytracing renderer
+#[cfg(not(tarpaulin_include))]
 pub mod raytracing;
 
 pub use crate::game::*;

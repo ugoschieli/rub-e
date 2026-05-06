@@ -793,7 +793,7 @@ impl Game for PongGame {
 
         let aspect = ctx.window_size().width as f32 / ctx.window_size().height as f32;
         let camera = Camera::new(
-            ctx,
+            &ctx.gfx.device,
             CAM_EYE.into(),
             CAM_TARGET.into(),
             cgmath::Vector3::unit_y(),

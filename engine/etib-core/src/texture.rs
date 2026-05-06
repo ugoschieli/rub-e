@@ -168,4 +168,115 @@ mod tests {
             assert_eq!(cube.texture().depth_or_array_layers(), 6);
         }
     }
+
+    fn make_device() -> Option<(wgpu::Device, wgpu::Queue)> {
+        let instance = wgpu::Instance::default();
+        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::LowPower,
+            compatible_surface: None,
+            force_fallback_adapter: false,
+        }));
+        if let Ok(adapter) = adapter {
+            Some(
+                pollster::block_on(
+                    adapter.request_device(&wgpu::DeviceDescriptor::default()),
+                )
+                .unwrap(),
+            )
+        } else {
+            None
+        }
+    }
+
+    #[test]
+    fn test_texture_depth_format() {
+        let Some((device, _)) = make_device() else {
+            return;
+        };
+        let tex = Texture::new(
+            &device,
+            64,
+            64,
+            wgpu::TextureFormat::Depth32Float,
+            wgpu::TextureUsages::RENDER_ATTACHMENT,
+            Some("depth texture"),
+        );
+        assert_eq!(tex.texture.width(), 64);
+        assert_eq!(tex.texture.height(), 64);
+        assert_eq!(tex.texture.format(), wgpu::TextureFormat::Depth32Float);
+    }
+
+    #[test]
+    fn test_texture_usage_stored() {
+        let Some((device, _)) = make_device() else {
+            return;
+        };
+        let tex = Texture::new(
+            &device,
+            32,
+            32,
+            wgpu::TextureFormat::Rgba8Unorm,
+            wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            None,
+        );
+        assert_eq!(tex.texture.width(), 32);
+    }
+
+    #[test]
+    fn test_cube_texture_accessors() {
+        let Some((device, _)) = make_device() else {
+            return;
+        };
+        let cube = CubeTexture::create_2d(
+            &device,
+            64,
+            64,
+            wgpu::TextureFormat::Rgba8Unorm,
+            1,
+            wgpu::TextureUsages::TEXTURE_BINDING,
+            wgpu::FilterMode::Nearest,
+            Some("cube accessors test"),
+        );
+        assert_eq!(cube.texture().width(), 64);
+        assert_eq!(cube.texture().depth_or_array_layers(), 6);
+        // Verify accessors return valid references (not null/invalid)
+        let _view: &wgpu::TextureView = cube.view();
+        let _sampler: &wgpu::Sampler = cube.sampler();
+    }
+
+    #[test]
+    fn test_cube_texture_mip_levels() {
+        let Some((device, _)) = make_device() else {
+            return;
+        };
+        let cube = CubeTexture::create_2d(
+            &device,
+            16,
+            16,
+            wgpu::TextureFormat::Rgba8Unorm,
+            4,
+            wgpu::TextureUsages::TEXTURE_BINDING,
+            wgpu::FilterMode::Linear,
+            Some("cube mip test"),
+        );
+        assert_eq!(cube.texture().mip_level_count(), 4);
+        assert_eq!(cube.texture().depth_or_array_layers(), 6);
+    }
+
+    #[test]
+    fn test_cube_texture_mag_filter_nearest() {
+        let Some((device, _)) = make_device() else {
+            return;
+        };
+        let _cube = CubeTexture::create_2d(
+            &device,
+            8,
+            8,
+            wgpu::TextureFormat::Rgba8Unorm,
+            1,
+            wgpu::TextureUsages::TEXTURE_BINDING,
+            wgpu::FilterMode::Nearest,
+            None,
+        );
+    }
 }

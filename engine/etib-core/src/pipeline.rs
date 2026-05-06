@@ -271,7 +271,7 @@ mod tests {
                 Some("Test Shader"),
             );
             
-            let pipeline = Pipeline::new_v2(
+            let _pipeline = Pipeline::new_v2(
                 &device,
                 &[],
                 &[],
@@ -284,7 +284,7 @@ mod tests {
 
             assert!(true); // If it didn't panic, creation succeeded
             
-            let skybox_pipeline = Pipeline::new_skybox(
+            let _skybox_pipeline = Pipeline::new_skybox(
                 &device,
                 &[],
                 &shader,
@@ -295,5 +295,114 @@ mod tests {
             
             assert!(true);
         }
+    }
+
+    fn make_device() -> Option<(wgpu::Device, wgpu::Queue)> {
+        let instance = wgpu::Instance::default();
+        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::LowPower,
+            compatible_surface: None,
+            force_fallback_adapter: false,
+        }));
+        if let Ok(adapter) = adapter {
+            Some(
+                pollster::block_on(
+                    adapter.request_device(&wgpu::DeviceDescriptor::default()),
+                )
+                .unwrap(),
+            )
+        } else {
+            None
+        }
+    }
+
+    const MINIMAL_SHADER: &str = concat!(
+        "@vertex fn vs_main() -> @builtin(position) vec4<f32> { return vec4<f32>(0.0); } ",
+        "@fragment fn fs_main() -> @location(0) vec4<f32> { return vec4<f32>(1.0); }",
+    );
+
+    #[test]
+    fn test_pipeline_new_v2_with_depth() {
+        let Some((device, _)) = make_device() else {
+            return;
+        };
+        let shader = Shader::new(MINIMAL_SHADER, &device, Some("test shader"));
+        let _pipeline = Pipeline::new_v2(
+            &device,
+            &[],
+            &[],
+            &shader,
+            wgpu::TextureFormat::Rgba8Unorm,
+            Some(wgpu::TextureFormat::Depth32Float),
+            wgpu::PrimitiveTopology::TriangleList,
+            Some("pipeline with depth"),
+        );
+    }
+
+    #[test]
+    fn test_pipeline_new_v2_triangle_strip() {
+        let Some((device, _)) = make_device() else {
+            return;
+        };
+        let shader = Shader::new(MINIMAL_SHADER, &device, Some("test shader"));
+        let _pipeline = Pipeline::new_v2(
+            &device,
+            &[],
+            &[],
+            &shader,
+            wgpu::TextureFormat::Rgba8Unorm,
+            None,
+            wgpu::PrimitiveTopology::TriangleStrip,
+            Some("triangle strip pipeline"),
+        );
+    }
+
+    #[test]
+    fn test_pipeline_new_with_vertex_buffer() {
+        let Some((device, _)) = make_device() else {
+            return;
+        };
+        let shader = Shader::new(MINIMAL_SHADER, &device, Some("test shader"));
+        let vertices = [0.0f32; 3];
+        let vb = crate::buffer::VertexBuffer::new(
+            &device,
+            &vertices,
+            wgpu::VertexBufferLayout {
+                array_stride: std::mem::size_of::<f32>() as wgpu::BufferAddress,
+                step_mode: wgpu::VertexStepMode::Vertex,
+                attributes: &[],
+            },
+        );
+        let surface_config = wgpu::SurfaceConfiguration {
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            width: 800,
+            height: 600,
+            present_mode: wgpu::PresentMode::Fifo,
+            alpha_mode: wgpu::CompositeAlphaMode::Auto,
+            view_formats: vec![],
+            desired_maximum_frame_latency: 2,
+        };
+        let _pipeline = Pipeline::new(&device, &[], &shader, &surface_config, &vb, "test pipeline");
+    }
+
+    #[test]
+    fn test_pipeline_new_with_layouts() {
+        let Some((device, _)) = make_device() else {
+            return;
+        };
+        let shader = Shader::new(MINIMAL_SHADER, &device, Some("test shader"));
+        let surface_config = wgpu::SurfaceConfiguration {
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            width: 800,
+            height: 600,
+            present_mode: wgpu::PresentMode::Fifo,
+            alpha_mode: wgpu::CompositeAlphaMode::Auto,
+            view_formats: vec![],
+            desired_maximum_frame_latency: 2,
+        };
+        let _pipeline =
+            Pipeline::new_with_layouts(&device, &[], &shader, &surface_config, &[], "test pipeline layouts");
     }
 }

@@ -1,5 +1,5 @@
 [workspace]
-members = [ "etib", "etib-core" ]
+members = ["etib", "etib-core"]
 resolver = "3"
 
 [workspace.dependencies]

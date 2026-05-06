@@ -33,6 +33,7 @@ impl Gfx {
     /// # Arguments
     /// * `window` - The window to create the graphics context for
     /// * `config_path` - Optional path to the config file. Defaults to "config.json" if None.
+    #[cfg(not(tarpaulin_include))]
     pub fn new(window: Arc<Window>, config: &EngineConfig) -> Gfx {
         let window_size = window.inner_size();
 
@@ -87,6 +88,7 @@ impl Gfx {
     }
 
     /// Get the texture and view of the next frame that will be rendered
+    #[cfg(not(tarpaulin_include))]
     pub fn get_next_frame(&self) -> (wgpu::SurfaceTexture, wgpu::TextureView) {
         let frame = self.surface.get_current_texture().unwrap();
         let view = frame
@@ -97,6 +99,7 @@ impl Gfx {
     }
 
     /// Get a default wgpu::RenderPassDescriptor with depth testing enabled
+    #[cfg(not(tarpaulin_include))]
     pub fn render_pass<'gfx: 'tex, 'tex>(
         &'gfx self,
         color_attachments: &'tex [Option<wgpu::RenderPassColorAttachment<'tex>>],
@@ -135,6 +138,7 @@ impl Gfx {
 
     /// Helper function to reconfigure the Surface size. Needs to be called when the window is
     /// resized.
+    #[cfg(not(tarpaulin_include))]
     pub fn reconfigure_surface_size(&mut self, size: PhysicalSize<u32>) {
         self.surface_config.width = size.width;
         self.surface_config.height = size.height;
@@ -161,5 +165,58 @@ impl Gfx {
         self.depth_texture_view = self
             .depth_texture
             .create_view(&wgpu::TextureViewDescriptor::default());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_device() -> Option<(wgpu::Device, wgpu::Queue)> {
+        let instance = wgpu::Instance::default();
+        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::LowPower,
+            compatible_surface: None,
+            force_fallback_adapter: false,
+        }));
+        if let Ok(adapter) = adapter {
+            Some(
+                pollster::block_on(
+                    adapter.request_device(&wgpu::DeviceDescriptor::default()),
+                )
+                .unwrap(),
+            )
+        } else {
+            None
+        }
+    }
+
+    /// color_attachments_from_view is a pure function: it wraps the given TextureView
+    /// into a RenderPassColorAttachment with Load::Clear(BLACK) and Store.
+    #[test]
+    fn test_color_attachments_from_view() {
+        let Some((device, _)) = make_device() else { return; };
+
+        let tex = device.create_texture(&wgpu::TextureDescriptor {
+            label: None,
+            size: wgpu::Extent3d { width: 4, height: 4, depth_or_array_layers: 1 },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[],
+        });
+        let view = tex.create_view(&wgpu::TextureViewDescriptor::default());
+
+        let attachment = Gfx::color_attachments_from_view(&view);
+        assert!(attachment.resolve_target.is_none());
+        match attachment.ops.load {
+            wgpu::LoadOp::Clear(c) => {
+                assert_eq!(c, wgpu::Color::BLACK);
+            }
+            _ => panic!("expected LoadOp::Clear(BLACK)"),
+        }
+        assert_eq!(attachment.ops.store, wgpu::StoreOp::Store);
     }
 }

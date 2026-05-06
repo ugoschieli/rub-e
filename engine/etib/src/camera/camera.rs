@@ -1,10 +1,8 @@
 use cgmath::{InnerSpace, Matrix, SquareMatrix};
-use winit::event::{ElementState, KeyEvent, MouseScrollDelta};
+use winit::event::{ElementState, MouseScrollDelta};
 use winit::keyboard::{KeyCode, PhysicalKey};
 
 use etib_core::bindgroup::{BindGroup, BindGroupBuilder};
-
-use crate::EngineContext;
 
 /// Enum representing the different camera modes
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -16,7 +14,7 @@ pub enum CameraMode {
 }
 
 /// Enum representing the different projection types
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Projection {
     /// Perspective projection
     Perspective {
@@ -123,7 +121,7 @@ pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
 impl Camera {
     /// Create a new camera object
     pub fn new(
-        ctx: &EngineContext,
+        device: &wgpu::Device,
         eye: cgmath::Point3<f32>,
         target: cgmath::Point3<f32>,
         up: cgmath::Vector3<f32>,
@@ -156,14 +154,14 @@ impl Camera {
 
         let bind_group = BindGroupBuilder::new()
             .add_uniform_buffer(
-                &ctx.gfx.device,
+                device,
                 0,
                 bytemuck::bytes_of(&camera_raw),
                 wgpu::ShaderStages::VERTEX
                     | wgpu::ShaderStages::FRAGMENT
                     | wgpu::ShaderStages::COMPUTE,
             )
-            .build(&ctx.gfx.device, Some("Camera Bind Group"));
+            .build(device, Some("Camera Bind Group"));
 
         Self {
             eye,
@@ -231,14 +229,14 @@ impl CameraController {
     }
 
     /// Process keyboard input events
-    pub fn process_keyboard(&mut self, key: KeyEvent) -> bool {
-        let amount = if key.state == ElementState::Pressed {
+    pub fn process_keyboard(&mut self, key: PhysicalKey, state: ElementState) -> bool {
+        let amount = if state == ElementState::Pressed {
             1.0
         } else {
             0.0
         };
 
-        match key.physical_key {
+        match key {
             PhysicalKey::Code(KeyCode::KeyW) | PhysicalKey::Code(KeyCode::ArrowUp) => {
                 self.forward_amount = amount;
                 true
@@ -356,7 +354,113 @@ impl CameraController {
 
 #[cfg(test)]
 mod tests {
+    use cgmath::{Point3, Vector3};
+
     use super::*;
+
+    fn make_device() -> Option<(wgpu::Device, wgpu::Queue)> {
+        let instance = wgpu::Instance::default();
+        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::LowPower,
+            compatible_surface: None,
+            force_fallback_adapter: false,
+        }));
+        if let Ok(adapter) = adapter {
+            Some(
+                pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+                    .unwrap(),
+            )
+        } else {
+            None
+        }
+    }
+
+    #[test]
+    fn test_camera_new() {
+        let Some((device, _)) = make_device() else {
+            return;
+        };
+
+        let perspective_camera = Camera::new(
+            &device,
+            Point3::new(0.0, 0.0, 0.0),
+            Point3::new(1.0, 0.0, 0.0),
+            Vector3::new(0.0, 1.0, 0.0),
+            16. / 9.,
+            Projection::Perspective { fovy: 45. },
+            0.1,
+            100.,
+        );
+
+        let ortho_camera = Camera::new(
+            &device,
+            Point3::new(0.0, 0.0, 0.0),
+            Point3::new(1.0, 0.0, 0.0),
+            Vector3::new(0.0, 1.0, 0.0),
+            16. / 9.,
+            Projection::Orthographic { scale: 1. },
+            0.1,
+            100.,
+        );
+
+        assert_eq!(
+            perspective_camera.projection,
+            Projection::Perspective { fovy: 45. }
+        );
+        assert_eq!(
+            ortho_camera.projection,
+            Projection::Orthographic { scale: 1. }
+        );
+    }
+
+    #[test]
+    fn test_camera_update_matrix() {
+        let Some((device, queue)) = make_device() else {
+            return;
+        };
+
+        let mut persp_camera = Camera::new(
+            &device,
+            Point3::new(0.0, 0.0, 0.0),
+            Point3::new(1.0, 0.0, 0.0),
+            Vector3::new(0.0, 1.0, 0.0),
+            16. / 9.,
+            Projection::Perspective { fovy: 45. },
+            0.1,
+            100.,
+        );
+
+        let mut ortho_camera = Camera::new(
+            &device,
+            Point3::new(0.0, 0.0, 0.0),
+            Point3::new(1.0, 0.0, 0.0),
+            Vector3::new(0.0, 1.0, 0.0),
+            16. / 9.,
+            Projection::Orthographic { scale: 1. },
+            0.1,
+            100.,
+        );
+
+        let proj = cgmath::perspective(cgmath::Deg(45.), 16. / 9., 0.1, 100.);
+        let view = cgmath::Matrix4::look_at_rh(
+            Point3::new(0., 0., 0.),
+            Point3::new(1., 0., 0.),
+            Vector3::new(0., 1., 0.),
+        );
+        let persp_matrix = OPENGL_TO_WGPU_MATRIX * proj * view;
+
+        let right = 16. / 9. * 1.;
+        let left = -right;
+        let top = 1.;
+        let bottom = -top;
+        let ortho_matrix =
+            OPENGL_TO_WGPU_MATRIX * cgmath::ortho(left, right, bottom, top, 0.1, 100.) * view;
+
+        let persp_result = persp_camera.update_matrix(&queue);
+        let ortho_result = ortho_camera.update_matrix(&queue);
+        assert_eq!(persp_result, persp_matrix);
+        assert_eq!(ortho_result, ortho_matrix);
+    }
 
     #[test]
     fn test_camera_controller_new() {
@@ -369,14 +473,130 @@ mod tests {
     }
 
     #[test]
+    fn test_camera_controller_update_matrix() {
+        let Some((device, queue)) = make_device() else {
+            return;
+        };
+
+        let mut pers_camera = Camera::new(
+            &device,
+            Point3::new(0.0, 0.0, 0.0),
+            Point3::new(1.0, 0.0, 0.0),
+            Vector3::new(0.0, 1.0, 0.0),
+            16. / 9.,
+            Projection::Perspective { fovy: 45. },
+            0.1,
+            100.,
+        );
+
+        let mut ortho_camera = Camera::new(
+            &device,
+            Point3::new(0.0, 0.0, 0.0),
+            Point3::new(1.0, 0.0, 0.0),
+            Vector3::new(0.0, 1.0, 0.0),
+            16. / 9.,
+            Projection::Orthographic { scale: 1. },
+            0.1,
+            100.,
+        );
+
+        let mut controller = CameraController::new(10.0, 0.5);
+
+        controller.update_camera(&queue, &mut pers_camera, 1.);
+
+        controller.mode = CameraMode::Isometric;
+        controller.update_camera(&queue, &mut ortho_camera, 1.);
+
+        assert!(true) // Assert we didn't panic
+    }
+
+    #[test]
+    fn test_camera_controller_keyboard() {
+        let mut controller = CameraController::new(10.0, 0.1);
+
+        controller.process_keyboard(PhysicalKey::Code(KeyCode::KeyW), ElementState::Pressed);
+        assert_eq!(controller.forward_amount, 1.);
+        controller.process_keyboard(PhysicalKey::Code(KeyCode::KeyW), ElementState::Released);
+        assert_eq!(controller.forward_amount, 0.);
+        controller.process_keyboard(PhysicalKey::Code(KeyCode::ArrowUp), ElementState::Pressed);
+        assert_eq!(controller.forward_amount, 1.);
+        controller.process_keyboard(PhysicalKey::Code(KeyCode::ArrowUp), ElementState::Released);
+        assert_eq!(controller.forward_amount, 0.);
+        controller.process_keyboard(PhysicalKey::Code(KeyCode::KeyS), ElementState::Pressed);
+        assert_eq!(controller.forward_amount, -1.);
+        controller.process_keyboard(PhysicalKey::Code(KeyCode::KeyS), ElementState::Released);
+        assert_eq!(controller.forward_amount, 0.);
+        controller.process_keyboard(PhysicalKey::Code(KeyCode::ArrowDown), ElementState::Pressed);
+        assert_eq!(controller.forward_amount, -1.);
+        controller.process_keyboard(
+            PhysicalKey::Code(KeyCode::ArrowDown),
+            ElementState::Released,
+        );
+        controller.process_keyboard(PhysicalKey::Code(KeyCode::KeyD), ElementState::Pressed);
+        assert_eq!(controller.right_amount, 1.);
+        controller.process_keyboard(PhysicalKey::Code(KeyCode::KeyD), ElementState::Released);
+        assert_eq!(controller.right_amount, 0.);
+        controller.process_keyboard(
+            PhysicalKey::Code(KeyCode::ArrowRight),
+            ElementState::Pressed,
+        );
+        assert_eq!(controller.right_amount, 1.);
+        controller.process_keyboard(
+            PhysicalKey::Code(KeyCode::ArrowRight),
+            ElementState::Released,
+        );
+        assert_eq!(controller.right_amount, 0.);
+        assert_eq!(controller.forward_amount, 0.);
+        controller.process_keyboard(PhysicalKey::Code(KeyCode::KeyA), ElementState::Pressed);
+        assert_eq!(controller.right_amount, -1.);
+        controller.process_keyboard(PhysicalKey::Code(KeyCode::KeyA), ElementState::Released);
+        assert_eq!(controller.right_amount, 0.);
+        controller.process_keyboard(PhysicalKey::Code(KeyCode::ArrowLeft), ElementState::Pressed);
+        assert_eq!(controller.right_amount, -1.);
+        controller.process_keyboard(
+            PhysicalKey::Code(KeyCode::ArrowLeft),
+            ElementState::Released,
+        );
+        assert_eq!(controller.right_amount, 0.);
+        controller.process_keyboard(PhysicalKey::Code(KeyCode::Space), ElementState::Pressed);
+        assert_eq!(controller.up_amount, 1.);
+        controller.process_keyboard(PhysicalKey::Code(KeyCode::Space), ElementState::Released);
+        assert_eq!(controller.up_amount, 0.);
+        controller.process_keyboard(PhysicalKey::Code(KeyCode::ShiftLeft), ElementState::Pressed);
+        assert_eq!(controller.up_amount, -1.);
+        controller.process_keyboard(
+            PhysicalKey::Code(KeyCode::ShiftLeft),
+            ElementState::Released,
+        );
+        assert_eq!(controller.up_amount, 0.);
+        controller.process_keyboard(
+            PhysicalKey::Code(KeyCode::ShiftRight),
+            ElementState::Pressed,
+        );
+        assert_eq!(controller.up_amount, -1.);
+        controller.process_keyboard(
+            PhysicalKey::Code(KeyCode::ShiftRight),
+            ElementState::Released,
+        );
+        assert_eq!(controller.up_amount, 0.);
+
+        // Unrecognized key must hit the wildcard `_ => false` arm
+        let consumed = controller.process_keyboard(
+            PhysicalKey::Code(KeyCode::F1),
+            ElementState::Pressed,
+        );
+        assert!(!consumed, "unrecognized key should return false");
+    }
+
+    #[test]
     fn test_camera_controller_mouse() {
         let mut controller = CameraController::new(10.0, 0.1);
-        
+
         // Test first person
         controller.process_mouse(10.0, 5.0);
         assert!(controller.yaw > -std::f32::consts::FRAC_PI_2);
         assert!(controller.pitch < 0.0);
-        
+
         // Test isometric ignores mouse
         controller.mode = CameraMode::Isometric;
         let yaw_before = controller.yaw;
@@ -387,17 +607,52 @@ mod tests {
     #[test]
     fn test_camera_controller_scroll() {
         let mut controller = CameraController::new(10.0, 0.1);
-        
+
         // Test first person speed change
         controller.process_scroll(&MouseScrollDelta::LineDelta(0.0, 1.0));
         assert_eq!(controller.speed, 10.5);
-        
+
         // Test isometric zoom
         controller.mode = CameraMode::Isometric;
         controller.process_scroll(&MouseScrollDelta::LineDelta(0.0, 1.0));
         assert!(controller.zoom < 1.0); // zoom in
-        
+
         controller.process_scroll(&MouseScrollDelta::LineDelta(0.0, -1.0));
         assert!(controller.zoom > 1.0); // zoom out
+    }
+
+    #[test]
+    fn test_process_scroll_pixel_delta() {
+        let mut controller = CameraController::new(10.0, 0.1);
+        controller.process_scroll(&MouseScrollDelta::PixelDelta(
+            winit::dpi::PhysicalPosition::new(0.0, 10.0),
+        ));
+        // change = 10.0 * 0.1 = 1.0, speed = (10.0 + 1.0 * 0.5).max(0.1)
+        assert_eq!(controller.speed, 10.5);
+    }
+
+    #[test]
+    fn test_process_scroll_speed_minimum() {
+        let mut controller = CameraController::new(10.0, 0.1);
+        // Scroll way down — speed must not go below 0.1
+        controller.process_scroll(&MouseScrollDelta::LineDelta(0.0, -1000.0));
+        assert!(controller.speed >= 0.1);
+    }
+
+    #[test]
+    fn test_opengl_to_wgpu_matrix() {
+        // The matrix remaps OpenGL NDC z ∈ [-1, 1] to wgpu NDC z ∈ [0, 1]
+        let p_near = cgmath::Vector4::new(0.0f32, 0.0, -1.0, 1.0);
+        let p_far = cgmath::Vector4::new(0.0f32, 0.0, 1.0, 1.0);
+        let near = OPENGL_TO_WGPU_MATRIX * p_near;
+        let far = OPENGL_TO_WGPU_MATRIX * p_far;
+        assert!(
+            (near.z - 0.0).abs() < 1e-6,
+            "near plane z should map to 0.0"
+        );
+        assert!((far.z - 1.0).abs() < 1e-6, "far plane z should map to 1.0");
+        // x and y should be unchanged
+        assert_eq!(near.x, 0.0);
+        assert_eq!(near.y, 0.0);
     }
 }

@@ -305,4 +305,42 @@ mod tests {
     fn test_create_instance_buffer() {
         Cube::create_instance_buffer(); // It's a no-op, just call it for coverage
     }
+
+    #[test]
+    fn test_cube_raw_size() {
+        // 16 f32 for model matrix + 4 f32 for color = 80 bytes
+        assert_eq!(size_of::<CubeRaw>(), 80);
+    }
+
+    #[test]
+    fn test_vertices_count() {
+        assert_eq!(VERTICES.len(), 24); // 6 faces × 4 vertices each
+    }
+
+    #[test]
+    fn test_indices_count() {
+        assert_eq!(INDICES.len(), 36); // 6 faces × 6 indices (2 triangles × 3)
+    }
+
+    #[test]
+    fn test_cube_desc_attribute_locations() {
+        let desc = Cube::desc();
+        // Model matrix spans shader locations 3–6, color at 7
+        assert_eq!(desc.attributes[0].shader_location, 3);
+        assert_eq!(desc.attributes[4].shader_location, 7);
+    }
+
+    #[test]
+    fn test_cube_into_raw_color() {
+        let cube = Cube {
+            model: cgmath::Matrix4::from_scale(1.0),
+            color: cgmath::Vector4::new(0.1, 0.2, 0.3, 0.4),
+        };
+        let raw = cube.into_raw();
+        let floats: &[f32] = bytemuck::cast_slice(bytemuck::bytes_of(&raw));
+        assert!((floats[16] - 0.1).abs() < 1e-6); // r
+        assert!((floats[17] - 0.2).abs() < 1e-6); // g
+        assert!((floats[18] - 0.3).abs() < 1e-6); // b
+        assert!((floats[19] - 0.4).abs() < 1e-6); // a
+    }
 }

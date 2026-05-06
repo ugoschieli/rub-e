@@ -212,6 +212,155 @@ impl DynamicScene {
 mod tests {
     use super::*;
 
+    fn make_device() -> Option<(wgpu::Device, wgpu::Queue)> {
+        let instance = wgpu::Instance::default();
+        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::LowPower,
+            compatible_surface: None,
+            force_fallback_adapter: false,
+        }));
+        if let Ok(adapter) = adapter {
+            Some(
+                pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+                    .unwrap(),
+            )
+        } else {
+            None
+        }
+    }
+
+    #[test]
+    fn test_dynamic_model_load() {
+        use std::io::Write;
+        let mut file = tempfile::NamedTempFile::new().unwrap();
+        writeln!(file, "1.0 2.0 3.0 1.0 0.0 0.0").unwrap();
+        writeln!(file, "4.0 5.0 6.0").unwrap();
+
+        let model = DynamicModel::load(file.path().to_str().unwrap()).unwrap();
+        assert_eq!(model.cube_count(), 2);
+        assert_eq!(model.position, Vector3::zero());
+        assert_eq!(model.scale, 1.0);
+    }
+
+    #[test]
+    fn test_dynamic_scene_new_and_buffer() {
+        let Some((device, _)) = make_device() else {
+            return;
+        };
+        let scene = DynamicScene::new(&device, 100);
+        assert_eq!(scene.live_count(), 0);
+        let _buf: &wgpu::Buffer = scene.buffer();
+    }
+
+    #[test]
+    fn test_dynamic_scene_add_and_get() {
+        let Some((device, _)) = make_device() else {
+            return;
+        };
+        let mut scene = DynamicScene::new(&device, 100);
+
+        let model = DynamicModel::from_cubes(vec![ModelCube {
+            position: Vector3::new(1.0, 0.0, 0.0),
+            color: Vector3::new(1.0, 1.0, 1.0),
+        }]);
+
+        let id = scene.add(model);
+        assert_eq!(id, 0);
+        assert!(scene.get(id).is_some());
+        assert!(scene.get(999).is_none());
+    }
+
+    #[test]
+    fn test_dynamic_scene_get_mut() {
+        let Some((device, _)) = make_device() else {
+            return;
+        };
+        let mut scene = DynamicScene::new(&device, 100);
+        let id = scene.add(DynamicModel::from_cubes(vec![ModelCube {
+            position: Vector3::new(0.0, 0.0, 0.0),
+            color: Vector3::new(1.0, 1.0, 1.0),
+        }]));
+
+        let m = scene.get_mut(id).unwrap();
+        m.position = Vector3::new(5.0, 0.0, 0.0);
+        assert_eq!(scene.get(id).unwrap().position, Vector3::new(5.0, 0.0, 0.0));
+        assert!(scene.get_mut(999).is_none());
+    }
+
+    #[test]
+    fn test_dynamic_scene_remove() {
+        let Some((device, _)) = make_device() else {
+            return;
+        };
+        let mut scene = DynamicScene::new(&device, 100);
+        let id = scene.add(DynamicModel::from_cubes(vec![ModelCube {
+            position: Vector3::zero(),
+            color: Vector3::new(1.0, 1.0, 1.0),
+        }]));
+        scene.remove(id);
+        assert!(scene.get(id).is_none());
+        scene.remove(id);   // double-remove is safe
+        scene.remove(999);  // out-of-bounds remove is safe
+    }
+
+    #[test]
+    fn test_dynamic_scene_update_gpu_live_count() {
+        let Some((device, queue)) = make_device() else {
+            return;
+        };
+        let mut scene = DynamicScene::new(&device, 100);
+        assert_eq!(scene.live_count(), 0);
+
+        scene.add(DynamicModel::from_cubes(vec![
+            ModelCube { position: Vector3::zero(), color: Vector3::new(1.0, 1.0, 1.0) },
+            ModelCube { position: Vector3::new(1.0, 0.0, 0.0), color: Vector3::new(0.0, 1.0, 0.0) },
+        ]));
+
+        assert_eq!(scene.live_count(), 0); // not uploaded yet
+        scene.update_gpu(&queue);
+        assert_eq!(scene.live_count(), 2);
+
+        scene.update_gpu(&queue); // dirty=false, no-op
+        assert_eq!(scene.live_count(), 2);
+    }
+
+    #[test]
+    fn test_dynamic_scene_reuses_freed_slots() {
+        let Some((device, _)) = make_device() else {
+            return;
+        };
+        let make_model = || {
+            DynamicModel::from_cubes(vec![ModelCube {
+                position: Vector3::zero(),
+                color: Vector3::new(1.0, 1.0, 1.0),
+            }])
+        };
+        let mut scene = DynamicScene::new(&device, 100);
+        let id0 = scene.add(make_model());
+        let id1 = scene.add(make_model());
+        assert_eq!(id0, 0);
+        assert_eq!(id1, 1);
+        scene.remove(id0);
+        let id_reused = scene.add(make_model());
+        assert_eq!(id_reused, 0); // freed slot should be reused
+    }
+
+    #[test]
+    fn test_dynamic_scene_exceeds_capacity_panics() {
+        let Some((device, _)) = make_device() else {
+            return;
+        };
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let mut scene = DynamicScene::new(&device, 1);
+            let model = DynamicModel::from_cubes(vec![
+                ModelCube { position: Vector3::zero(), color: Vector3::new(1.0, 1.0, 1.0) },
+                ModelCube { position: Vector3::new(1.0, 0.0, 0.0), color: Vector3::new(1.0, 1.0, 1.0) },
+            ]);
+            scene.add(model);
+        }));
+        assert!(result.is_err(), "exceeding max_instances should panic");
+    }
+
     #[test]
     fn test_dynamic_model() {
         let cubes = vec![
@@ -241,5 +390,59 @@ mod tests {
         let bytes2 = bytemuck::bytes_of(&instance2);
         let float_array2: &[f32] = bytemuck::cast_slice(bytes2);
         assert_eq!(float_array2[12], 15.0);
+    }
+
+    #[test]
+    fn test_dynamic_model_from_cubes_empty() {
+        let model = DynamicModel::from_cubes(vec![]);
+        assert_eq!(model.cube_count(), 0);
+        let raw: Vec<_> = model.to_raw_instances().collect();
+        assert!(raw.is_empty());
+    }
+
+    #[test]
+    fn test_dynamic_model_scale() {
+        let cubes = vec![ModelCube {
+            position: Vector3::new(1.0, 0.0, 0.0),
+            color: Vector3::new(1.0, 1.0, 1.0),
+        }];
+        let mut model = DynamicModel::from_cubes(cubes);
+        model.scale = 2.0;
+
+        let instance = model.to_raw_instances().next().unwrap();
+        let floats: &[f32] = bytemuck::cast_slice(bytemuck::bytes_of(&instance));
+        // Scale is applied to the local translation: (2 * 1, 0, 0)
+        assert_eq!(floats[12], 2.0); // tx
+        assert_eq!(floats[13], 0.0); // ty
+        assert_eq!(floats[14], 0.0); // tz
+    }
+
+    #[test]
+    fn test_dynamic_model_rotation() {
+        use cgmath::Rotation3;
+        let cubes = vec![ModelCube {
+            position: Vector3::new(1.0, 0.0, 0.0),
+            color: Vector3::new(1.0, 1.0, 1.0),
+        }];
+        let mut model = DynamicModel::from_cubes(cubes);
+        // 90° around Y: (1,0,0) → (0,0,-1)
+        model.rotation = Quaternion::from_angle_y(cgmath::Deg(90.0));
+
+        let instance = model.to_raw_instances().next().unwrap();
+        let floats: &[f32] = bytemuck::cast_slice(bytemuck::bytes_of(&instance));
+        assert!(floats[12].abs() < 1e-5, "x should be ~0");
+        assert!(floats[13].abs() < 1e-5, "y should be ~0");
+        assert!((floats[14] + 1.0).abs() < 1e-5, "z should be ~-1");
+    }
+
+    #[test]
+    fn test_dynamic_model_cube_count() {
+        let cubes = vec![
+            ModelCube { position: Vector3::new(0.0, 0.0, 0.0), color: Vector3::new(1.0, 0.0, 0.0) },
+            ModelCube { position: Vector3::new(1.0, 0.0, 0.0), color: Vector3::new(0.0, 1.0, 0.0) },
+            ModelCube { position: Vector3::new(2.0, 0.0, 0.0), color: Vector3::new(0.0, 0.0, 1.0) },
+        ];
+        let model = DynamicModel::from_cubes(cubes);
+        assert_eq!(model.cube_count(), 3);
     }
 }

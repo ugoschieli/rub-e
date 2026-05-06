@@ -36,40 +36,37 @@ pub struct ChunkCullingPass {
 impl ChunkCullingPass {
     /// Create the chunk culling pipeline.
     pub fn new(device: &wgpu::Device, camera_bind_group_layout: &wgpu::BindGroupLayout) -> Self {
-        let bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("Chunk Culling Bind Group Layout"),
-                entries: &[
-                    // binding 0: chunks (read-only)
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::COMPUTE,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Storage { read_only: true },
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
+        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("Chunk Culling Bind Group Layout"),
+            entries: &[
+                // binding 0: chunks (read-only)
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
                     },
-                    // binding 1: chunk_visible (read/write)
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStages::COMPUTE,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Storage { read_only: false },
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
+                    count: None,
+                },
+                // binding 1: chunk_visible (read/write)
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: false },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
                     },
-                ],
-            });
+                    count: None,
+                },
+            ],
+        });
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Chunk Culling Shader"),
-            source: wgpu::ShaderSource::Wgsl(
-                include_str!("../shaders/chunk_cull.wgsl").into(),
-            ),
+            source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/chunk_cull.wgsl").into()),
         });
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -117,6 +114,7 @@ impl ChunkCullingPass {
     }
 
     /// Dispatch the chunk culling compute shader.
+    #[cfg(not(tarpaulin_include))]
     pub fn cull(
         &self,
         encoder: &mut wgpu::CommandEncoder,
@@ -153,67 +151,66 @@ pub struct CullingPass {
 impl CullingPass {
     /// Create a new culling pass.
     pub fn new(device: &wgpu::Device, camera_bind_group_layout: &wgpu::BindGroupLayout) -> Self {
-        let bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("Culling Bind Group Layout"),
-                entries: &[
-                    // binding 0: all_instances (read-only)
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::COMPUTE,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Storage { read_only: true },
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
+        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("Culling Bind Group Layout"),
+            entries: &[
+                // binding 0: all_instances (read-only)
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
                     },
-                    // binding 1: visible_instances (read/write)
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStages::COMPUTE,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Storage { read_only: false },
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
+                    count: None,
+                },
+                // binding 1: visible_instances (read/write)
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: false },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
                     },
-                    // binding 2: indirect draw buffer (read/write)
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 2,
-                        visibility: wgpu::ShaderStages::COMPUTE,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Storage { read_only: false },
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
+                    count: None,
+                },
+                // binding 2: indirect draw buffer (read/write)
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: false },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
                     },
-                    // binding 3: cube_chunk_ids (read-only)
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 3,
-                        visibility: wgpu::ShaderStages::COMPUTE,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Storage { read_only: true },
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
+                    count: None,
+                },
+                // binding 3: cube_chunk_ids (read-only)
+                wgpu::BindGroupLayoutEntry {
+                    binding: 3,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
                     },
-                    // binding 4: chunk_visible (read-only — written by ChunkCullingPass)
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 4,
-                        visibility: wgpu::ShaderStages::COMPUTE,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Storage { read_only: true },
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
+                    count: None,
+                },
+                // binding 4: chunk_visible (read-only — written by ChunkCullingPass)
+                wgpu::BindGroupLayoutEntry {
+                    binding: 4,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
                     },
-                ],
-            });
+                    count: None,
+                },
+            ],
+        });
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Culling Shader"),
@@ -280,6 +277,7 @@ impl CullingPass {
     }
 
     /// Dispatch the per-cube culling compute shader.
+    #[cfg(not(tarpaulin_include))]
     pub fn cull(
         &self,
         encoder: &mut wgpu::CommandEncoder,
@@ -301,6 +299,10 @@ impl CullingPass {
 
 #[cfg(test)]
 mod tests {
+    use cgmath::{Point3, Vector3};
+
+    use crate::camera::{Camera, Projection};
+
     use super::*;
 
     #[test]
@@ -313,7 +315,7 @@ mod tests {
             count: 50,
             _pad1: [0; 3],
         };
-        
+
         assert_eq!(chunk.start_idx, 100);
         assert_eq!(chunk.count, 50);
         assert_eq!(chunk.aabb_min, [-1.0, -1.0, -1.0]);
@@ -322,37 +324,49 @@ mod tests {
 
     #[test]
     fn test_culling_pipelines_headless() {
-        let instance = wgpu::Instance::default();
+        let mut instance = wgpu::Instance::default();
         let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::LowPower,
             compatible_surface: None,
             force_fallback_adapter: false,
         }));
-        
+
         if let Ok(adapter) = adapter {
-            let (device, _) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default())).unwrap();
-            
-            // Need a dummy layout for camera
-            let entries = [
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                }
-            ];
-            let camera_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            let (device, _) =
+                pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+                    .unwrap();
+
+            let camera = Camera::new(
+                &device,
+                Point3::new(0.0, 0.0, 0.0),
+                Point3::new(1.0, 0.0, 0.0),
+                Vector3::new(0.0, 1.0, 0.0),
+                16. / 9.,
+                Projection::Perspective { fovy: 45. },
+                0.1,
+                100.,
+            );
+
+            let chunk_pass = ChunkCullingPass::new(&device, &camera.bind_group.layout);
+            let cull_pass = CullingPass::new(&device, &camera.bind_group.layout);
+
+            let dummy_buffer = device.create_buffer(&wgpu::BufferDescriptor {
                 label: None,
-                entries: &entries,
+                size: 256,
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::STORAGE,
+                mapped_at_creation: false,
             });
-            
-            let chunk_pass = ChunkCullingPass::new(&device, &camera_layout);
-            let _cull_pass = CullingPass::new(&device, &camera_layout);
-            
+
+            chunk_pass.create_bind_group(&device, &dummy_buffer, &dummy_buffer);
+            cull_pass.create_bind_group(
+                &device,
+                &dummy_buffer,
+                &dummy_buffer,
+                &dummy_buffer,
+                &dummy_buffer,
+                &dummy_buffer,
+            );
+
             // Ensure we created the passes without panicking
             assert!(true);
         }

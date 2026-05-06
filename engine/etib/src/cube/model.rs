@@ -123,4 +123,49 @@ mod tests {
         assert_eq!(cubes[2].position, cgmath::Vector3::new(-1.0, -2.0, -3.0));
         assert_eq!(cubes[2].color, cgmath::Vector3::new(0.0, 1.0, 0.0)); // Green
     }
+
+    #[test]
+    fn test_load_model_file_not_found() {
+        let result = load_model("/nonexistent/path/does_not_exist.model");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_load_model_empty_file() {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        let cubes = load_model(file.path().to_str().unwrap()).unwrap();
+        assert!(cubes.is_empty());
+    }
+
+    #[test]
+    fn test_load_model_only_comments() {
+        use std::io::Write;
+        let mut file = tempfile::NamedTempFile::new().unwrap();
+        writeln!(file, "# comment one").unwrap();
+        writeln!(file, "# comment two").unwrap();
+        writeln!(file, "").unwrap();
+        let cubes = load_model(file.path().to_str().unwrap()).unwrap();
+        assert!(cubes.is_empty());
+    }
+
+    #[test]
+    fn test_load_model_wrong_field_count_skipped() {
+        use std::io::Write;
+        let mut file = tempfile::NamedTempFile::new().unwrap();
+        writeln!(file, "1.0 2.0 3.0 4.0").unwrap();   // 4 fields → skipped
+        writeln!(file, "1.0 2.0").unwrap();             // 2 fields → skipped
+        writeln!(file, "5.0 6.0 7.0").unwrap();         // 3 fields → valid
+        let cubes = load_model(file.path().to_str().unwrap()).unwrap();
+        assert_eq!(cubes.len(), 1);
+        assert_eq!(cubes[0].position, cgmath::Vector3::new(5.0, 6.0, 7.0));
+    }
+
+    #[test]
+    fn test_load_model_default_color_is_white() {
+        use std::io::Write;
+        let mut file = tempfile::NamedTempFile::new().unwrap();
+        writeln!(file, "1.0 2.0 3.0").unwrap(); // position only
+        let cubes = load_model(file.path().to_str().unwrap()).unwrap();
+        assert_eq!(cubes[0].color, cgmath::Vector3::new(1.0, 1.0, 1.0));
+    }
 }

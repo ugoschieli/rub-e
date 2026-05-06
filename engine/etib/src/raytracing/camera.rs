@@ -167,4 +167,43 @@ mod tests {
         cam.update(&input, speed, &mut frame_count);
         assert_eq!(frame_count, 10);
     }
+
+    #[test]
+    fn test_camera_update_strafe() {
+        let mut cam = Camera::default();
+        let mut frame_count = 10;
+
+        // Facing -Z (yaw = -π/2), strafing right moves in +X direction
+        let mut input = InputState::default();
+        input.right = true;
+        cam.update(&input, 1.0, &mut frame_count);
+        assert!(cam.pos.x > 0.0, "strafing right should increase x");
+        assert_eq!(frame_count, 0);
+
+        // Strafe left from current position
+        let pos_x = cam.pos.x;
+        input.right = false;
+        input.left = true;
+        frame_count = 10;
+        cam.update(&input, 1.0, &mut frame_count);
+        assert!(cam.pos.x < pos_x, "strafing left should decrease x");
+        assert_eq!(frame_count, 0);
+    }
+
+    #[test]
+    fn test_camera_update_up_down() {
+        let mut cam = Camera::default();
+        let mut frame_count = 0;
+
+        let mut input = InputState::default();
+        input.up = true;
+        cam.update(&input, 1.0, &mut frame_count);
+        assert!(cam.pos.y > 0.0, "moving up should increase y");
+
+        let pos_y = cam.pos.y;
+        input.up = false;
+        input.down = true;
+        cam.update(&input, 1.0, &mut frame_count);
+        assert!(cam.pos.y < pos_y, "moving down should decrease y");
+    }
 }

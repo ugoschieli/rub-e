@@ -49,3 +49,44 @@ pub struct Uniforms {
     /// Camera-specific uniforms (position, ray basis, matrices).
     pub camera_uniforms: CameraUniforms,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_input_state_default() {
+        let state = InputState::default();
+        assert!(!state.forward);
+        assert!(!state.backward);
+        assert!(!state.left);
+        assert!(!state.right);
+        assert!(!state.up);
+        assert!(!state.down);
+        assert!(!state.rmb_pressed);
+    }
+
+    #[test]
+    fn test_input_state_fields_independent() {
+        let mut state = InputState::default();
+        state.forward = true;
+        state.rmb_pressed = true;
+        assert!(state.forward);
+        assert!(!state.backward);
+        assert!(state.rmb_pressed);
+    }
+
+    #[test]
+    fn test_uniforms_is_pod() {
+        // Verifies Pod/Zeroable are correctly derived — cast to bytes must succeed
+        let uniforms = <Uniforms as bytemuck::Zeroable>::zeroed();
+        let bytes = bytemuck::bytes_of(&uniforms);
+        assert!(!bytes.is_empty());
+    }
+
+    #[test]
+    fn test_uniforms_size() {
+        // 4 header u32/f32 fields (16 bytes) + CameraUniforms (192 bytes) = 208 bytes
+        assert_eq!(std::mem::size_of::<Uniforms>(), 208);
+    }
+}

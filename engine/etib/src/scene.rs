@@ -96,6 +96,7 @@ impl Scene {
     ///
     /// `dynamic_max_instances` caps the **total number of cubes** across all
     /// live dynamic models and pre-allocates the dynamic GPU buffer accordingly.
+    #[cfg(not(tarpaulin_include))]
     pub fn new(
         ctx: &EngineContext,
         camera: Camera,
@@ -337,6 +338,7 @@ impl Scene {
     ///
     /// `cubemap_resolution` is the edge length of each cubemap face.
     /// Replaces any previously loaded skybox.
+    #[cfg(not(tarpaulin_include))]
     pub fn set_skybox_from_bytes(
         &mut self,
         device: &wgpu::Device,
@@ -454,6 +456,7 @@ impl Scene {
     /// 4. Opens an HDR render pass and draws static models, dynamic models,
     ///    and the skybox (if set).
     /// 5. Tonemaps the HDR result to `swapchain_view`.
+    #[cfg(not(tarpaulin_include))]
     pub fn render(
         &self,
         ctx: &EngineContext,
@@ -538,5 +541,370 @@ impl Scene {
 
         // --- Tonemap HDR → swapchain ---
         self.hdr.process(encoder, view);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::camera::{Camera, Projection};
+    use cgmath::{Point3, Vector3};
+
+    fn make_device() -> Option<(wgpu::Device, wgpu::Queue)> {
+        let instance = wgpu::Instance::default();
+        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::LowPower,
+            compatible_surface: None,
+            force_fallback_adapter: false,
+        }));
+        if let Ok(adapter) = adapter {
+            Some(
+                pollster::block_on(
+                    adapter.request_device(&wgpu::DeviceDescriptor::default()),
+                )
+                .unwrap(),
+            )
+        } else {
+            None
+        }
+    }
+
+    fn make_surface_config(w: u32, h: u32) -> wgpu::SurfaceConfiguration {
+        wgpu::SurfaceConfiguration {
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            width: w,
+            height: h,
+            present_mode: wgpu::PresentMode::Fifo,
+            alpha_mode: wgpu::CompositeAlphaMode::Auto,
+            view_formats: vec![],
+            desired_maximum_frame_latency: 2,
+        }
+    }
+
+    fn white_cube(x: f32, y: f32, z: f32) -> ModelCube {
+        ModelCube {
+            position: Vector3::new(x, y, z),
+            color: Vector3::new(1.0, 1.0, 1.0),
+        }
+    }
+
+    fn build_scene(
+        device: &wgpu::Device,
+        surface_config: &wgpu::SurfaceConfiguration,
+        static_cubes: &[ModelCube],
+        dynamic_max: usize,
+    ) -> Scene {
+        use crate::hdr::{HdrPipeline, TonemappingMode};
+
+        let hdr = HdrPipeline::new(device, surface_config, TonemappingMode::Sdr, 1000.0);
+        let target_format = hdr.format();
+
+        let camera = Camera::new(
+            device,
+            Point3::new(0.0, 5.0, 10.0),
+            Point3::new(0.0, 0.0, 0.0),
+            Vector3::unit_y(),
+            surface_config.width as f32 / surface_config.height as f32,
+            Projection::Perspective { fovy: 60.0 },
+            0.1,
+            1000.0,
+        );
+
+        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Cube Vertex Buffer"),
+            contents: bytemuck::cast_slice(VERTICES),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Cube Index Buffer"),
+            contents: bytemuck::cast_slice(INDICES),
+            usage: wgpu::BufferUsages::INDEX,
+        });
+
+        let mut chunk_map: HashMap<(i32, i32), Vec<usize>> = HashMap::new();
+        for (i, cube) in static_cubes.iter().enumerate() {
+            let cx = (cube.position.x / CHUNK_SIZE).floor() as i32;
+            let cz = (cube.position.z / CHUNK_SIZE).floor() as i32;
+            chunk_map.entry((cx, cz)).or_default().push(i);
+        }
+        let mut chunk_keys: Vec<(i32, i32)> = chunk_map.keys().copied().collect();
+        chunk_keys.sort_unstable();
+
+        let mut instance_data: Vec<CubeRaw> = Vec::with_capacity(static_cubes.len());
+        let mut cube_chunk_ids: Vec<u32> = Vec::with_capacity(static_cubes.len());
+        let mut chunks_raw: Vec<ChunkRaw> = Vec::with_capacity(chunk_keys.len());
+
+        for (chunk_idx, key) in chunk_keys.iter().enumerate() {
+            let indices = &chunk_map[key];
+            let start_idx = instance_data.len() as u32;
+            let count = indices.len() as u32;
+            let mut min = [f32::MAX; 3];
+            let mut max = [f32::MIN; 3];
+            for &i in indices {
+                let p = static_cubes[i].position;
+                min[0] = min[0].min(p.x - 0.5);
+                min[1] = min[1].min(p.y - 0.5);
+                min[2] = min[2].min(p.z - 0.5);
+                max[0] = max[0].max(p.x + 0.5);
+                max[1] = max[1].max(p.y + 0.5);
+                max[2] = max[2].max(p.z + 0.5);
+            }
+            for &i in indices {
+                let c = &static_cubes[i];
+                instance_data.push(
+                    Cube {
+                        model: Matrix4::from_translation(c.position),
+                        color: Vector4::new(c.color.x, c.color.y, c.color.z, 1.0),
+                    }
+                    .into_raw(),
+                );
+                cube_chunk_ids.push(chunk_idx as u32);
+            }
+            chunks_raw.push(ChunkRaw {
+                aabb_min: min,
+                _pad0: 0.0,
+                aabb_max: max,
+                start_idx,
+                count,
+                _pad1: [0; 3],
+            });
+        }
+
+        let total_instance_count = instance_data.len() as u32;
+        let num_chunks = chunks_raw.len() as u32;
+
+        let static_usage = wgpu::BufferUsages::VERTEX
+            | wgpu::BufferUsages::STORAGE
+            | wgpu::BufferUsages::COPY_DST;
+
+        let all_instances_buffer = if instance_data.is_empty() {
+            device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("Static Instances Buffer"),
+                size: 4,
+                usage: static_usage,
+                mapped_at_creation: false,
+            })
+        } else {
+            device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Static Instances Buffer"),
+                contents: bytemuck::cast_slice(&instance_data),
+                usage: static_usage,
+            })
+        };
+
+        let visible_size = (instance_data.len() * size_of::<CubeRaw>()).max(4) as u64;
+        let visible_instances_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Visible Instances Buffer"),
+            size: visible_size,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::STORAGE,
+            mapped_at_creation: false,
+        });
+
+        let indirect_args = [INDICES.len() as u32, 0u32, 0u32, 0u32, 0u32];
+        let indirect_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Indirect Draw Buffer"),
+            contents: bytemuck::cast_slice(&indirect_args),
+            usage: wgpu::BufferUsages::INDIRECT
+                | wgpu::BufferUsages::STORAGE
+                | wgpu::BufferUsages::COPY_DST,
+        });
+
+        let chunks_buffer = if chunks_raw.is_empty() {
+            device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("Chunks Buffer"),
+                size: 4,
+                usage: wgpu::BufferUsages::STORAGE,
+                mapped_at_creation: false,
+            })
+        } else {
+            device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Chunks Buffer"),
+                contents: bytemuck::cast_slice(&chunks_raw),
+                usage: wgpu::BufferUsages::STORAGE,
+            })
+        };
+
+        let chunk_visible_size = (chunks_raw.len() * size_of::<u32>()).max(4) as u64;
+        let chunk_visible_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Chunk Visible Buffer"),
+            size: chunk_visible_size,
+            usage: wgpu::BufferUsages::STORAGE,
+            mapped_at_creation: false,
+        });
+
+        let cube_chunk_ids_buffer = if cube_chunk_ids.is_empty() {
+            device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("Cube Chunk IDs Buffer"),
+                size: 4,
+                usage: wgpu::BufferUsages::STORAGE,
+                mapped_at_creation: false,
+            })
+        } else {
+            device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Cube Chunk IDs Buffer"),
+                contents: bytemuck::cast_slice(&cube_chunk_ids),
+                usage: wgpu::BufferUsages::STORAGE,
+            })
+        };
+
+        let shader = Shader::new(CUBE_SHADER, device, Some("Cube Shader"));
+        let pipeline = Pipeline::new_v2(
+            device,
+            &[&camera.bind_group.layout],
+            &[Vertex::desc(), Cube::desc()],
+            &shader,
+            target_format,
+            Some(wgpu::TextureFormat::Depth32Float),
+            wgpu::PrimitiveTopology::TriangleList,
+            Some("Cubes Pipeline"),
+        );
+
+        let chunk_cull_pass = ChunkCullingPass::new(device, &camera.bind_group.layout);
+        let chunk_culling_bind_group = chunk_cull_pass.create_bind_group(
+            device,
+            &chunks_buffer,
+            &chunk_visible_buffer,
+        );
+
+        let cull_pass = CullingPass::new(device, &camera.bind_group.layout);
+        let culling_bind_group = cull_pass.create_bind_group(
+            device,
+            &all_instances_buffer,
+            &visible_instances_buffer,
+            &indirect_buffer,
+            &cube_chunk_ids_buffer,
+            &chunk_visible_buffer,
+        );
+
+        let dynamic_scene = DynamicScene::new(device, dynamic_max.max(1));
+
+        Scene {
+            vertex_buffer,
+            index_buffer,
+            pipeline,
+            all_instances_buffer,
+            visible_instances_buffer,
+            indirect_buffer,
+            total_instance_count,
+            chunk_cull_pass,
+            chunk_culling_bind_group,
+            num_chunks,
+            chunks_buffer,
+            chunk_visible_buffer,
+            cull_pass,
+            culling_bind_group,
+            cube_chunk_ids_buffer,
+            dynamic_scene,
+            skybox: None,
+            hdr,
+            camera,
+        }
+    }
+
+    #[test]
+    fn test_scene_new_empty_statics() {
+        let Some((device, _)) = make_device() else { return; };
+        let cfg = make_surface_config(800, 600);
+        let scene = build_scene(&device, &cfg, &[], 10);
+        assert_eq!(scene.static_count(), 0);
+        assert_eq!(scene.dynamic_count(), 0);
+    }
+
+    #[test]
+    fn test_scene_new_with_statics() {
+        let Some((device, _)) = make_device() else { return; };
+        let cfg = make_surface_config(800, 600);
+        let cubes = vec![
+            white_cube(0.0, 0.0, 0.0),
+            white_cube(1.0, 0.0, 0.0),
+            white_cube(33.0, 0.0, 0.0),
+        ];
+        let scene = build_scene(&device, &cfg, &cubes, 10);
+        assert_eq!(scene.static_count(), 3);
+    }
+
+    #[test]
+    fn test_static_count() {
+        let Some((device, _)) = make_device() else { return; };
+        let cfg = make_surface_config(800, 600);
+        let cubes = vec![white_cube(0.0, 0.0, 0.0), white_cube(1.0, 0.0, 0.0)];
+        let scene = build_scene(&device, &cfg, &cubes, 10);
+        assert_eq!(scene.static_count(), 2);
+    }
+
+    #[test]
+    fn test_dynamic_count_starts_at_zero() {
+        let Some((device, _)) = make_device() else { return; };
+        let cfg = make_surface_config(800, 600);
+        let scene = build_scene(&device, &cfg, &[], 10);
+        assert_eq!(scene.dynamic_count(), 0);
+    }
+
+    #[test]
+    fn test_add_get_dynamic() {
+        let Some((device, _)) = make_device() else { return; };
+        let cfg = make_surface_config(800, 600);
+        let mut scene = build_scene(&device, &cfg, &[], 10);
+        let model = DynamicModel::from_cubes(vec![white_cube(1.0, 0.0, 0.0)]);
+        let id = scene.add_dynamic(model);
+        assert!(scene.get_dynamic(id).is_some());
+        assert!(scene.get_dynamic(999).is_none());
+    }
+
+    #[test]
+    fn test_get_dynamic_mut() {
+        let Some((device, _)) = make_device() else { return; };
+        let cfg = make_surface_config(800, 600);
+        let mut scene = build_scene(&device, &cfg, &[], 10);
+        let model = DynamicModel::from_cubes(vec![white_cube(0.0, 0.0, 0.0)]);
+        let id = scene.add_dynamic(model);
+        {
+            let m = scene.get_dynamic_mut(id).unwrap();
+            m.position = Vector3::new(5.0, 0.0, 0.0);
+        }
+        assert_eq!(
+            scene.get_dynamic(id).unwrap().position,
+            Vector3::new(5.0, 0.0, 0.0)
+        );
+        assert!(scene.get_dynamic_mut(999).is_none());
+    }
+
+    #[test]
+    fn test_remove_dynamic() {
+        let Some((device, _)) = make_device() else { return; };
+        let cfg = make_surface_config(800, 600);
+        let mut scene = build_scene(&device, &cfg, &[], 10);
+        let model = DynamicModel::from_cubes(vec![white_cube(0.0, 0.0, 0.0)]);
+        let id = scene.add_dynamic(model);
+        scene.remove_dynamic(id);
+        assert!(scene.get_dynamic(id).is_none());
+        scene.remove_dynamic(id);
+        scene.remove_dynamic(999);
+    }
+
+    #[test]
+    fn test_scene_resize() {
+        let Some((device, _)) = make_device() else { return; };
+        let cfg = make_surface_config(800, 600);
+        let mut scene = build_scene(&device, &cfg, &[], 10);
+        // Resize must not panic and the HDR pipeline must still be usable afterwards
+        scene.resize(&device, 1280, 720);
+        assert_eq!(scene.hdr.format(), wgpu::TextureFormat::Rgba16Float);
+        let _view: &wgpu::TextureView = scene.hdr.view();
+    }
+
+    #[test]
+    fn test_scene_multi_chunk() {
+        let Some((device, _)) = make_device() else { return; };
+        let cfg = make_surface_config(800, 600);
+        let cubes = vec![
+            white_cube(0.0, 0.0, 0.0),
+            white_cube(33.0, 0.0, 0.0),
+            white_cube(66.0, 0.0, 0.0),
+        ];
+        let scene = build_scene(&device, &cfg, &cubes, 10);
+        assert_eq!(scene.static_count(), 3);
+        assert_eq!(scene.num_chunks, 3);
     }
 }

@@ -60,7 +60,7 @@ impl Game for MyGame {
 
         let camera = if params.is_isometric {
             etib::camera::Camera::new(
-                ctx,
+                &ctx.gfx.device,
                 (50.0, 50.0, 50.0).into(),
                 (0.0, 0.0, 0.0).into(),
                 cgmath::Vector3::unit_y(),
@@ -71,7 +71,7 @@ impl Game for MyGame {
             )
         } else {
             etib::camera::Camera::new(
-                ctx,
+                &ctx.gfx.device,
                 (0.0, 30.0, 80.0).into(),
                 (0.0, 10.0, 0.0).into(),
                 cgmath::Vector3::unit_y(),
@@ -161,7 +161,8 @@ impl Game for MyGame {
     fn input(&mut self, ctx: &mut EngineContext, event: &WindowEvent) {
         match event {
             WindowEvent::KeyboardInput { event, .. } => {
-                self.camera_controller.process_keyboard(event.clone());
+                self.camera_controller
+                    .process_keyboard(event.physical_key, event.state);
 
                 if event.state == winit::event::ElementState::Pressed {
                     match event.physical_key {

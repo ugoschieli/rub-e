@@ -41,8 +41,7 @@ impl BindGroup {
 
     /// Get a buffer from the bind group
     pub fn get_buffer(&self, binding: u32) -> Option<&wgpu::Buffer> {
-        let resource = self.data(binding).unwrap();
-        match resource {
+        match self.data(binding)? {
             WrappedResource::Buffer(buffer) => Some(buffer),
             _ => None,
         }
@@ -257,5 +256,208 @@ mod tests {
             // Warning condition
             bg.write_buffer(&queue, 1, bytemuck::cast_slice(&new_data));
         }
+    }
+
+    fn make_device() -> Option<(wgpu::Device, wgpu::Queue)> {
+        let instance = wgpu::Instance::default();
+        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::LowPower,
+            compatible_surface: None,
+            force_fallback_adapter: false,
+        }));
+        if let Ok(adapter) = adapter {
+            Some(
+                pollster::block_on(
+                    adapter.request_device(&wgpu::DeviceDescriptor::default()),
+                )
+                .unwrap(),
+            )
+        } else {
+            None
+        }
+    }
+
+    #[test]
+    fn test_data_returns_buffer_resource() {
+        let Some((device, _)) = make_device() else {
+            return;
+        };
+        let data = [0.0f32; 4];
+        let bg = BindGroupBuilder::new()
+            .add_uniform_buffer(
+                &device,
+                0,
+                bytemuck::cast_slice(&data),
+                wgpu::ShaderStages::VERTEX,
+            )
+            .build(&device, None);
+        assert!(matches!(bg.data(0), Some(WrappedResource::Buffer(_))));
+        assert!(bg.data(1).is_none());
+    }
+
+    #[test]
+    fn test_get_buffer_returns_none_for_non_buffer_binding() {
+        let Some((device, _)) = make_device() else {
+            return;
+        };
+        let texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: None,
+            size: wgpu::Extent3d {
+                width: 1,
+                height: 1,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
+        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let bg = BindGroupBuilder::new()
+            .add_texture(
+                0,
+                view,
+                wgpu::ShaderStages::FRAGMENT,
+                wgpu::TextureSampleType::Float { filterable: true },
+            )
+            .build(&device, None);
+        assert!(bg.get_buffer(0).is_none());
+    }
+
+    #[test]
+    fn test_add_texture_binding() {
+        let Some((device, _)) = make_device() else {
+            return;
+        };
+        let texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: None,
+            size: wgpu::Extent3d {
+                width: 4,
+                height: 4,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
+        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let bg = BindGroupBuilder::new()
+            .add_texture(
+                0,
+                view,
+                wgpu::ShaderStages::FRAGMENT,
+                wgpu::TextureSampleType::Float { filterable: true },
+            )
+            .build(&device, None);
+        assert!(matches!(bg.data(0), Some(WrappedResource::TextureView(_))));
+    }
+
+    #[test]
+    fn test_add_sampler_binding() {
+        let Some((device, _)) = make_device() else {
+            return;
+        };
+        let sampler = device.create_sampler(&wgpu::SamplerDescriptor::default());
+        let bg = BindGroupBuilder::new()
+            .add_sampler(
+                0,
+                sampler,
+                wgpu::SamplerBindingType::Filtering,
+                wgpu::ShaderStages::FRAGMENT,
+            )
+            .build(&device, None);
+        assert!(matches!(bg.data(0), Some(WrappedResource::Sampler(_))));
+    }
+
+    #[test]
+    fn test_add_cube_texture_binding() {
+        let Some((device, _)) = make_device() else {
+            return;
+        };
+        let texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: None,
+            size: wgpu::Extent3d {
+                width: 4,
+                height: 4,
+                depth_or_array_layers: 6,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
+        let view = texture.create_view(&wgpu::TextureViewDescriptor {
+            dimension: Some(wgpu::TextureViewDimension::Cube),
+            array_layer_count: Some(6),
+            ..Default::default()
+        });
+        let bg = BindGroupBuilder::new()
+            .add_cube_texture(
+                0,
+                view,
+                wgpu::ShaderStages::FRAGMENT,
+                wgpu::TextureSampleType::Float { filterable: true },
+            )
+            .build(&device, None);
+        assert!(matches!(bg.data(0), Some(WrappedResource::TextureView(_))));
+    }
+
+    #[test]
+    fn test_add_storage_texture_binding() {
+        let Some((device, _)) = make_device() else {
+            return;
+        };
+        let texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: None,
+            size: wgpu::Extent3d {
+                width: 4,
+                height: 4,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::STORAGE_BINDING,
+            view_formats: &[],
+        });
+        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let bg = BindGroupBuilder::new()
+            .add_storage_texture(0, view, wgpu::ShaderStages::COMPUTE)
+            .build(&device, None);
+        assert!(matches!(bg.data(0), Some(WrappedResource::TextureView(_))));
+    }
+
+    #[test]
+    fn test_multiple_uniform_buffers() {
+        let Some((device, _)) = make_device() else {
+            return;
+        };
+        let data_a = [1.0f32, 2.0];
+        let data_b = [3.0f32, 4.0, 5.0, 6.0];
+        let bg = BindGroupBuilder::new()
+            .add_uniform_buffer(
+                &device,
+                0,
+                bytemuck::cast_slice(&data_a),
+                wgpu::ShaderStages::VERTEX,
+            )
+            .add_uniform_buffer(
+                &device,
+                1,
+                bytemuck::cast_slice(&data_b),
+                wgpu::ShaderStages::FRAGMENT,
+            )
+            .build(&device, None);
+        assert!(bg.get_buffer(0).is_some());
+        assert!(bg.get_buffer(1).is_some());
+        assert!(bg.get_buffer(2).is_none());
     }
 }
