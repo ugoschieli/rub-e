@@ -1,9 +1,16 @@
-[workspace]
-members = [ "etib", "etib-core" ]
-resolver = "3"
+[package]
+name = "etib"
+version = "0.1.0"
+edition = "2024"
 
-[workspace.dependencies]
+[dependencies]
+anyhow = "1"
 bytemuck = { version = "1", features = ["derive"] }
+clap = { version = "4.6", features = ["derive"] }
+env_logger = "0.11"
+glam = { version = "0.32", features = ["bytemuck"] }
 log = "0.4"
-naga = "27"
-wgpu = "27"
+naga = "29"
+pollster = "0.4"
+wgpu = "29"
+winit = "0.30"
