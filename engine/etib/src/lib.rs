@@ -25,6 +25,8 @@ mod vertex;
 
 /// Module containing the experimental raytracing renderer
 pub mod raytracing;
+/// Simple rigid-body physics: gravity integration and floor collision
+pub mod physics;
 
 pub use crate::game::*;
 pub use crate::gfx::*;
