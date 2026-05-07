@@ -919,7 +919,7 @@ impl Game for PongGame {
         let mut trail_ids = Vec::new();
         for _ in 0..10 {
             let mut trail_cube =
-                DynamicModel::from_cubes(vec![unit_cube(0.0, 0.0, 0.0, 5.0, 0.0, 0.0)]);
+                DynamicModel::from_cubes(vec![unit_cube(0.0, 0.0, 0.0, 0.0, 0.3, 0.0)]);
             trail_cube.position = Vector3::new(0.0, 0.0, 1000.0);
             trail_ids.push(scene.add_dynamic(trail_cube));
         }
