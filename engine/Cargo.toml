@@ -1,20 +1,9 @@
-[package]
-name = "etib"
-version = "0.1.0"
-edition = "2024"
+[workspace]
+members = ["etib", "etib-core"]
+resolver = "3"
 
-[dependencies]
-anyhow = "1"
+[workspace.dependencies]
 bytemuck = { version = "1", features = ["derive"] }
-cgmath = "0.18"
-env_logger = "0.11"
 log = "0.4"
 naga = "27"
-pollster = "0.4"
 wgpu = "27"
-winit = "0.30"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-
-[dev-dependencies]
-tempfile = "3.15.0"
