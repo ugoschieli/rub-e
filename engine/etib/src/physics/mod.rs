@@ -544,3 +544,224 @@ pub fn apply_cube_collision(
         b.angular_velocity -= r_vec_b.cross(impulse_t) / i_b;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use cgmath::{Quaternion, Vector3, Zero};
+
+    use super::*;
+
+    fn identity() -> Quaternion<f32> {
+        Quaternion::new(1.0, 0.0, 0.0, 0.0)
+    }
+
+    // ── Builder / defaults ────────────────────────────────────────────────────
+
+    #[test]
+    fn default_values() {
+        let b = RigidBody::new();
+        assert_eq!(b.restitution, 0.20);
+        assert_eq!(b.floor_friction, 1.0);
+        assert_eq!(b.half_side, 1.0);
+        assert_eq!(b.mass, 3.0);
+        assert!(!b.on_ground);
+    }
+
+    #[test]
+    fn builder_restitution_clamped() {
+        assert_eq!(RigidBody::new().with_restitution(2.0).restitution, 1.0);
+        assert_eq!(RigidBody::new().with_restitution(-0.5).restitution, 0.0);
+    }
+
+    #[test]
+    fn builder_half_side_floored() {
+        assert_eq!(RigidBody::new().with_half_side(0.0).half_side, 0.001);
+    }
+
+    #[test]
+    fn builder_mass_floored() {
+        assert_eq!(RigidBody::new().with_mass(0.0).mass, 0.001);
+    }
+
+    #[test]
+    fn builder_friction_non_negative() {
+        assert_eq!(RigidBody::new().with_friction(-1.0).floor_friction, 0.0);
+    }
+
+    #[test]
+    fn builder_bounds_stored() {
+        let b = RigidBody::new().with_bounds(-3.0, 3.0, -5.0, 5.0);
+        assert_eq!(b.bounds, [-3.0, 3.0, -5.0, 5.0]);
+    }
+
+    // ── Inertia ───────────────────────────────────────────────────────────────
+
+    #[test]
+    fn inertia_formula() {
+        let b = RigidBody::new().with_mass(3.0).with_half_side(1.0);
+        // I = m * (2h)^2 / 6 = 3 * 4 / 6 = 2.0
+        let expected = 3.0 * 4.0_f32 / 6.0;
+        assert!((b.inertia() - expected).abs() < 1e-5);
+    }
+
+    #[test]
+    fn inertia_scales_with_mass() {
+        let b1 = RigidBody::new().with_mass(1.0).with_half_side(1.0);
+        let b2 = RigidBody::new().with_mass(2.0).with_half_side(1.0);
+        assert!((b2.inertia() - b1.inertia() * 2.0).abs() < 1e-5);
+    }
+
+    // ── Gravity / update ──────────────────────────────────────────────────────
+
+    #[test]
+    fn gravity_accelerates_downward() {
+        let mut body = RigidBody::new();
+        let mut pos = Vector3::new(0.0, 100.0, 0.0);
+        let mut rot = identity();
+        body.update(&mut pos, &mut rot, 0.016, 0.0);
+        assert!(body.linear_velocity.y < 0.0);
+    }
+
+    #[test]
+    fn floor_collision_pushes_cube_up() {
+        let mut body = RigidBody::new().with_half_side(1.0);
+        // pos.y = 0.5 → lowest corner at -0.5 → penetrates floor at y=0
+        let mut pos = Vector3::new(0.0, 0.5, 0.0);
+        let mut rot = identity();
+        body.update(&mut pos, &mut rot, 0.001, 0.0);
+        // Lowest corner (pos.y - half_side with identity rotation) must be >= 0
+        assert!(pos.y - body.half_side >= -1e-3);
+        assert!(body.on_ground);
+    }
+
+    #[test]
+    fn on_ground_cleared_when_airborne() {
+        let mut body = RigidBody::new().with_half_side(1.0);
+        let mut pos = Vector3::new(0.0, 100.0, 0.0);
+        let mut rot = identity();
+        body.update(&mut pos, &mut rot, 0.001, 0.0);
+        assert!(!body.on_ground);
+    }
+
+    #[test]
+    fn wall_x_max_clamps_position() {
+        let mut body = RigidBody::new()
+            .with_half_side(1.0)
+            .with_bounds(-50.0, 5.0, -50.0, 50.0);
+        body.linear_velocity = Vector3::new(10.0, 0.0, 0.0);
+        let mut pos = Vector3::new(10.0, 5.0, 0.0);
+        let mut rot = identity();
+        // floor_y far below so floor doesn't interfere
+        body.update(&mut pos, &mut rot, 0.001, -100.0);
+        // rightmost extent must not exceed x_max=5.0
+        assert!(pos.x + body.half_side <= 5.0 + 1e-3);
+    }
+
+    #[test]
+    fn wall_x_min_clamps_position() {
+        let mut body = RigidBody::new()
+            .with_half_side(1.0)
+            .with_bounds(-5.0, 50.0, -50.0, 50.0);
+        body.linear_velocity = Vector3::new(-10.0, 0.0, 0.0);
+        let mut pos = Vector3::new(-10.0, 5.0, 0.0);
+        let mut rot = identity();
+        body.update(&mut pos, &mut rot, 0.001, -100.0);
+        assert!(pos.x - body.half_side >= -5.0 - 1e-3);
+    }
+
+    // ── Cube-to-cube collision ────────────────────────────────────────────────
+
+    #[test]
+    fn collision_separates_overlapping_cubes() {
+        let mut a = RigidBody::new().with_half_side(1.0);
+        let mut b = RigidBody::new().with_half_side(1.0);
+        let mut pos_a = Vector3::new(0.5, 0.0, 0.0);
+        let mut pos_b = Vector3::new(-0.5, 0.0, 0.0);
+
+        apply_cube_collision(&mut a, &mut pos_a, &mut b, &mut pos_b);
+
+        let dist = (pos_a - pos_b).magnitude();
+        let min_dist = a.half_side * 1.2 + b.half_side * 1.2;
+        assert!(dist >= min_dist - 1e-4);
+    }
+
+    #[test]
+    fn collision_no_change_when_far_apart() {
+        let mut a = RigidBody::new().with_half_side(1.0);
+        let mut b = RigidBody::new().with_half_side(1.0);
+        let mut pos_a = Vector3::new(100.0, 0.0, 0.0);
+        let mut pos_b = Vector3::zero();
+        let vel_a_before = a.linear_velocity;
+        let vel_b_before = b.linear_velocity;
+
+        apply_cube_collision(&mut a, &mut pos_a, &mut b, &mut pos_b);
+
+        assert_eq!(a.linear_velocity, vel_a_before);
+        assert_eq!(b.linear_velocity, vel_b_before);
+    }
+
+    #[test]
+    fn collision_bounces_approaching_cubes() {
+        let mut a = RigidBody::new().with_half_side(1.0).with_restitution(1.0);
+        let mut b = RigidBody::new().with_half_side(1.0).with_restitution(1.0);
+        // A moves left, B moves right — head-on, cubes are overlapping
+        a.linear_velocity = Vector3::new(-5.0, 0.0, 0.0);
+        b.linear_velocity = Vector3::new(5.0, 0.0, 0.0);
+        let mut pos_a = Vector3::new(1.0, 0.0, 0.0);
+        let mut pos_b = Vector3::new(-1.0, 0.0, 0.0);
+
+        apply_cube_collision(&mut a, &mut pos_a, &mut b, &mut pos_b);
+
+        // Elastic equal-mass head-on: velocities exchange along collision axis
+        assert!(a.linear_velocity.x > 0.0, "A should rebound rightward");
+        assert!(b.linear_velocity.x < 0.0, "B should rebound leftward");
+    }
+
+    #[test]
+    fn collision_skipped_when_already_separating() {
+        let mut a = RigidBody::new().with_half_side(1.0);
+        let mut b = RigidBody::new().with_half_side(1.0);
+        // Cubes overlap but move apart — no impulse should be applied
+        a.linear_velocity = Vector3::new(10.0, 0.0, 0.0);
+        b.linear_velocity = Vector3::new(-10.0, 0.0, 0.0);
+        let mut pos_a = Vector3::new(1.0, 0.0, 0.0);
+        let mut pos_b = Vector3::new(-1.0, 0.0, 0.0);
+        let vel_a_before = a.linear_velocity;
+        let vel_b_before = b.linear_velocity;
+
+        apply_cube_collision(&mut a, &mut pos_a, &mut b, &mut pos_b);
+
+        // Separation pushes positions apart but linear velocity should be unchanged
+        // (the velocity-relative check: v_rel_n >= 0 → return early after position fix)
+        assert_eq!(a.linear_velocity, vel_a_before);
+        assert_eq!(b.linear_velocity, vel_b_before);
+    }
+
+    // ── Internal helpers ──────────────────────────────────────────────────────
+
+    #[test]
+    fn corners_returns_8_points_at_correct_distance() {
+        let h = 1.5_f32;
+        let pts = corners(h);
+        assert_eq!(pts.len(), 8);
+        let expected_dist = (3.0_f32 * h * h).sqrt();
+        for p in &pts {
+            let dist = (p.x * p.x + p.y * p.y + p.z * p.z).sqrt();
+            assert!((dist - expected_dist).abs() < 1e-5);
+        }
+    }
+
+    #[test]
+    fn quat_angle_identity_to_itself_is_zero() {
+        let q = identity();
+        assert!(quat_angle(q, q) < 1e-5);
+    }
+
+    #[test]
+    fn quat_angle_negated_quaternion_is_same_rotation() {
+        let q = identity();
+        let neg_q = Quaternion::new(-q.s, -q.v.x, -q.v.y, -q.v.z);
+        // q and -q represent the same rotation; angle should be 0
+        assert!(quat_angle(q, neg_q) < 1e-5);
+    }
+}

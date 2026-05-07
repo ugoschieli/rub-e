@@ -38,3 +38,53 @@ impl SoundStrategy for SingleCubeStrategy {
             .unwrap_or_default()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use cgmath::Vector3;
+
+    use super::*;
+
+    fn origin() -> Vector3<f32> {
+        Vector3::new(0.0, 0.0, 0.0)
+    }
+
+    #[test]
+    fn empty_cubes_returns_no_emitters() {
+        let strategy = SingleCubeStrategy;
+        assert!(strategy.compute_emitters(&[], origin()).is_empty());
+    }
+
+    #[test]
+    fn single_cube_emitter_position_and_volume() {
+        let strategy = SingleCubeStrategy;
+        let cube = Vector3::new(3.0, 1.0, -2.0);
+        let emitters = strategy.compute_emitters(&[cube], origin());
+        assert_eq!(emitters.len(), 1);
+        assert_eq!(emitters[0].position, cube);
+        assert!((emitters[0].volume - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn multiple_cubes_uses_only_first() {
+        let strategy = SingleCubeStrategy;
+        let cubes = [
+            Vector3::new(1.0, 0.0, 0.0),
+            Vector3::new(5.0, 5.0, 5.0),
+            Vector3::new(-3.0, 2.0, 7.0),
+        ];
+        let emitters = strategy.compute_emitters(&cubes, origin());
+        assert_eq!(emitters.len(), 1);
+        assert_eq!(emitters[0].position, cubes[0]);
+    }
+
+    #[test]
+    fn camera_position_does_not_affect_output() {
+        let strategy = SingleCubeStrategy;
+        let cube = Vector3::new(1.0, 2.0, 3.0);
+        let e1 = strategy.compute_emitters(&[cube], Vector3::new(0.0, 0.0, 0.0));
+        let e2 = strategy.compute_emitters(&[cube], Vector3::new(100.0, 200.0, 300.0));
+        assert_eq!(e1[0].position, e2[0].position);
+        assert!((e1[0].volume - e2[0].volume).abs() < 1e-6);
+    }
+}
