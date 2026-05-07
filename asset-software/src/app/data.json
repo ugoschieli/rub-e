@@ -1,0 +1,70 @@
+
+{
+  "user": {
+    "name": "shadcn",
+    "email": "m@example.com",
+    "avatar": "/avatars/shadcn.jpg"
+  },
+  "teams": [
+    {
+      "name": "STG-02",
+      "logo": "/public/STG-02.png"
+    }
+  ],
+  "assets": [
+    {
+      "title": "Assets",
+      "url": "/assets",
+      "isActive": true,
+      "items": [
+        {
+          "title": "Rock",
+          "url": "/assets/Rock",
+          "tag": ["Character", "Hero"]
+        },
+        {
+          "title": "Wood",
+          "url": "/assets/Wood",
+          "tag": ["Character", "Hero"]          
+        },
+        {
+          "title": "Squard",
+          "url": "/assets/Squard",
+          "tag": ["Character", "Hero"]
+        },
+         {
+          "title": "a",
+          "url": "/assets/a",
+          "tag": ["Hero"]
+        },
+                 {
+          "title": "test",
+          "url": "/assets/test",
+          "tag": ["test"]
+        }
+      ]
+
+    }
+  ],
+  "projects": [
+    {
+      "title": "Projects",
+      "url": "/projects",
+      "isActive": true,
+      "items": [
+        {
+          "title": "Design Engineering",
+          "url": "/projects/design-engineering"
+        },
+        {
+          "title": "Marketing",
+          "url": "/projects/marketing"
+        },
+        {
+          "title": "Job Application",
+          "url": "/projects/job-application"
+        }
+      ]
+    }
+  ]
+}
