@@ -21,6 +21,8 @@ pub mod config;
 pub mod hdr;
 /// Module providing keyboard input state tracking
 pub mod input;
+/// 3D spatial audio helpers (sound manager + strategies).
+pub mod sounds;
 /// Module containing the time management (delta time)
 pub mod time;
 mod vertex;
@@ -28,6 +30,8 @@ mod vertex;
 /// Module containing the experimental raytracing renderer
 #[cfg(not(tarpaulin_include))]
 pub mod raytracing;
+/// Simple rigid-body physics: gravity integration and floor collision
+pub mod physics;
 
 pub use crate::game::*;
 pub use crate::gfx::*;
