@@ -10,6 +10,10 @@ use winit::keyboard::KeyCode;
 use etib::camera::{Camera, Projection};
 use etib::config::EngineConfig;
 use etib::cube::{DynamicModel, ModelCube};
+use etib::sounds::{
+    SoundManager, StaticSoundData,
+    strategy::{EmitterState, SoundStrategy},
+};
 use etib::{EngineContext, Game, Scene};
 
 // ---------------------------------------------------------------------------
@@ -486,6 +490,23 @@ fn make_text_model(text: &str, base_x: f32, color: Vector3<f32>) -> DynamicModel
 }
 
 // ---------------------------------------------------------------------------
+// Sound strategies
+// ---------------------------------------------------------------------------
+
+/// Places the emitter at the listener (camera) position — effectively global/non-spatial.
+struct AmbientStrategy;
+
+impl SoundStrategy for AmbientStrategy {
+    fn compute_emitters(
+        &self,
+        _cubes: &[Vector3<f32>],
+        camera_pos: Vector3<f32>,
+    ) -> Vec<EmitterState> {
+        vec![EmitterState { position: camera_pos, volume: 1.0 }]
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Game state
 // ---------------------------------------------------------------------------
 struct PongGame {
@@ -517,6 +538,11 @@ struct PongGame {
 
     title_id: usize,
     spectators: Vec<Spectator>,
+
+    // Sound
+    sound_manager: SoundManager,
+    ambient_data: Option<StaticSoundData>,
+    crowd_cheer: StaticSoundData,
 }
 
 struct Ball {
@@ -976,6 +1002,18 @@ impl Game for PongGame {
             });
         }
 
+        let sound_manager = SoundManager::new();
+
+        // Preload now to avoid file I/O later; the group is added lazily when the game starts.
+        let ambient_data = StaticSoundData::from_file(
+            format!("{}/sounds/ambience.mp3", env!("CARGO_MANIFEST_DIR"))
+        ).expect("Failed to load ambience.mp3");
+
+        let crowd_cheer = StaticSoundData::from_file(
+            format!("{}/sounds/crowd_cheer.mp3", env!("CARGO_MANIFEST_DIR"))
+        ).expect("Failed to load crowd_cheer.mp3");
+
+
         PongGame {
             scene,
             ball,
@@ -995,12 +1033,27 @@ impl Game for PongGame {
             time: 0.0,
             title_id,
             spectators,
+            sound_manager,
+            ambient_data: Some(ambient_data),
+            crowd_cheer,
         }
     }
 
     fn update(&mut self, ctx: &mut EngineContext) {
         let dt = ctx.time.dt;
         self.time += dt;
+
+        // Start ambient the first frame the game is running (track doesn't exist during menu).
+        if self.game_started {
+            if let Some(data) = self.ambient_data.take() {
+                self.sound_manager.add_group_preloaded(
+                    vec![Vector3::new(0.0, 0.0, 0.0)],
+                    data,
+                    Box::new(AmbientStrategy),
+                );
+            }
+        }
+        self.sound_manager.update(&self.scene.camera, dt);
 
         if self.game_started {
             if let Some(m) = self.scene.get_dynamic_mut(self.title_id) {
@@ -1077,6 +1130,8 @@ impl Game for PongGame {
                     s.jump_timer = 1.0;
                 }
             }
+            let eye = scene.camera.eye;
+            self.sound_manager.play_oneshot(self.crowd_cheer.clone(), [eye.x - 8.0, eye.y, eye.z]);
         }
 
         if self.right_player.score as i32 != self.right_player.rendered_score {
@@ -1101,6 +1156,8 @@ impl Game for PongGame {
                     s.jump_timer = 1.0;
                 }
             }
+            let eye = scene.camera.eye;
+            self.sound_manager.play_oneshot(self.crowd_cheer.clone(), [eye.x + 8.0, eye.y, eye.z]);
         }
 
         // --- Sync GPU transforms ---

@@ -1,5 +1,7 @@
 use cgmath::InnerSpace;
 use kira::{AudioManager, AudioManagerSettings, DefaultBackend, Tween};
+use kira::sound::static_sound::StaticSoundData;
+use kira::track::{SpatialTrackBuilder, SpatialTrackHandle};
 
 use crate::camera::Camera;
 use crate::sounds::{group::SoundGroup, strategy::SoundStrategy};
@@ -15,6 +17,11 @@ fn to_mint_quat(x: f32, y: f32, z: f32, w: f32) -> mint::Quaternion<f32> {
     }
 }
 
+struct OneShotEntry {
+    _track: SpatialTrackHandle,
+    remaining: f32,
+}
+
 /// High-level manager for spatial audio.
 ///
 /// Owns the backend audio manager, a listener, and one or more [`SoundGroup`]s.
@@ -23,6 +30,7 @@ pub struct SoundManager {
     audio_manager: AudioManager<DefaultBackend>,
     listener: kira::listener::ListenerHandle,
     groups: Vec<SoundGroup>,
+    oneshots: Vec<OneShotEntry>,
 }
 
 impl SoundManager {
@@ -42,6 +50,7 @@ impl SoundManager {
             audio_manager,
             listener,
             groups: Vec::new(),
+            oneshots: Vec::new(),
         }
     }
 
@@ -70,9 +79,49 @@ impl SoundManager {
         self.groups.push(group);
     }
 
+    /// Add a group from already-loaded [`StaticSoundData`] (no file I/O, safe to call mid-game).
+    pub fn add_group_preloaded(
+        &mut self,
+        cubes: Vec<cgmath::Vector3<f32>>,
+        sound_data: StaticSoundData,
+        strategy: Box<dyn SoundStrategy>,
+    ) {
+        let group = SoundGroup::new(
+            &mut self.audio_manager,
+            &self.listener,
+            cubes,
+            sound_data,
+            strategy,
+        );
+        self.groups.push(group);
+    }
+
+    /// Replace the cube positions for a specific group (identified by insertion order).
+    pub fn update_group_cubes(&mut self, index: usize, cubes: Vec<cgmath::Vector3<f32>>) {
+        if let Some(group) = self.groups.get_mut(index) {
+            group.update_cubes(cubes);
+        }
+    }
+
+    /// Play a non-looping sound once at the given world-space position.
+    ///
+    /// Pass a pre-loaded [`StaticSoundData`] (cheap to clone — it wraps an `Arc`).
+    /// The track is kept alive internally until the sound finishes, then released
+    /// on the next [`SoundManager::update`] call.
+    pub fn play_oneshot(&mut self, sound_data: StaticSoundData, position: [f32; 3]) {
+        let duration = sound_data.duration().as_secs_f32();
+        let pos = to_mint_vec3(position[0], position[1], position[2]);
+        let mut track = self
+            .audio_manager
+            .add_spatial_sub_track(self.listener.id(), pos, SpatialTrackBuilder::new())
+            .expect("Failed to create one-shot track");
+        track.play(sound_data).expect("Failed to play one-shot sound");
+        self.oneshots.push(OneShotEntry { _track: track, remaining: duration });
+    }
+
     /// Update the listener (position + orientation) from the current camera and
     /// update all groups.
-    pub fn update(&mut self, camera: &Camera) {
+    pub fn update(&mut self, camera: &Camera, dt: f32) {
         // Position du listener
         self.listener.set_position(
             to_mint_vec3(camera.eye.x, camera.eye.y, camera.eye.z),
@@ -106,6 +155,12 @@ impl SoundManager {
         };
 
         self.listener.set_orientation(quat, Tween::default());
+
+        // Tick down and release finished one-shots
+        for entry in &mut self.oneshots {
+            entry.remaining -= dt;
+        }
+        self.oneshots.retain(|e| e.remaining > 0.0);
 
         // Mise à jour des groupes
         let camera_pos = cgmath::Vector3::new(camera.eye.x, camera.eye.y, camera.eye.z);

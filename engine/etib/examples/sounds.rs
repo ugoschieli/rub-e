@@ -93,7 +93,7 @@ impl Game for SoundsDemo {
             let _ = model.position;
         }
 
-        self.sound_manager.update(&self.scene.camera);
+        self.sound_manager.update(&self.scene.camera, dt);
     }
 
     fn scene(&mut self) -> Option<&mut Scene> {

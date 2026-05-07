@@ -13,3 +13,5 @@ pub mod strategy;
 
 /// High-level manager for spatial sounds.
 pub use manager::SoundManager;
+/// Re-exported so callers can preload sounds without depending on `kira` directly.
+pub use kira::sound::static_sound::StaticSoundData;
