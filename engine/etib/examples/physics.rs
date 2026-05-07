@@ -153,7 +153,7 @@ impl Game for PhysicsDemo {
         camera_controller.pitch = fwd.y.asin();
 
         let camera = Camera::new(
-            ctx,
+            &ctx.gfx.device,
             eye,
             target,
             Vector3::unit_y(),
@@ -241,7 +241,8 @@ impl Game for PhysicsDemo {
         use winit::event::WindowEvent;
         match event {
             WindowEvent::KeyboardInput { event, .. } => {
-                self.camera_controller.process_keyboard(event.clone());
+                self.camera_controller
+                    .process_keyboard(event.physical_key, event.state);
                 if event.state == winit::event::ElementState::Pressed {
                     match event.physical_key {
                         PhysicalKey::Code(KeyCode::Escape) => {
