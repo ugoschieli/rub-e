@@ -52,6 +52,10 @@ const BALL_LOB_X_FACTOR: f32 = 0.9;
 /// Ball center Y limit so it never clips into a wall (wall face − ball radius).
 const WALL_LIMIT: f32 = FIELD_HALF_H - 2.0;
 
+const DASH_SMASH_BONUS: f32 = 30.0;
+const LOB_COOLDOWN: f32 = 6.0;
+const PADDLE_HIT_COOLDOWN: f32 = 0.08;
+
 // ---------------------------------------------------------------------------
 // Camera  — perspective from a low angle to reveal cube depth
 // ---------------------------------------------------------------------------
@@ -502,7 +506,10 @@ impl SoundStrategy for AmbientStrategy {
         _cubes: &[Vector3<f32>],
         camera_pos: Vector3<f32>,
     ) -> Vec<EmitterState> {
-        vec![EmitterState { position: camera_pos, volume: 1.0 }]
+        vec![EmitterState {
+            position: camera_pos,
+            volume: 1.0,
+        }]
     }
 }
 
@@ -549,6 +556,8 @@ struct Ball {
     p: Vector3<f32>,
     v: Vector3<f32>,
     id: usize,
+    left_hit_cd: f32,
+    right_hit_cd: f32,
 }
 
 struct Player {
@@ -559,6 +568,7 @@ struct Player {
     cooldown_timer: f32,
     dash_timer: f32,
     dash_cooldown: f32,
+    lob_cooldown: f32,
     score: u32,
     rendered_score: i32,
     id: usize,
@@ -622,6 +632,8 @@ fn ball_speed(ball: &Ball) -> f32 {
 
 fn reset_ball(ball: &mut Ball, toward_right: bool) {
     ball.p = Vector3::new(0.0, 0.0, 0.0);
+    ball.left_hit_cd = 0.0;
+    ball.right_hit_cd = 0.0;
     let vx = if toward_right {
         BALL_SPEED_INIT
     } else {
@@ -670,6 +682,20 @@ fn step_physics(
     }
     if right.dash_timer > 0.0 {
         right.dash_timer -= dt;
+    }
+
+    // --- Lob cooldowns ---
+    if left.lob_cooldown > 0.0 {
+        left.lob_cooldown -= dt;
+    }
+    if right.lob_cooldown > 0.0 {
+        right.lob_cooldown -= dt;
+    }
+    if ball.left_hit_cd > 0.0 {
+        ball.left_hit_cd -= dt;
+    }
+    if ball.right_hit_cd > 0.0 {
+        ball.right_hit_cd -= dt;
     }
 
     // --- Boost activation ---
@@ -759,46 +785,142 @@ fn step_physics(
     // Ball can only hit paddles if it is low enough (e.g. not lobbed over them)
     let ball_is_hittable = ball.p.z < 3.0;
 
-    let left_contact = left.x + 2.5;
-    if ball_is_hittable
-        && ball.v.x < 0.0
-        && ball.p.x <= left_contact
-        && ball.p.x > left.x + 0.0 // prevent hitting with back of paddle
-        && (ball.p.y - left.y).abs() <= PADDLE_HALF_H
-    // prevent hitting with sides
+    // Left paddle — AABB face detection (velocity-weighted penetration)
     {
-        ball.p.x = left_contact;
-        let new_speed = (ball_speed(ball) + BALL_SPEED_INC).min(BALL_SPEED_MAX);
-        let offset = ((ball.p.y - left.y) / PADDLE_HALF_H).clamp(-1.0, 1.0);
-        let angle = offset * FRAC_PI_4;
-        if left_input.lob_pressed {
-            ball.v.z = BALL_LOB_SPEED;
-            ball.v.x = (new_speed * BALL_LOB_X_FACTOR) * angle.cos();
-        } else {
-            ball.v.x = new_speed * angle.cos();
+        let px_min = left.x - 0.5;
+        let px_max = left.x + 2.5;
+        let py_min = left.y - PADDLE_HALF_H - 0.5;
+        let py_max = left.y + PADDLE_HALF_H + 0.5;
+
+        if ball_is_hittable
+            && ball.left_hit_cd <= 0.0
+            && ball.p.x > px_min
+            && ball.p.x < px_max
+            && ball.p.y > py_min
+            && ball.p.y < py_max
+        {
+            ball.left_hit_cd = left.dash_timer.max(PADDLE_HIT_COOLDOWN) + 0.3;
+
+            let pen_front = px_max - ball.p.x;
+            let pen_back = ball.p.x - px_min;
+            let pen_top = py_max - ball.p.y;
+            let pen_bot = ball.p.y - py_min;
+
+            // Divide by speed on each axis: gives "time since the ball crossed that face".
+            // Smallest value = face most recently crossed = entry face.
+            let vx = ball.v.x.abs().max(0.01);
+            let vy = ball.v.y.abs().max(0.01);
+            let t_x = pen_front.min(pen_back) / vx;
+            let t_y = pen_top.min(pen_bot) / vy;
+
+            if t_x <= t_y {
+                if pen_front < pen_back {
+                    ball.p.x = px_max;
+                    let base_speed = (ball_speed(ball) + BALL_SPEED_INC).min(BALL_SPEED_MAX);
+                    let new_speed = if left.dash_timer > 0.0 {
+                        (base_speed + DASH_SMASH_BONUS).min(BALL_SPEED_MAX + DASH_SMASH_BONUS)
+                    } else {
+                        base_speed
+                    };
+                    let offset = ((ball.p.y - left.y) / PADDLE_HALF_H).clamp(-1.0, 1.0);
+                    let angle = offset * FRAC_PI_4;
+                    if left_input.lob_pressed && left.lob_cooldown <= 0.0 {
+                        ball.v.z = BALL_LOB_SPEED;
+                        ball.v.x = (new_speed * BALL_LOB_X_FACTOR) * angle.cos();
+                        left.lob_cooldown = LOB_COOLDOWN;
+                    } else {
+                        ball.v.x = new_speed * angle.cos();
+                    }
+                    ball.v.y = new_speed * angle.sin();
+                } else {
+                    ball.p.x = px_min;
+                    ball.v.x = -ball.v.x.abs();
+                }
+            } else {
+                // Side face — redirect strongly in Y, small X from hit position along face
+                let speed = (ball_speed(ball) + BALL_SPEED_INC).min(BALL_SPEED_MAX);
+                let mid_x = (px_min + px_max) * 0.5;
+                let half_x = (px_max - px_min) * 0.5;
+                let offset = ((ball.p.x - mid_x) / half_x).clamp(-1.0, 1.0);
+                let angle = offset * FRAC_PI_4;
+                if pen_top < pen_bot {
+                    ball.p.y = py_max;
+                    ball.v.y = speed * angle.cos(); // upward
+                } else {
+                    ball.p.y = py_min;
+                    ball.v.y = -speed * angle.cos(); // downward
+                }
+                ball.v.x = speed * angle.sin();
+            }
         }
-        ball.v.y = new_speed * angle.sin();
     }
 
-    let right_contact = right.x - 1.5;
-    if ball_is_hittable
-        && ball.v.x > 0.0
-        && ball.p.x >= right_contact
-        && ball.p.x < right.x + 1.0 // prevent hitting with back of paddle
-        && (ball.p.y - right.y).abs() <= PADDLE_HALF_H
-    // prevent hitting with sides
+    // Right paddle — AABB face detection (velocity-weighted penetration)
     {
-        ball.p.x = right_contact;
-        let new_speed = (ball_speed(ball) + BALL_SPEED_INC).min(BALL_SPEED_MAX);
-        let offset = ((ball.p.y - right.y) / PADDLE_HALF_H).clamp(-1.0, 1.0);
-        let angle = offset * FRAC_PI_4;
-        if right_input.lob_pressed {
-            ball.v.z = BALL_LOB_SPEED;
-            ball.v.x = -(new_speed * BALL_LOB_X_FACTOR) * angle.cos();
-        } else {
-            ball.v.x = -new_speed * angle.cos();
+        let px_min = right.x - 1.5;
+        let px_max = right.x + 1.0;
+        let py_min = right.y - PADDLE_HALF_H - 0.5;
+        let py_max = right.y + PADDLE_HALF_H + 0.5;
+
+        if ball_is_hittable
+            && ball.right_hit_cd <= 0.0
+            && ball.p.x > px_min
+            && ball.p.x < px_max
+            && ball.p.y > py_min
+            && ball.p.y < py_max
+        {
+            ball.right_hit_cd = right.dash_timer.max(PADDLE_HIT_COOLDOWN) + 0.3;
+
+            let pen_front = ball.p.x - px_min;
+            let pen_back = px_max - ball.p.x;
+            let pen_top = py_max - ball.p.y;
+            let pen_bot = ball.p.y - py_min;
+
+            let vx = ball.v.x.abs().max(0.01);
+            let vy = ball.v.y.abs().max(0.01);
+            let t_x = pen_front.min(pen_back) / vx;
+            let t_y = pen_top.min(pen_bot) / vy;
+
+            if t_x <= t_y {
+                if pen_front < pen_back {
+                    ball.p.x = px_min;
+                    let base_speed = (ball_speed(ball) + BALL_SPEED_INC).min(BALL_SPEED_MAX);
+                    let new_speed = if right.dash_timer > 0.0 {
+                        (base_speed + DASH_SMASH_BONUS).min(BALL_SPEED_MAX + DASH_SMASH_BONUS)
+                    } else {
+                        base_speed
+                    };
+                    let offset = ((ball.p.y - right.y) / PADDLE_HALF_H).clamp(-1.0, 1.0);
+                    let angle = offset * FRAC_PI_4;
+                    if right_input.lob_pressed && right.lob_cooldown <= 0.0 {
+                        ball.v.z = BALL_LOB_SPEED;
+                        ball.v.x = -(new_speed * BALL_LOB_X_FACTOR) * angle.cos();
+                        right.lob_cooldown = LOB_COOLDOWN;
+                    } else {
+                        ball.v.x = -new_speed * angle.cos();
+                    }
+                    ball.v.y = new_speed * angle.sin();
+                } else {
+                    ball.p.x = px_max;
+                    ball.v.x = ball.v.x.abs();
+                }
+            } else {
+                // Side face — redirect strongly in Y, small X from hit position along face
+                let speed = (ball_speed(ball) + BALL_SPEED_INC).min(BALL_SPEED_MAX);
+                let mid_x = (px_min + px_max) * 0.5;
+                let half_x = (px_max - px_min) * 0.5;
+                let offset = ((ball.p.x - mid_x) / half_x).clamp(-1.0, 1.0);
+                let angle = offset * FRAC_PI_4;
+                if pen_top < pen_bot {
+                    ball.p.y = py_max;
+                    ball.v.y = speed * angle.cos(); // upward
+                } else {
+                    ball.p.y = py_min;
+                    ball.v.y = -speed * angle.cos(); // downward
+                }
+                ball.v.x = speed * angle.sin();
+            }
         }
-        ball.v.y = new_speed * angle.sin();
     }
 
     // --- Scoring ---
@@ -864,6 +986,8 @@ impl Game for PongGame {
             p: Vector3::new(0.0, 0.0, 0.0),
             v: Vector3::new(BALL_SPEED_INIT, BALL_SPEED_INIT * 0.4, 0.0),
             id: scene.add_dynamic(ball_model),
+            left_hit_cd: 0.0,
+            right_hit_cd: 0.0,
         };
 
         let left_player = Player {
@@ -874,6 +998,7 @@ impl Game for PongGame {
             cooldown_timer: 0.0,
             dash_timer: 0.0,
             dash_cooldown: 0.0,
+            lob_cooldown: 0.0,
             score: 0,
             rendered_score: 0,
             id: scene.add_dynamic(left_paddle),
@@ -888,6 +1013,7 @@ impl Game for PongGame {
             cooldown_timer: 0.0,
             dash_timer: 0.0,
             dash_cooldown: 0.0,
+            lob_cooldown: 0.0,
             score: 0,
             rendered_score: 0,
             id: scene.add_dynamic(right_paddle),
@@ -1005,14 +1131,17 @@ impl Game for PongGame {
         let sound_manager = SoundManager::new();
 
         // Preload now to avoid file I/O later; the group is added lazily when the game starts.
-        let ambient_data = StaticSoundData::from_file(
-            format!("{}/sounds/ambience.mp3", env!("CARGO_MANIFEST_DIR"))
-        ).expect("Failed to load ambience.mp3");
+        let ambient_data = StaticSoundData::from_file(format!(
+            "{}/sounds/ambience.mp3",
+            env!("CARGO_MANIFEST_DIR")
+        ))
+        .expect("Failed to load ambience.mp3");
 
-        let crowd_cheer = StaticSoundData::from_file(
-            format!("{}/sounds/crowd_cheer.mp3", env!("CARGO_MANIFEST_DIR"))
-        ).expect("Failed to load crowd_cheer.mp3");
-
+        let crowd_cheer = StaticSoundData::from_file(format!(
+            "{}/sounds/crowd_cheer.mp3",
+            env!("CARGO_MANIFEST_DIR")
+        ))
+        .expect("Failed to load crowd_cheer.mp3");
 
         PongGame {
             scene,
@@ -1131,7 +1260,8 @@ impl Game for PongGame {
                 }
             }
             let eye = scene.camera.eye;
-            self.sound_manager.play_oneshot(self.crowd_cheer.clone(), [eye.x - 8.0, eye.y, eye.z]);
+            self.sound_manager
+                .play_oneshot(self.crowd_cheer.clone(), [eye.x - 8.0, eye.y, eye.z]);
         }
 
         if self.right_player.score as i32 != self.right_player.rendered_score {
@@ -1157,7 +1287,8 @@ impl Game for PongGame {
                 }
             }
             let eye = scene.camera.eye;
-            self.sound_manager.play_oneshot(self.crowd_cheer.clone(), [eye.x + 8.0, eye.y, eye.z]);
+            self.sound_manager
+                .play_oneshot(self.crowd_cheer.clone(), [eye.x + 8.0, eye.y, eye.z]);
         }
 
         // --- Sync GPU transforms ---
@@ -1559,6 +1690,32 @@ impl Game for PongGame {
                                     .fill(color)
                                     .desired_width(180.0),
                             );
+
+                            ui.add_space(20.0);
+
+                            // Lob
+                            let (progress, text, color) = if p.lob_cooldown > 0.0 {
+                                (
+                                    1.0 - (p.lob_cooldown / LOB_COOLDOWN),
+                                    format!("LOB: {:.1}s", p.lob_cooldown),
+                                    etib::egui::Color32::DARK_GRAY,
+                                )
+                            } else {
+                                (
+                                    1.0,
+                                    "LOB: READY".to_string(),
+                                    etib::egui::Color32::from_rgb(180, 100, 255),
+                                )
+                            };
+                            ui.add(
+                                etib::egui::ProgressBar::new(progress)
+                                    .text(
+                                        etib::egui::RichText::new(text)
+                                            .color(etib::egui::Color32::BLACK),
+                                    )
+                                    .fill(color)
+                                    .desired_width(180.0),
+                            );
                         });
                     });
 
@@ -1627,6 +1784,32 @@ impl Game for PongGame {
                                                 1.0,
                                                 "BOOST: READY".to_string(),
                                                 etib::egui::Color32::GREEN,
+                                            )
+                                        };
+                                        ui.add(
+                                            etib::egui::ProgressBar::new(progress)
+                                                .text(
+                                                    etib::egui::RichText::new(text)
+                                                        .color(etib::egui::Color32::BLACK),
+                                                )
+                                                .fill(color)
+                                                .desired_width(180.0),
+                                        );
+
+                                        ui.add_space(20.0);
+
+                                        // Lob
+                                        let (progress, text, color) = if p.lob_cooldown > 0.0 {
+                                            (
+                                                1.0 - (p.lob_cooldown / LOB_COOLDOWN),
+                                                format!("LOB: {:.1}s", p.lob_cooldown),
+                                                etib::egui::Color32::DARK_GRAY,
+                                            )
+                                        } else {
+                                            (
+                                                1.0,
+                                                "LOB: READY".to_string(),
+                                                etib::egui::Color32::from_rgb(180, 100, 255),
                                             )
                                         };
                                         ui.add(
@@ -1818,6 +2001,8 @@ impl PongServer {
             p: Vector3::new(0.0, 0.0, 0.0),
             v: Vector3::new(BALL_SPEED_INIT, BALL_SPEED_INIT * 0.4, 0.0),
             id: 0,
+            left_hit_cd: 0.0,
+            right_hit_cd: 0.0,
         };
 
         let socket = UdpSocket::bind(format!("0.0.0.0:{}", port))?;
@@ -1833,6 +2018,7 @@ impl PongServer {
                 cooldown_timer: 0.0,
                 dash_timer: 0.0,
                 dash_cooldown: 0.0,
+                lob_cooldown: 0.0,
                 score: 0,
                 rendered_score: 0,
                 id: 0,
@@ -1846,6 +2032,7 @@ impl PongServer {
                 cooldown_timer: 0.0,
                 dash_timer: 0.0,
                 dash_cooldown: 0.0,
+                lob_cooldown: 0.0,
                 score: 0,
                 rendered_score: 0,
                 id: 0,
