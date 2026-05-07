@@ -1,42 +1,56 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Asset Software
 
-## Getting Started
+This project is a desktop application built with **Tauri v2** and **Next.js**.
 
-Install tauri cli
+## Prerequisites
+
+- [Rust](https://www.rust-lang.org/tools/install) and Cargo.
+- [Node.js](https://nodejs.org/) (v18+ recommended).
+- Tauri CLI installed:
+  ```bash
+  cargo install tauri-cli
+  ```
+
+## Installation
+
+Install the frontend dependencies:
 
 ```bash
-cargo install tauri-cli
+npm install
+# or
+pnpm install
 ```
 
-First, run the development server:
+## Development
+
+To launch the application in development mode (with hot-reload for both frontend and backend):
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cargo tauri dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Build
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+To generate the production executable:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+cargo tauri build
+```
+The generated files will be located in `src-tauri/target/release/bundle`.
 
-## Learn More
+## Tests
 
-To learn more about Next.js, take a look at the following resources:
+### Frontend (Next.js / Vitest)
+To run the frontend unit tests with Vitest:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npm run test
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Backend (Rust)
+To run the Rust tests for the Tauri application:
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+cd src-tauri
+cargo test
+```
