@@ -15,6 +15,10 @@ fn to_mint_quat(x: f32, y: f32, z: f32, w: f32) -> mint::Quaternion<f32> {
     }
 }
 
+/// High-level manager for spatial audio.
+///
+/// Owns the backend audio manager, a listener, and one or more [`SoundGroup`]s.
+/// Call [`SoundManager::update`] every frame to keep the listener in sync with the camera.
 pub struct SoundManager {
     audio_manager: AudioManager<DefaultBackend>,
     listener: kira::listener::ListenerHandle,
@@ -22,6 +26,7 @@ pub struct SoundManager {
 }
 
 impl SoundManager {
+    /// Create a new audio manager and a default listener.
     pub fn new() -> Self {
         let mut audio_manager = AudioManager::new(AudioManagerSettings::default())
             .expect("Failed to create audio manager");
@@ -40,6 +45,11 @@ impl SoundManager {
         }
     }
 
+    /// Add a new spatial sound group.
+    ///
+    /// `cubes` are world-space positions used by the strategy to compute one or
+    /// more emitters.
+    /// `sound_path` is a filesystem path to an audio file supported by `kira`.
     pub fn add_group(
         &mut self,
         cubes: Vec<cgmath::Vector3<f32>>,
@@ -60,6 +70,8 @@ impl SoundManager {
         self.groups.push(group);
     }
 
+    /// Update the listener (position + orientation) from the current camera and
+    /// update all groups.
     pub fn update(&mut self, camera: &Camera) {
         // Position du listener
         self.listener.set_position(

@@ -1,11 +1,16 @@
 use cgmath::Vector3;
 
+/// A single spatial emitter state for one frame.
 pub struct EmitterState {
+    /// World-space position of the emitter.
     pub position: Vector3<f32>,
+    /// Linear volume multiplier.
     pub volume: f32,
 }
 
+/// Strategy interface for converting cube positions into one or more emitters.
 pub trait SoundStrategy: Send + Sync {
+    /// Compute emitters from the set of cube positions and the current camera position.
     fn compute_emitters(
         &self,
         cubes: &[Vector3<f32>],
@@ -13,6 +18,7 @@ pub trait SoundStrategy: Send + Sync {
     ) -> Vec<EmitterState>;
 }
 
+/// Simplest strategy: use the first cube as the single emitter.
 pub struct SingleCubeStrategy;
 
 impl SoundStrategy for SingleCubeStrategy {
