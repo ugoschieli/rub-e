@@ -2,8 +2,8 @@ use std::collections::HashSet;
 use std::f32::consts::FRAC_PI_4;
 use std::sync::Arc;
 
-use glam::{Mat4, Quat, Vec3};
-use wgpu::util::DeviceExt;
+use bytemuck::{Pod, Zeroable};
+use glam::{Mat4, Quat, Vec3, Vec4, Vec4Swizzles};
 use winit::application::ApplicationHandler;
 use winit::dpi::PhysicalSize;
 use winit::event::{DeviceEvent, ElementState, WindowEvent};
@@ -13,6 +13,33 @@ use winit::window::{CursorGrabMode, Fullscreen, Window, WindowId};
 
 mod utils;
 
+#[derive(Debug)]
+struct Cube {
+    position: Vec3,
+    color: Vec3,
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Pod, Zeroable)]
+struct CubeGpu {
+    position: Vec4,
+    color: Vec4,
+}
+
+impl Cube {
+    pub const fn new(position: Vec3, color: Vec3) -> Cube {
+        Cube { position, color }
+    }
+
+    pub fn to_gpu(&self) -> CubeGpu {
+        CubeGpu {
+            position: Vec4::ZERO.with_xyz(self.position),
+            color: Vec4::ONE.with_xyz(self.color),
+        }
+    }
+}
+
+#[derive(Debug)]
 struct Camera {
     position: Vec3,
     rotation: Quat,
@@ -53,12 +80,14 @@ impl Camera {
     }
 }
 
+#[derive(Debug)]
 struct Gfx {
     device: wgpu::Device,
     queue: wgpu::Queue,
     surface: wgpu::Surface<'static>,
     pipeline: wgpu::RenderPipeline,
     camera_buffer: wgpu::Buffer,
+    cubes_buffer: wgpu::Buffer,
     bind_group: wgpu::BindGroup,
     depth_texture_view: wgpu::TextureView,
 }
@@ -73,13 +102,23 @@ impl Gfx {
         let (surface, surface_config) =
             utils::create_surface(&instance, &adapter, &device, window, size);
 
-        let camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("ETIB Camera Buffer"),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            contents: bytemuck::bytes_of(&Mat4::ZERO),
-        });
+        let camera_buffer = utils::create_buffer(
+            &device,
+            "ETIB Camera Buffer",
+            wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            &Mat4::ZERO,
+        );
 
-        let (bind_group, bind_group_layout) = utils::create_bind_group(&device, &camera_buffer);
+        let cubes = &[Cube::new(Vec3::new(1., 1., -5.), Vec3::Y).to_gpu()];
+        let cubes_buffer = utils::create_buffer(
+            &device,
+            "ETIB Cubes Buffer",
+            wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            cubes,
+        );
+
+        let (bind_group, bind_group_layout) =
+            utils::create_bind_group(&device, &camera_buffer, &cubes_buffer);
         let pipeline = utils::create_render_pipeline(&device, &surface_config, &bind_group_layout);
         let (_depth_texture, depth_texture_view) = utils::create_depth_texture(&device, size);
 
@@ -89,6 +128,7 @@ impl Gfx {
             surface,
             pipeline,
             camera_buffer,
+            cubes_buffer,
             bind_group,
             depth_texture_view,
         }
@@ -127,7 +167,7 @@ impl Gfx {
     }
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 struct App {
     window: Option<Arc<Window>>,
     gfx: Option<Gfx>,

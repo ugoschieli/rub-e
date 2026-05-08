@@ -1,3 +1,5 @@
+use bytemuck::NoUninit;
+use wgpu::{BufferUsages, util::DeviceExt};
 use winit::{dpi::PhysicalSize, event_loop::ActiveEventLoop};
 
 const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
@@ -48,31 +50,63 @@ pub fn create_surface(
     (surface, surface_config)
 }
 
+pub fn create_buffer<T: NoUninit>(
+    device: &wgpu::Device,
+    label: &str,
+    usage: wgpu::BufferUsages,
+    contents: &T,
+) -> wgpu::Buffer {
+    device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some(label),
+        usage,
+        contents: bytemuck::bytes_of(contents),
+    })
+}
+
 pub fn create_bind_group(
     device: &wgpu::Device,
     camera_buffer: &wgpu::Buffer,
+    cubes_buffer: &wgpu::Buffer,
 ) -> (wgpu::BindGroup, wgpu::BindGroupLayout) {
     let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: Some("ETIB Bind Group Layout"),
-        entries: &[wgpu::BindGroupLayoutEntry {
-            binding: 0, // Camera
-            visibility: wgpu::ShaderStages::VERTEX,
-            ty: wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Uniform,
-                has_dynamic_offset: false,
-                min_binding_size: None,
+        entries: &[
+            wgpu::BindGroupLayoutEntry {
+                binding: 0, // Camera
+                visibility: wgpu::ShaderStages::VERTEX,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
             },
-            count: None,
-        }],
+            wgpu::BindGroupLayoutEntry {
+                binding: 1, // Cubes
+                visibility: wgpu::ShaderStages::VERTEX,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+        ],
     });
 
     let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("ETIB Bind Group"),
         layout: &bind_group_layout,
-        entries: &[wgpu::BindGroupEntry {
-            binding: 0, // Camera
-            resource: camera_buffer.as_entire_binding(),
-        }],
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0, // Camera
+                resource: camera_buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1, // Cubes
+                resource: cubes_buffer.as_entire_binding(),
+            },
+        ],
     });
 
     (bind_group, bind_group_layout)
