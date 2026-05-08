@@ -1,5 +1,5 @@
 use bytemuck::NoUninit;
-use wgpu::{BufferUsages, util::DeviceExt};
+use wgpu::util::DeviceExt;
 use winit::{dpi::PhysicalSize, event_loop::ActiveEventLoop};
 
 const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
@@ -20,9 +20,7 @@ pub fn create_adapter(instance: &wgpu::Instance) -> wgpu::Adapter {
 
 pub fn create_device(adapter: &wgpu::Adapter) -> (wgpu::Device, wgpu::Queue) {
     pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-        required_features: wgpu::Features {
-            ..Default::default()
-        },
+        required_features: wgpu::Features::default(),
         experimental_features: unsafe { wgpu::ExperimentalFeatures::enabled() },
         ..Default::default()
     }))
@@ -40,12 +38,15 @@ pub fn create_surface(
         .create_surface(window)
         .expect("Failed to create a surface");
 
-    let surface_config = surface
-        .get_default_config(&adapter, size.width, size.height)
+    let mut surface_config = surface
+        .get_default_config(adapter, size.width, size.height)
         .expect("The surface isn't supported by this adapter");
-    log::info!("{:?}", surface_config);
+    surface_config.desired_maximum_frame_latency = 0;
+    surface_config.present_mode = wgpu::PresentMode::AutoVsync;
+    //surface_config.present_mode = wgpu::PresentMode::Immediate;
+    log::info!("{surface_config:?}");
 
-    surface.configure(&device, &surface_config);
+    surface.configure(device, &surface_config);
 
     (surface, surface_config)
 }
@@ -54,12 +55,12 @@ pub fn create_buffer<T: NoUninit>(
     device: &wgpu::Device,
     label: &str,
     usage: wgpu::BufferUsages,
-    contents: &T,
+    contents: &[T],
 ) -> wgpu::Buffer {
     device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some(label),
         usage,
-        contents: bytemuck::bytes_of(contents),
+        contents: bytemuck::cast_slice(contents),
     })
 }
 
@@ -67,6 +68,7 @@ pub fn create_bind_group(
     device: &wgpu::Device,
     camera_buffer: &wgpu::Buffer,
     cubes_buffer: &wgpu::Buffer,
+    face_matrices_buffer: &wgpu::Buffer,
 ) -> (wgpu::BindGroup, wgpu::BindGroupLayout) {
     let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: Some("ETIB Bind Group Layout"),
@@ -91,6 +93,16 @@ pub fn create_bind_group(
                 },
                 count: None,
             },
+            wgpu::BindGroupLayoutEntry {
+                binding: 2, // Face Rotation Matrices
+                visibility: wgpu::ShaderStages::VERTEX,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
         ],
     });
 
@@ -105,6 +117,10 @@ pub fn create_bind_group(
             wgpu::BindGroupEntry {
                 binding: 1, // Cubes
                 resource: cubes_buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2, // Face Rotation Matrices
+                resource: face_matrices_buffer.as_entire_binding(),
             },
         ],
     });
@@ -121,7 +137,7 @@ pub fn create_render_pipeline(
 
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("ETIB Pipeline Layout"),
-        bind_group_layouts: &[Some(&bind_group_layout)],
+        bind_group_layouts: &[Some(bind_group_layout)],
         immediate_size: 0,
     });
 
@@ -132,17 +148,13 @@ pub fn create_render_pipeline(
             module: &shader,
             entry_point: None,
             buffers: &[],
-            compilation_options: wgpu::PipelineCompilationOptions {
-                ..Default::default()
-            },
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
         },
         fragment: Some(wgpu::FragmentState {
             module: &shader,
             entry_point: None,
             targets: &[Some(surface_config.format.into())],
-            compilation_options: wgpu::PipelineCompilationOptions {
-                ..Default::default()
-            },
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
         }),
         primitive: wgpu::PrimitiveState {
             topology: wgpu::PrimitiveTopology::TriangleList,
@@ -155,18 +167,12 @@ pub fn create_render_pipeline(
         },
         depth_stencil: Some(wgpu::DepthStencilState {
             format: DEPTH_FORMAT,
-            stencil: wgpu::StencilState {
-                ..Default::default()
-            },
+            stencil: wgpu::StencilState::default(),
             depth_write_enabled: Some(true),
             depth_compare: Some(wgpu::CompareFunction::Less),
-            bias: wgpu::DepthBiasState {
-                ..Default::default()
-            },
+            bias: wgpu::DepthBiasState::default(),
         }),
-        multisample: wgpu::MultisampleState {
-            ..Default::default()
-        },
+        multisample: wgpu::MultisampleState::default(),
         multiview_mask: None,
         cache: None,
     })
@@ -235,7 +241,7 @@ pub fn create_render_pass<'a>(
     encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
         label: Some("ETIB Render Pass"),
         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-            view: &current_surface_texture_view,
+            view: current_surface_texture_view,
             ops: wgpu::Operations {
                 load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
                 store: wgpu::StoreOp::Store,

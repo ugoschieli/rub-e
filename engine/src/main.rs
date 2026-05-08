@@ -1,5 +1,5 @@
 use std::collections::HashSet;
-use std::f32::consts::FRAC_PI_4;
+use std::f32::consts::{FRAC_PI_2, PI};
 use std::sync::Arc;
 
 use bytemuck::{Pod, Zeroable};
@@ -11,9 +11,19 @@ use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::{CursorGrabMode, Fullscreen, Window, WindowId};
 
+use crate::time::Time;
+use camera::Camera;
+
+mod camera;
+mod time;
 mod utils;
 
-#[derive(Debug)]
+const CUBES: &[Cube] = &[
+    Cube::new(Vec3::new(0., 0., -5.), Vec3::Y),
+    Cube::new(Vec3::new(3., 0., -5.), Vec3::Y),
+];
+
+#[derive(Debug, Copy, Clone)]
 struct Cube {
     position: Vec3,
     color: Vec3,
@@ -27,56 +37,15 @@ struct CubeGpu {
 }
 
 impl Cube {
-    pub const fn new(position: Vec3, color: Vec3) -> Cube {
-        Cube { position, color }
+    pub const fn new(position: Vec3, color: Vec3) -> Self {
+        Self { position, color }
     }
 
-    pub fn to_gpu(&self) -> CubeGpu {
+    pub fn to_gpu(self) -> CubeGpu {
         CubeGpu {
             position: Vec4::ZERO.with_xyz(self.position),
             color: Vec4::ONE.with_xyz(self.color),
         }
-    }
-}
-
-#[derive(Debug)]
-struct Camera {
-    position: Vec3,
-    rotation: Quat,
-    fovy: f32,
-}
-
-impl Camera {
-    fn new() -> Self {
-        Camera {
-            position: Vec3::new(0., 0., 2.),
-            rotation: Quat::default(),
-            fovy: FRAC_PI_4,
-        }
-    }
-
-    fn matrix(&self, size: PhysicalSize<u32>) -> Mat4 {
-        let forward = self.rotation * Vec3::new(0., 0., -1.);
-
-        let view = Mat4::look_at_rh(
-            self.position,           // Move the camera back to see the square
-            self.position + forward, // Look at the center
-            Vec3::Y,                 // Up is Y
-        );
-
-        let projection =
-            Mat4::perspective_infinite_rh(self.fovy, size.width as f32 / size.height as f32, 0.1);
-
-        // WGPU uses a 0.0 to 1.0 depth range, while glam's projection matrices
-        // target the -1.0 to 1.0 range used by OpenGL. We need to remap it.
-        let correction = Mat4::from_cols(
-            glam::Vec4::new(1.0, 0.0, 0.0, 0.0),
-            glam::Vec4::new(0.0, 1.0, 0.0, 0.0),
-            glam::Vec4::new(0.0, 0.0, 0.5, 0.0),
-            glam::Vec4::new(0.0, 0.0, 0.5, 1.0),
-        );
-
-        correction * projection * view
     }
 }
 
@@ -106,23 +75,46 @@ impl Gfx {
             &device,
             "ETIB Camera Buffer",
             wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            &Mat4::ZERO,
+            &[Mat4::ZERO],
         );
 
-        let cubes = &[Cube::new(Vec3::new(1., 1., -5.), Vec3::Y).to_gpu()];
+        let cubes = CUBES
+            .iter()
+            .map(|cube| cube.to_gpu())
+            .collect::<Vec<CubeGpu>>();
+
         let cubes_buffer = utils::create_buffer(
             &device,
             "ETIB Cubes Buffer",
             wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            cubes,
+            &cubes,
         );
 
-        let (bind_group, bind_group_layout) =
-            utils::create_bind_group(&device, &camera_buffer, &cubes_buffer);
+        let face_matrices = &[
+            Mat4::from_translation(Vec3::new(0.5, 0., 0.)) * Mat4::from_rotation_y(FRAC_PI_2),
+            Mat4::from_translation(Vec3::new(-0.5, 0., 0.)) * Mat4::from_rotation_y(-FRAC_PI_2),
+            Mat4::from_translation(Vec3::new(0., 0.5, 0.)) * Mat4::from_rotation_x(-FRAC_PI_2),
+            Mat4::from_translation(Vec3::new(0., -0.5, 0.)) * Mat4::from_rotation_x(FRAC_PI_2),
+            Mat4::from_translation(Vec3::new(0., 0., 0.5)) * Mat4::IDENTITY,
+            Mat4::from_translation(Vec3::new(0., 0., -0.5)) * Mat4::from_rotation_y(-PI),
+        ];
+        let face_matrices_buffer = utils::create_buffer(
+            &device,
+            "ETIB Face Rotation Matrices Buffer",
+            wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            face_matrices,
+        );
+
+        let (bind_group, bind_group_layout) = utils::create_bind_group(
+            &device,
+            &camera_buffer,
+            &cubes_buffer,
+            &face_matrices_buffer,
+        );
         let pipeline = utils::create_render_pipeline(&device, &surface_config, &bind_group_layout);
         let (_depth_texture, depth_texture_view) = utils::create_depth_texture(&device, size);
 
-        Gfx {
+        Self {
             device,
             queue,
             surface,
@@ -135,13 +127,11 @@ impl Gfx {
     }
 
     fn render(&self, camera: &Camera, size: PhysicalSize<u32>) {
-        let (current_surface_texture, current_surface_texture_view) =
-            match utils::get_current_surface_texture(&self.surface) {
-                Some(current_surface) => current_surface,
-                None => {
-                    return;
-                }
-            };
+        let Some((current_surface_texture, current_surface_texture_view)) =
+            utils::get_current_surface_texture(&self.surface)
+        else {
+            return;
+        };
 
         self.queue.write_buffer(
             &self.camera_buffer,
@@ -159,7 +149,8 @@ impl Gfx {
 
             render_pass.set_pipeline(&self.pipeline);
             render_pass.set_bind_group(0, &self.bind_group, &[]);
-            render_pass.draw(0..6, 0..1);
+            #[allow(clippy::cast_possible_truncation)]
+            render_pass.draw(0..(CUBES.len() as u32 * 36), 0..1);
         }
 
         self.queue.submit(Some(encoder.finish()));
@@ -167,12 +158,27 @@ impl Gfx {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct App {
     window: Option<Arc<Window>>,
     gfx: Option<Gfx>,
     camera: Option<Camera>,
     keys_held: HashSet<KeyCode>,
+    time: Time,
+    cubes: Vec<Cube>,
+}
+
+impl App {
+    pub fn new() -> Self {
+        Self {
+            window: None,
+            gfx: None,
+            camera: None,
+            keys_held: HashSet::default(),
+            time: Time::new(),
+            cubes: CUBES.into(),
+        }
+    }
 }
 
 impl ApplicationHandler for App {
@@ -195,31 +201,6 @@ impl ApplicationHandler for App {
         self.camera = Some(Camera::new());
     }
 
-    fn device_event(
-        &mut self,
-        _event_loop: &ActiveEventLoop,
-        _device_id: winit::event::DeviceId,
-        event: DeviceEvent,
-    ) {
-        let camera = self.camera.as_mut().unwrap();
-
-        const SENSITIVITY: f32 = 0.1;
-
-        let right = camera.rotation * Vec3::X;
-
-        if let DeviceEvent::MouseMotion { delta } = event {
-            let yaw = Quat::from_rotation_y(-delta.0.to_radians() as f32 * SENSITIVITY);
-            let pitch = Quat::from_axis_angle(right, -delta.1.to_radians() as f32 * SENSITIVITY);
-
-            let candidate = (pitch * camera.rotation).normalize();
-            let new_forward = candidate * Vec3::NEG_Z;
-            if new_forward.y.abs() < 0.99 {
-                camera.rotation = candidate;
-            }
-            camera.rotation = (yaw * camera.rotation).normalize();
-        }
-    }
-
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
         match event {
             WindowEvent::CloseRequested => {
@@ -235,7 +216,9 @@ impl ApplicationHandler for App {
                 }
             }
             WindowEvent::RedrawRequested => {
-                const SPEED: f32 = 0.05;
+                const SPEED: f32 = 3.0;
+
+                self.time.tick();
 
                 let camera = self.camera.as_mut().unwrap();
                 let forward = camera.rotation * Vec3::NEG_Z;
@@ -260,7 +243,7 @@ impl ApplicationHandler for App {
                 if self.keys_held.contains(&KeyCode::ShiftLeft) {
                     move_dir -= Vec3::Y;
                 }
-                camera.position += move_dir.normalize_or_zero() * SPEED;
+                camera.position += move_dir.normalize_or_zero() * SPEED * self.time.dt;
 
                 let gfx = self.gfx.as_ref().unwrap();
                 let window = self.window.as_ref().unwrap();
@@ -272,15 +255,42 @@ impl ApplicationHandler for App {
             _ => (),
         }
     }
+
+    fn device_event(
+        &mut self,
+        _event_loop: &ActiveEventLoop,
+        _device_id: winit::event::DeviceId,
+        event: DeviceEvent,
+    ) {
+        const SENSITIVITY: f32 = 0.05;
+
+        let camera = self.camera.as_mut().unwrap();
+
+        let right = camera.rotation * Vec3::X;
+
+        if let DeviceEvent::MouseMotion { delta } = event {
+            #[allow(clippy::cast_possible_truncation)]
+            let delta = (delta.0 as f32, delta.1 as f32);
+            let yaw = Quat::from_rotation_y(-delta.0.to_radians() * SENSITIVITY);
+            let pitch = Quat::from_axis_angle(right, -delta.1.to_radians() * SENSITIVITY);
+
+            let candidate = (pitch * camera.rotation).normalize();
+            let new_forward = candidate * Vec3::NEG_Z;
+            if new_forward.y.abs() < 0.99 {
+                camera.rotation = candidate;
+            }
+            camera.rotation = (yaw * camera.rotation).normalize();
+        }
+    }
 }
 
 fn main() -> anyhow::Result<()> {
     env_logger::init();
 
-    let event_loop = EventLoop::new().unwrap();
+    let event_loop = EventLoop::new()?;
     event_loop.set_control_flow(ControlFlow::Poll);
 
-    let mut app = App::default();
+    let mut app = App::new();
     event_loop.run_app(&mut app)?;
 
     Ok(())
