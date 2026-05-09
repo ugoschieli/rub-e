@@ -1,9 +1,12 @@
+use crate::cube::{Cube, CubeGpu};
+use crate::frame_buffer::FrameBuffers;
+use crate::time::Time;
+use camera::Camera;
+use glam::{Mat4, Quat, Vec3};
 use std::collections::HashSet;
 use std::f32::consts::{FRAC_PI_2, PI};
+use std::ops::Range;
 use std::sync::Arc;
-
-use bytemuck::{Pod, Zeroable};
-use glam::{Mat4, Quat, Vec3, Vec4, Vec4Swizzles};
 use winit::application::ApplicationHandler;
 use winit::dpi::PhysicalSize;
 use winit::event::{DeviceEvent, ElementState, WindowEvent};
@@ -11,43 +14,15 @@ use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::{CursorGrabMode, Fullscreen, Window, WindowId};
 
-use crate::time::Time;
-use camera::Camera;
-
 mod camera;
+mod cube;
+mod frame_buffer;
 mod time;
 mod utils;
 
-const CUBES: &[Cube] = &[
-    Cube::new(Vec3::new(0., 0., -5.), Vec3::Y),
-    Cube::new(Vec3::new(3., 0., -5.), Vec3::Z),
-];
-
-#[derive(Debug, Copy, Clone)]
-struct Cube {
-    position: Vec3,
-    color: Vec3,
-}
-
-#[repr(C)]
-#[derive(Debug, Copy, Clone, Pod, Zeroable)]
-struct CubeGpu {
-    position: Vec4,
-    color: Vec4,
-}
-
-impl Cube {
-    pub const fn new(position: Vec3, color: Vec3) -> Self {
-        Self { position, color }
-    }
-
-    pub fn to_gpu(self) -> CubeGpu {
-        CubeGpu {
-            position: Vec4::ZERO.with_xyz(self.position),
-            color: Vec4::ONE.with_xyz(self.color),
-        }
-    }
-}
+const FRAMES_IN_FLIGHT: usize = 2;
+const CUBE_NUMBER: usize = 1_000_000;
+const CUBE_RANGE: Range<f32> = -1000.0..1000.0;
 
 #[derive(Debug)]
 struct Gfx {
@@ -55,15 +30,14 @@ struct Gfx {
     queue: wgpu::Queue,
     surface: wgpu::Surface<'static>,
     compute_pipeline: wgpu::ComputePipeline,
-    pipeline: wgpu::RenderPipeline,
-    camera_buffer: wgpu::Buffer,
-    compute_bind_group: wgpu::BindGroup,
-    bind_group: wgpu::BindGroup,
+    render_pipeline: wgpu::RenderPipeline,
     depth_texture_view: wgpu::TextureView,
+    frame_buffers: [FrameBuffers; FRAMES_IN_FLIGHT],
+    submission_indices: [Option<wgpu::SubmissionIndex>; FRAMES_IN_FLIGHT],
 }
 
 impl Gfx {
-    fn new(event_loop: &ActiveEventLoop, window: Arc<Window>) -> Self {
+    fn new(event_loop: &ActiveEventLoop, window: Arc<Window>, cubes: &[Cube]) -> Self {
         let size = window.inner_size();
 
         let instance = utils::create_instance(event_loop);
@@ -72,14 +46,7 @@ impl Gfx {
         let (surface, surface_config) =
             utils::create_surface(&instance, &adapter, &device, window, size);
 
-        let camera_buffer = utils::create_buffer_init(
-            &device,
-            "ETIB Camera Buffer",
-            wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            &[Mat4::ZERO],
-        );
-
-        let cubes = CUBES
+        let cubes = cubes
             .iter()
             .map(|cube| cube.to_gpu())
             .collect::<Vec<CubeGpu>>();
@@ -91,13 +58,6 @@ impl Gfx {
             &cubes,
         );
 
-        let faces_buffer = utils::create_buffer(
-            &device,
-            "EITB Faces Buffer",
-            (cubes.len() * 6 * 48) as u64, // 6 Faces max foreach cubes, a Face is 48 bytes (2 vec4<f32> + u32 + padding)
-            wgpu::BufferUsages::STORAGE,
-        );
-
         let face_matrices = &[
             Mat4::from_translation(Vec3::new(0.5, 0., 0.)) * Mat4::from_rotation_y(FRAC_PI_2),
             Mat4::from_translation(Vec3::new(-0.5, 0., 0.)) * Mat4::from_rotation_y(-FRAC_PI_2),
@@ -106,6 +66,7 @@ impl Gfx {
             Mat4::from_translation(Vec3::new(0., 0., 0.5)) * Mat4::IDENTITY,
             Mat4::from_translation(Vec3::new(0., 0., -0.5)) * Mat4::from_rotation_y(-PI),
         ];
+
         let face_matrices_buffer = utils::create_buffer_init(
             &device,
             "ETIB Face Rotation Matrices Buffer",
@@ -113,18 +74,19 @@ impl Gfx {
             face_matrices,
         );
 
-        let (compute_bind_group, compute_bind_group_layout) =
-            utils::create_compute_bind_group(&device, &cubes_buffer, &faces_buffer);
+        let frame_buffers = (0..FRAMES_IN_FLIGHT)
+            .map(|_| FrameBuffers::new(&device, &cubes, &cubes_buffer, &face_matrices_buffer))
+            .collect::<Vec<FrameBuffers>>();
 
-        let (bind_group, bind_group_layout) = utils::create_bind_group(
+        let compute_pipeline =
+            utils::create_compute_pipeline(&device, &frame_buffers[0].compute_bind_group_layout);
+
+        let render_pipeline = utils::create_render_pipeline(
             &device,
-            &camera_buffer,
-            &faces_buffer,
-            &face_matrices_buffer,
+            &surface_config,
+            &frame_buffers[0].render_bind_group_layout,
         );
 
-        let compute_pipeline = utils::create_compute_pipeline(&device, &compute_bind_group_layout);
-        let pipeline = utils::create_render_pipeline(&device, &surface_config, &bind_group_layout);
         let (_depth_texture, depth_texture_view) = utils::create_depth_texture(&device, size);
 
         Self {
@@ -132,15 +94,27 @@ impl Gfx {
             queue,
             surface,
             compute_pipeline,
-            pipeline,
-            camera_buffer,
-            compute_bind_group,
-            bind_group,
+            render_pipeline,
             depth_texture_view,
+            frame_buffers: frame_buffers.try_into().unwrap(),
+            submission_indices: [const { None }; FRAMES_IN_FLIGHT],
         }
     }
 
-    fn render(&self, camera: &Camera, size: PhysicalSize<u32>) {
+    fn render(&mut self, camera: &Camera, size: PhysicalSize<u32>, time: &Time, cubes: &[Cube]) {
+        let frame_index = time.frame_number % FRAMES_IN_FLIGHT;
+
+        if let Some(idx) = self.submission_indices[frame_index].take() {
+            self.device
+                .poll(wgpu::PollType::Wait {
+                    submission_index: Some(idx),
+                    timeout: None,
+                })
+                .unwrap();
+        }
+
+        let frame_buffer = &self.frame_buffers[frame_index];
+
         let Some((current_surface_texture, current_surface_texture_view)) =
             utils::get_current_surface_texture(&self.surface)
         else {
@@ -148,7 +122,7 @@ impl Gfx {
         };
 
         self.queue.write_buffer(
-            &self.camera_buffer,
+            &frame_buffer.camera_buffer,
             0,
             bytemuck::bytes_of(&camera.matrix(size)),
         );
@@ -157,9 +131,9 @@ impl Gfx {
         {
             let mut compute_pass = utils::create_compute_pass(&mut encoder);
             compute_pass.set_pipeline(&self.compute_pipeline);
-            compute_pass.set_bind_group(0, &self.compute_bind_group, &[]);
+            compute_pass.set_bind_group(0, &frame_buffer.compute_bind_group, &[]);
             compute_pass.dispatch_workgroups(
-                u32::try_from(CUBES.len().div_ceil(64)).unwrap(),
+                u32::try_from(cubes.len().div_ceil(64)).unwrap(),
                 1,
                 1,
             );
@@ -171,13 +145,14 @@ impl Gfx {
                 &self.depth_texture_view,
             );
 
-            render_pass.set_pipeline(&self.pipeline);
-            render_pass.set_bind_group(0, &self.bind_group, &[]);
+            render_pass.set_pipeline(&self.render_pipeline);
+            render_pass.set_bind_group(0, &frame_buffer.render_bind_group, &[]);
             #[allow(clippy::cast_possible_truncation)]
-            render_pass.draw(0..(CUBES.len() as u32 * 36), 0..1);
+            render_pass.draw(0..(cubes.len() as u32 * 36), 0..1);
         }
 
-        self.queue.submit(Some(encoder.finish()));
+        let submission_index = self.queue.submit(Some(encoder.finish()));
+        self.submission_indices[frame_index] = Some(submission_index);
         current_surface_texture.present();
     }
 }
@@ -194,13 +169,17 @@ struct App {
 
 impl App {
     pub fn new() -> Self {
+        let cubes = (0..CUBE_NUMBER)
+            .map(|_| Cube::random_cube(CUBE_RANGE))
+            .collect();
+
         Self {
             window: None,
             gfx: None,
             camera: None,
             keys_held: HashSet::default(),
             time: Time::new(),
-            cubes: CUBES.into(),
+            cubes,
         }
     }
 }
@@ -220,7 +199,7 @@ impl ApplicationHandler for App {
         window.set_cursor_grab(CursorGrabMode::Locked).unwrap();
         window.set_cursor_visible(false);
 
-        self.gfx = Some(Gfx::new(event_loop, window.clone()));
+        self.gfx = Some(Gfx::new(event_loop, window.clone(), &self.cubes));
         self.window = Some(window);
         self.camera = Some(Camera::new());
     }
@@ -269,10 +248,10 @@ impl ApplicationHandler for App {
                 }
                 camera.position += move_dir.normalize_or_zero() * SPEED * self.time.dt;
 
-                let gfx = self.gfx.as_ref().unwrap();
+                let gfx = self.gfx.as_mut().unwrap();
                 let window = self.window.as_ref().unwrap();
 
-                gfx.render(camera, window.inner_size());
+                gfx.render(camera, window.inner_size(), &self.time, &self.cubes);
 
                 window.request_redraw();
             }

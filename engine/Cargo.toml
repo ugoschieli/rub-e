@@ -6,11 +6,10 @@ edition = "2024"
 [dependencies]
 anyhow = "1"
 bytemuck = { version = "1", features = ["derive"] }
-clap = { version = "4.6", features = ["derive"] }
 env_logger = "0.11"
 glam = { version = "0.32", features = ["bytemuck"] }
 log = "0.4"
-naga = "29"
 pollster = "0.4"
+rand = "0.10.1"
 wgpu = "29"
 winit = "0.30"

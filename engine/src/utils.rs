@@ -1,3 +1,4 @@
+use crate::FRAMES_IN_FLIGHT;
 use bytemuck::NoUninit;
 use wgpu::util::DeviceExt;
 use winit::{dpi::PhysicalSize, event_loop::ActiveEventLoop};
@@ -19,8 +20,12 @@ pub fn create_adapter(instance: &wgpu::Instance) -> wgpu::Adapter {
 }
 
 pub fn create_device(adapter: &wgpu::Adapter) -> (wgpu::Device, wgpu::Queue) {
+    let adapter_limits = adapter.limits();
+    log::info!("{adapter_limits:#?}");
+
     pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
         required_features: wgpu::Features::default(),
+        required_limits: adapter_limits,
         experimental_features: unsafe { wgpu::ExperimentalFeatures::enabled() },
         ..Default::default()
     }))
@@ -41,9 +46,9 @@ pub fn create_surface(
     let mut surface_config = surface
         .get_default_config(adapter, size.width, size.height)
         .expect("The surface isn't supported by this adapter");
-    surface_config.desired_maximum_frame_latency = 0;
+    surface_config.desired_maximum_frame_latency = u32::try_from(FRAMES_IN_FLIGHT).unwrap();
     surface_config.present_mode = wgpu::PresentMode::AutoVsync;
-    //surface_config.present_mode = wgpu::PresentMode::Immediate;
+    surface_config.present_mode = wgpu::PresentMode::Immediate;
     log::info!("{surface_config:?}");
 
     surface.configure(device, &surface_config);
