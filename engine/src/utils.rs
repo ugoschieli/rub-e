@@ -51,7 +51,21 @@ pub fn create_surface(
     (surface, surface_config)
 }
 
-pub fn create_buffer<T: NoUninit>(
+pub fn create_buffer(
+    device: &wgpu::Device,
+    label: &str,
+    size: u64,
+    usage: wgpu::BufferUsages,
+) -> wgpu::Buffer {
+    device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some(label),
+        size,
+        usage,
+        mapped_at_creation: false,
+    })
+}
+
+pub fn create_buffer_init<T: NoUninit>(
     device: &wgpu::Device,
     label: &str,
     usage: wgpu::BufferUsages,
@@ -67,7 +81,7 @@ pub fn create_buffer<T: NoUninit>(
 pub fn create_bind_group(
     device: &wgpu::Device,
     camera_buffer: &wgpu::Buffer,
-    cubes_buffer: &wgpu::Buffer,
+    faces_buffer: &wgpu::Buffer,
     face_matrices_buffer: &wgpu::Buffer,
 ) -> (wgpu::BindGroup, wgpu::BindGroupLayout) {
     let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -84,7 +98,7 @@ pub fn create_bind_group(
                 count: None,
             },
             wgpu::BindGroupLayoutEntry {
-                binding: 1, // Cubes
+                binding: 1, // Faces
                 visibility: wgpu::ShaderStages::VERTEX,
                 ty: wgpu::BindingType::Buffer {
                     ty: wgpu::BufferBindingType::Storage { read_only: true },
@@ -115,8 +129,8 @@ pub fn create_bind_group(
                 resource: camera_buffer.as_entire_binding(),
             },
             wgpu::BindGroupEntry {
-                binding: 1, // Cubes
-                resource: cubes_buffer.as_entire_binding(),
+                binding: 1, // Faces
+                resource: faces_buffer.as_entire_binding(),
             },
             wgpu::BindGroupEntry {
                 binding: 2, // Face Rotation Matrices
@@ -128,6 +142,77 @@ pub fn create_bind_group(
     (bind_group, bind_group_layout)
 }
 
+pub fn create_compute_bind_group(
+    device: &wgpu::Device,
+    cubes_buffer: &wgpu::Buffer,
+    faces_buffer: &wgpu::Buffer,
+) -> (wgpu::BindGroup, wgpu::BindGroupLayout) {
+    let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("ETIB Bind Group Layout"),
+        entries: &[
+            wgpu::BindGroupLayoutEntry {
+                binding: 0, // Cubes
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 1, // Faces
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: false },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+        ],
+    });
+
+    let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("ETIB Bind Group"),
+        layout: &bind_group_layout,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0, // Cubes
+                resource: cubes_buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1, // Faces
+                resource: faces_buffer.as_entire_binding(),
+            },
+        ],
+    });
+
+    (bind_group, bind_group_layout)
+}
+
+pub fn create_compute_pipeline(
+    device: &wgpu::Device,
+    bind_group_layout: &wgpu::BindGroupLayout,
+) -> wgpu::ComputePipeline {
+    let shader = device.create_shader_module(wgpu::include_wgsl!("./compute.wgsl"));
+
+    let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some("ETIB Compute Pipeline Layout"),
+        bind_group_layouts: &[Some(bind_group_layout)],
+        immediate_size: 0,
+    });
+
+    device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+        label: Some("ETIB Compute Pipeline"),
+        layout: Some(&layout),
+        entry_point: Some("main"),
+        module: &shader,
+        cache: None,
+        compilation_options: wgpu::PipelineCompilationOptions::default(),
+    })
+}
+
 pub fn create_render_pipeline(
     device: &wgpu::Device,
     surface_config: &wgpu::SurfaceConfiguration,
@@ -135,7 +220,7 @@ pub fn create_render_pipeline(
 ) -> wgpu::RenderPipeline {
     let shader = device.create_shader_module(wgpu::include_wgsl!("./shaders.wgsl"));
 
-    let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+    let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("ETIB Pipeline Layout"),
         bind_group_layouts: &[Some(bind_group_layout)],
         immediate_size: 0,
@@ -143,7 +228,7 @@ pub fn create_render_pipeline(
 
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some("ETIB Render Pipeline"),
-        layout: Some(&pipeline_layout),
+        layout: Some(&layout),
         vertex: wgpu::VertexState {
             module: &shader,
             entry_point: None,
@@ -230,6 +315,13 @@ pub fn get_current_surface_texture(
 pub fn create_encoder(device: &wgpu::Device) -> wgpu::CommandEncoder {
     device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
         label: Some("ETIB Command Encoder"),
+    })
+}
+
+pub fn create_compute_pass(encoder: &'_ mut wgpu::CommandEncoder) -> wgpu::ComputePass<'_> {
+    encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+        label: Some("ETIB Compute Pass"),
+        timestamp_writes: None,
     })
 }
 

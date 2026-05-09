@@ -20,7 +20,7 @@ mod utils;
 
 const CUBES: &[Cube] = &[
     Cube::new(Vec3::new(0., 0., -5.), Vec3::Y),
-    Cube::new(Vec3::new(3., 0., -5.), Vec3::Y),
+    Cube::new(Vec3::new(3., 0., -5.), Vec3::Z),
 ];
 
 #[derive(Debug, Copy, Clone)]
@@ -54,9 +54,10 @@ struct Gfx {
     device: wgpu::Device,
     queue: wgpu::Queue,
     surface: wgpu::Surface<'static>,
+    compute_pipeline: wgpu::ComputePipeline,
     pipeline: wgpu::RenderPipeline,
     camera_buffer: wgpu::Buffer,
-    cubes_buffer: wgpu::Buffer,
+    compute_bind_group: wgpu::BindGroup,
     bind_group: wgpu::BindGroup,
     depth_texture_view: wgpu::TextureView,
 }
@@ -71,7 +72,7 @@ impl Gfx {
         let (surface, surface_config) =
             utils::create_surface(&instance, &adapter, &device, window, size);
 
-        let camera_buffer = utils::create_buffer(
+        let camera_buffer = utils::create_buffer_init(
             &device,
             "ETIB Camera Buffer",
             wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
@@ -83,11 +84,18 @@ impl Gfx {
             .map(|cube| cube.to_gpu())
             .collect::<Vec<CubeGpu>>();
 
-        let cubes_buffer = utils::create_buffer(
+        let cubes_buffer = utils::create_buffer_init(
             &device,
             "ETIB Cubes Buffer",
             wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
             &cubes,
+        );
+
+        let faces_buffer = utils::create_buffer(
+            &device,
+            "EITB Faces Buffer",
+            (cubes.len() * 6 * 48) as u64, // 6 Faces max foreach cubes, a Face is 48 bytes (2 vec4<f32> + u32 + padding)
+            wgpu::BufferUsages::STORAGE,
         );
 
         let face_matrices = &[
@@ -98,19 +106,24 @@ impl Gfx {
             Mat4::from_translation(Vec3::new(0., 0., 0.5)) * Mat4::IDENTITY,
             Mat4::from_translation(Vec3::new(0., 0., -0.5)) * Mat4::from_rotation_y(-PI),
         ];
-        let face_matrices_buffer = utils::create_buffer(
+        let face_matrices_buffer = utils::create_buffer_init(
             &device,
             "ETIB Face Rotation Matrices Buffer",
             wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
             face_matrices,
         );
 
+        let (compute_bind_group, compute_bind_group_layout) =
+            utils::create_compute_bind_group(&device, &cubes_buffer, &faces_buffer);
+
         let (bind_group, bind_group_layout) = utils::create_bind_group(
             &device,
             &camera_buffer,
-            &cubes_buffer,
+            &faces_buffer,
             &face_matrices_buffer,
         );
+
+        let compute_pipeline = utils::create_compute_pipeline(&device, &compute_bind_group_layout);
         let pipeline = utils::create_render_pipeline(&device, &surface_config, &bind_group_layout);
         let (_depth_texture, depth_texture_view) = utils::create_depth_texture(&device, size);
 
@@ -118,9 +131,10 @@ impl Gfx {
             device,
             queue,
             surface,
+            compute_pipeline,
             pipeline,
             camera_buffer,
-            cubes_buffer,
+            compute_bind_group,
             bind_group,
             depth_texture_view,
         }
@@ -140,6 +154,16 @@ impl Gfx {
         );
 
         let mut encoder = utils::create_encoder(&self.device);
+        {
+            let mut compute_pass = utils::create_compute_pass(&mut encoder);
+            compute_pass.set_pipeline(&self.compute_pipeline);
+            compute_pass.set_bind_group(0, &self.compute_bind_group, &[]);
+            compute_pass.dispatch_workgroups(
+                u32::try_from(CUBES.len().div_ceil(64)).unwrap(),
+                1,
+                1,
+            );
+        }
         {
             let mut render_pass = utils::create_render_pass(
                 &mut encoder,
