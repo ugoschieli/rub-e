@@ -22,8 +22,9 @@ pub struct ChunkMetaGpu {
 
 #[derive(Debug, Clone)]
 pub struct World {
-    voxel_buffer: wgpu::Buffer,
-    chunk_meta_buffer: wgpu::Buffer,
+    pub voxel_buffer: wgpu::Buffer,
+    pub chunk_meta_buffer: wgpu::Buffer,
+    pub chunk_count: usize,
 }
 
 impl World {
@@ -51,7 +52,7 @@ impl World {
         });
 
         let chunk_meta_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("ETIB Voxel Buffer"),
+            label: Some("ETIB Chunk Meta Buffer"),
             usage: wgpu::BufferUsages::STORAGE,
             contents: bytemuck::cast_slice(&chunks_data),
         });
@@ -59,6 +60,7 @@ impl World {
         Self {
             voxel_buffer,
             chunk_meta_buffer,
+            chunk_count: chunk_number,
         }
     }
 

@@ -1,6 +1,6 @@
 use crate::camera::Camera;
 use crate::chunk::World;
-use crate::cube::{Cube, CubeGpu};
+use crate::cube::Cube;
 use crate::frame_buffer::FrameBuffers;
 use crate::time::Time;
 use glam::{Mat4, Quat, Vec3};
@@ -31,7 +31,9 @@ struct Gfx {
     device: wgpu::Device,
     queue: wgpu::Queue,
     surface: wgpu::Surface<'static>,
-    compute_pipeline: wgpu::ComputePipeline,
+    world: World,
+    cull_pipeline: wgpu::ComputePipeline,
+    mesh_pipeline: wgpu::ComputePipeline,
     render_pipeline: wgpu::RenderPipeline,
     depth_texture_view: wgpu::TextureView,
     frame_buffers: [FrameBuffers; FRAMES_IN_FLIGHT],
@@ -50,18 +52,6 @@ impl Gfx {
 
         let world = World::new(&device, cubes);
 
-        let cubes = cubes
-            .iter()
-            .map(|cube| cube.to_gpu())
-            .collect::<Vec<CubeGpu>>();
-
-        let cubes_buffer = utils::create_buffer_init(
-            &device,
-            "ETIB Cubes Buffer",
-            wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            &cubes,
-        );
-
         let face_matrices = &[
             Mat4::from_translation(Vec3::new(0.5, 0., 0.)) * Mat4::from_rotation_y(FRAC_PI_2),
             Mat4::from_translation(Vec3::new(-0.5, 0., 0.)) * Mat4::from_rotation_y(-FRAC_PI_2),
@@ -79,11 +69,31 @@ impl Gfx {
         );
 
         let frame_buffers = (0..FRAMES_IN_FLIGHT)
-            .map(|_| FrameBuffers::new(&device, &cubes, &cubes_buffer, &face_matrices_buffer))
+            .map(|_| {
+                FrameBuffers::new(
+                    &device,
+                    CUBE_NUMBER,
+                    world.chunk_count,
+                    &face_matrices_buffer,
+                    &world.chunk_meta_buffer,
+                    &world.voxel_buffer,
+                )
+            })
             .collect::<Vec<FrameBuffers>>();
 
-        let compute_pipeline =
-            utils::create_compute_pipeline(&device, &frame_buffers[0].compute_bind_group_layout);
+        let cull_pipeline = utils::create_compute_pipeline(
+            &device,
+            "Frustum Culling",
+            &frame_buffers[0].cull_bind_group_layout,
+            "./shaders/cull.wgsl",
+        );
+
+        let mesh_pipeline = utils::create_compute_pipeline(
+            &device,
+            "Mesh Generation",
+            &frame_buffers[0].mesh_bind_group_layout,
+            "./shaders/mesh.wgsl",
+        );
 
         let render_pipeline = utils::create_render_pipeline(
             &device,
@@ -97,7 +107,9 @@ impl Gfx {
             device,
             queue,
             surface,
-            compute_pipeline,
+            world,
+            cull_pipeline,
+            mesh_pipeline,
             render_pipeline,
             depth_texture_view,
             frame_buffers: frame_buffers.try_into().unwrap(),
@@ -105,7 +117,7 @@ impl Gfx {
         }
     }
 
-    fn render(&mut self, camera: &Camera, size: PhysicalSize<u32>, time: &Time, cubes: &[Cube]) {
+    fn render(&mut self, camera: &Camera, size: PhysicalSize<u32>, time: &Time) {
         let frame_index = time.frame_number % FRAMES_IN_FLIGHT;
 
         if let Some(idx) = self.submission_indices[frame_index].take() {
@@ -132,15 +144,24 @@ impl Gfx {
         );
 
         let mut encoder = utils::create_encoder(&self.device);
+        // Reset the cull counter and the draw vertex_count before the compute passes.
+        encoder.clear_buffer(&frame_buffer.visible_chunks_buffer, 0, Some(4));
+        encoder.clear_buffer(&frame_buffer.draw_indirect_buffer, 0, Some(4));
         {
-            let mut compute_pass = utils::create_compute_pass(&mut encoder);
-            compute_pass.set_pipeline(&self.compute_pipeline);
-            compute_pass.set_bind_group(0, &frame_buffer.compute_bind_group, &[]);
-            compute_pass.dispatch_workgroups(
-                u32::try_from(cubes.len().div_ceil(64)).unwrap(),
+            let mut cull_pass = utils::create_compute_pass(&mut encoder);
+            cull_pass.set_pipeline(&self.cull_pipeline);
+            cull_pass.set_bind_group(0, &frame_buffer.cull_bind_group, &[]);
+            cull_pass.dispatch_workgroups(
+                u32::try_from(self.world.chunk_count.div_ceil(64)).unwrap(),
                 1,
                 1,
             );
+        }
+        {
+            let mut mesh_pass = utils::create_compute_pass(&mut encoder);
+            mesh_pass.set_pipeline(&self.mesh_pipeline);
+            mesh_pass.set_bind_group(0, &frame_buffer.mesh_bind_group, &[]);
+            mesh_pass.dispatch_workgroups(u32::try_from(self.world.chunk_count).unwrap(), 1, 1);
         }
         {
             let mut render_pass = utils::create_render_pass(
@@ -151,8 +172,7 @@ impl Gfx {
 
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_bind_group(0, &frame_buffer.render_bind_group, &[]);
-            #[allow(clippy::cast_possible_truncation)]
-            render_pass.draw(0..(cubes.len() as u32 * 36), 0..1);
+            render_pass.draw_indirect(&frame_buffer.draw_indirect_buffer, 0);
         }
 
         let submission_index = self.queue.submit(Some(encoder.finish()));
@@ -164,6 +184,7 @@ impl Gfx {
 #[derive(Debug)]
 struct App {
     window: Option<Arc<Window>>,
+    window_size: PhysicalSize<u32>,
     gfx: Option<Gfx>,
     camera: Option<Camera>,
     keys_held: HashSet<KeyCode>,
@@ -179,6 +200,7 @@ impl App {
 
         Self {
             window: None,
+            window_size: PhysicalSize::new(0, 0),
             gfx: None,
             camera: None,
             keys_held: HashSet::default(),
@@ -212,6 +234,9 @@ impl ApplicationHandler for App {
         match event {
             WindowEvent::CloseRequested => {
                 event_loop.exit();
+            }
+            WindowEvent::Resized(new_size) => {
+                self.window_size = new_size;
             }
             WindowEvent::KeyboardInput { event, .. } => {
                 if let PhysicalKey::Code(code) = event.physical_key {
@@ -255,7 +280,7 @@ impl ApplicationHandler for App {
                 let gfx = self.gfx.as_mut().unwrap();
                 let window = self.window.as_ref().unwrap();
 
-                gfx.render(camera, window.inner_size(), &self.time, &self.cubes);
+                gfx.render(camera, self.window_size, &self.time);
 
                 window.request_redraw();
             }

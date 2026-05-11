@@ -147,16 +147,19 @@ pub fn create_bind_group(
     (bind_group, bind_group_layout)
 }
 
-pub fn create_compute_bind_group(
+pub fn create_mesh_bind_group(
     device: &wgpu::Device,
-    cubes_buffer: &wgpu::Buffer,
+    visible_chunks_buffer: &wgpu::Buffer,
+    chunk_meta_buffer: &wgpu::Buffer,
+    voxel_buffer: &wgpu::Buffer,
+    draw_args_buffer: &wgpu::Buffer,
     faces_buffer: &wgpu::Buffer,
 ) -> (wgpu::BindGroup, wgpu::BindGroupLayout) {
     let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-        label: Some("ETIB Bind Group Layout"),
+        label: Some("ETIB Mesh Bind Group Layout"),
         entries: &[
             wgpu::BindGroupLayoutEntry {
-                binding: 0, // Cubes
+                binding: 0, // VisibleChunks
                 visibility: wgpu::ShaderStages::COMPUTE,
                 ty: wgpu::BindingType::Buffer {
                     ty: wgpu::BufferBindingType::Storage { read_only: true },
@@ -166,7 +169,37 @@ pub fn create_compute_bind_group(
                 count: None,
             },
             wgpu::BindGroupLayoutEntry {
-                binding: 1, // Faces
+                binding: 1, // ChunkMeta array
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 2, // Voxel data
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 3, // DrawArgs (vertex_count atomic + draw indirect fields)
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: false },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 4, // Face output
                 visibility: wgpu::ShaderStages::COMPUTE,
                 ty: wgpu::BindingType::Buffer {
                     ty: wgpu::BufferBindingType::Storage { read_only: false },
@@ -179,16 +212,92 @@ pub fn create_compute_bind_group(
     });
 
     let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("ETIB Bind Group"),
+        label: Some("ETIB Mesh Bind Group"),
         layout: &bind_group_layout,
         entries: &[
             wgpu::BindGroupEntry {
-                binding: 0, // Cubes
-                resource: cubes_buffer.as_entire_binding(),
+                binding: 0,
+                resource: visible_chunks_buffer.as_entire_binding(),
             },
             wgpu::BindGroupEntry {
-                binding: 1, // Faces
+                binding: 1,
+                resource: chunk_meta_buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: voxel_buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 3,
+                resource: draw_args_buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 4,
                 resource: faces_buffer.as_entire_binding(),
+            },
+        ],
+    });
+
+    (bind_group, bind_group_layout)
+}
+
+pub fn create_cull_bind_group(
+    device: &wgpu::Device,
+    camera_buffer: &wgpu::Buffer,
+    chunk_meta_buffer: &wgpu::Buffer,
+    visible_chunks_buffer: &wgpu::Buffer,
+) -> (wgpu::BindGroup, wgpu::BindGroupLayout) {
+    let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("ETIB Cull Bind Group Layout"),
+        entries: &[
+            wgpu::BindGroupLayoutEntry {
+                binding: 0, // Camera (view-projection matrix)
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 1, // ChunkMeta array
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 2, // VisibleChunks (count + indices)
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: false },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+        ],
+    });
+
+    let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("ETIB Cull Bind Group"),
+        layout: &bind_group_layout,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: camera_buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: chunk_meta_buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: visible_chunks_buffer.as_entire_binding(),
             },
         ],
     });
@@ -198,18 +307,25 @@ pub fn create_compute_bind_group(
 
 pub fn create_compute_pipeline(
     device: &wgpu::Device,
+    label: &str,
     bind_group_layout: &wgpu::BindGroupLayout,
+    shader_file: &str,
 ) -> wgpu::ComputePipeline {
-    let shader = device.create_shader_module(wgpu::include_wgsl!("./compute.wgsl"));
+    let shader_content = std::fs::read_to_string(shader_file).unwrap();
+
+    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some(format!("ETIB {label} Shader").as_str()),
+        source: wgpu::ShaderSource::Wgsl(shader_content.into()),
+    });
 
     let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-        label: Some("ETIB Compute Pipeline Layout"),
+        label: Some(format!("ETIB {label} Pipeline Layout").as_str()),
         bind_group_layouts: &[Some(bind_group_layout)],
         immediate_size: 0,
     });
 
     device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-        label: Some("ETIB Compute Pipeline"),
+        label: Some(format!("ETIB {label} Pipeline").as_str()),
         layout: Some(&layout),
         entry_point: Some("main"),
         module: &shader,
@@ -223,7 +339,7 @@ pub fn create_render_pipeline(
     surface_config: &wgpu::SurfaceConfiguration,
     bind_group_layout: &wgpu::BindGroupLayout,
 ) -> wgpu::RenderPipeline {
-    let shader = device.create_shader_module(wgpu::include_wgsl!("./shaders.wgsl"));
+    let shader = device.create_shader_module(wgpu::include_wgsl!("../shaders/draw.wgsl"));
 
     let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("ETIB Pipeline Layout"),
