@@ -2,7 +2,7 @@ use crate::cube::CubeGpu;
 use crate::utils;
 use glam::Mat4;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FrameBuffers {
     pub camera_buffer: wgpu::Buffer,
     pub face_buffer: wgpu::Buffer,

@@ -11,5 +11,6 @@ glam = { version = "0.32", features = ["bytemuck"] }
 log = "0.4"
 pollster = "0.4"
 rand = "0.10.1"
+rustc-hash = "2.1.2"
 wgpu = "29"
 winit = "0.30"

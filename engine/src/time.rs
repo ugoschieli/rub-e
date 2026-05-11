@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub struct Time {
     pub dt: f32,
     pub now: Instant,

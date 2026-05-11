@@ -1,7 +1,8 @@
+use crate::camera::Camera;
+use crate::chunk::World;
 use crate::cube::{Cube, CubeGpu};
 use crate::frame_buffer::FrameBuffers;
 use crate::time::Time;
-use camera::Camera;
 use glam::{Mat4, Quat, Vec3};
 use std::collections::HashSet;
 use std::f32::consts::{FRAC_PI_2, PI};
@@ -15,6 +16,7 @@ use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::{CursorGrabMode, Fullscreen, Window, WindowId};
 
 mod camera;
+mod chunk;
 mod cube;
 mod frame_buffer;
 mod time;
@@ -22,7 +24,7 @@ mod utils;
 
 const FRAMES_IN_FLIGHT: usize = 2;
 const CUBE_NUMBER: usize = 1_000_000;
-const CUBE_RANGE: Range<f32> = -1000.0..1000.0;
+const CUBE_RANGE: Range<i32> = -128..128;
 
 #[derive(Debug)]
 struct Gfx {
@@ -45,6 +47,8 @@ impl Gfx {
         let (device, queue) = utils::create_device(&adapter);
         let (surface, surface_config) =
             utils::create_surface(&instance, &adapter, &device, window, size);
+
+        let world = World::new(&device, cubes);
 
         let cubes = cubes
             .iter()
@@ -171,7 +175,7 @@ impl App {
     pub fn new() -> Self {
         let cubes = (0..CUBE_NUMBER)
             .map(|_| Cube::random_cube(CUBE_RANGE))
-            .collect();
+            .collect::<Vec<Cube>>();
 
         Self {
             window: None,

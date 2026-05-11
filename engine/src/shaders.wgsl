@@ -1,12 +1,12 @@
 struct Face {
-    position: vec4<f32>,
-    color: vec4<f32>,
+    position: vec3<i32>,
     direction: u32,
+    color: u32,
 }
 
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
-    @location(0) color: vec4<f32>,
+    @location(0) color: u32,
 }
 
 const FACE_VERTICES = array<vec3<f32>, 6>(
@@ -27,7 +27,8 @@ fn vs_main(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
     let current_vertex = FACE_VERTICES[vertex_index % 6];
 
     let model_vertex = face_matrices[current_face.direction] * vec4<f32>(current_vertex, 1.);
-    out.clip_position = camera * (model_vertex + current_face.position);
+    let position = vec4<f32>(vec3<f32>(current_face.position), 0.0);
+    out.clip_position = camera * (model_vertex + position);
     out.color = current_face.color;
 
     return out;
@@ -35,5 +36,9 @@ fn vs_main(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    return vec4<f32>(in.color.rgb, 1.0);
+    let r = f32(in.color & 1023u) / 1023.0;
+    let g = f32((in.color >> 5u) & 1023u) / 1023.0;
+    let b = f32((in.color >> 10u) & 1023u) / 1023.0;
+
+    return vec4<f32>(r, g, b, 1.0);
 }

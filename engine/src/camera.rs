@@ -2,7 +2,7 @@ use glam::{Mat4, Quat, Vec3};
 use std::f32::consts::FRAC_PI_4;
 use winit::dpi::PhysicalSize;
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone, Default)]
 pub struct Camera {
     pub position: Vec3,
     pub rotation: Quat,
