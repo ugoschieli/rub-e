@@ -1,4 +1,4 @@
-use crate::FRAMES_IN_FLIGHT;
+use crate::gfx::FRAMES_IN_FLIGHT;
 use bytemuck::NoUninit;
 use wgpu::util::DeviceExt;
 use winit::{dpi::PhysicalSize, event_loop::ActiveEventLoop};

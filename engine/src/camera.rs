@@ -1,6 +1,12 @@
+use crate::time::Time;
 use glam::{Mat4, Quat, Vec3};
+use std::collections::HashSet;
 use std::f32::consts::FRAC_PI_4;
 use winit::dpi::PhysicalSize;
+use winit::keyboard::KeyCode;
+
+const SENSITIVITY: f32 = 0.05;
+const SPEED: f32 = 3.0;
 
 #[derive(Debug, Copy, Clone, Default)]
 pub struct Camera {
@@ -41,5 +47,46 @@ impl Camera {
         );
 
         correction * projection * view
+    }
+
+    pub fn handle_keyboard(&mut self, keys_held: &HashSet<KeyCode>, time: &Time) {
+        let forward = self.rotation * Vec3::NEG_Z;
+        let right = self.rotation * Vec3::X;
+
+        let mut move_dir = Vec3::ZERO;
+        if keys_held.contains(&KeyCode::KeyW) {
+            move_dir += forward;
+        }
+        if keys_held.contains(&KeyCode::KeyS) {
+            move_dir -= forward;
+        }
+        if keys_held.contains(&KeyCode::KeyD) {
+            move_dir += right;
+        }
+        if keys_held.contains(&KeyCode::KeyA) {
+            move_dir -= right;
+        }
+        if keys_held.contains(&KeyCode::Space) {
+            move_dir += Vec3::Y;
+        }
+        if keys_held.contains(&KeyCode::ShiftLeft) {
+            move_dir -= Vec3::Y;
+        }
+        self.position += move_dir.normalize_or_zero() * SPEED * time.dt;
+    }
+
+    pub fn handle_mouse(&mut self, delta: (f64, f64)) {
+        #[allow(clippy::cast_possible_truncation)]
+        let delta = (delta.0 as f32, delta.1 as f32);
+        let right = self.rotation * Vec3::X;
+        let yaw = Quat::from_rotation_y(-delta.0.to_radians() * SENSITIVITY);
+        let pitch = Quat::from_axis_angle(right, -delta.1.to_radians() * SENSITIVITY);
+
+        let candidate = (pitch * self.rotation).normalize();
+        let new_forward = candidate * Vec3::NEG_Z;
+        if new_forward.y.abs() < 0.99 {
+            self.rotation = candidate;
+        }
+        self.rotation = (yaw * self.rotation).normalize();
     }
 }
