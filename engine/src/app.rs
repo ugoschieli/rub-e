@@ -9,31 +9,23 @@ use std::sync::Arc;
 use winit::application::ApplicationHandler;
 use winit::dpi::PhysicalSize;
 use winit::event::{DeviceEvent, ElementState, WindowEvent};
-use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
+use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::{CursorGrabMode, Fullscreen, Window, WindowId};
 
-mod camera;
-mod chunk;
-mod cube;
-mod frame_buffer;
-mod gfx;
-mod time;
-mod utils;
-
-const CUBE_NUMBER: usize = 1_000_000;
-const CUBE_RANGE: Range<i32> = -128..128;
+pub const CUBE_NUMBER: usize = 1_000_000;
+pub const CUBE_RANGE: Range<i32> = -128..128;
 
 #[derive(Debug)]
-struct App {
-    window: Option<Arc<Window>>,
-    window_size: PhysicalSize<u32>,
-    gfx: Option<Gfx>,
-    camera: Option<Camera>,
-    keys_held: HashSet<KeyCode>,
-    time: Time,
-    cubes: Vec<Cube>,
-    world: Option<World>,
+pub struct App {
+    pub window: Option<Arc<Window>>,
+    pub window_size: PhysicalSize<u32>,
+    pub gfx: Option<Gfx>,
+    pub camera: Option<Camera>,
+    pub keys_held: HashSet<KeyCode>,
+    pub time: Time,
+    pub cubes: Vec<Cube>,
+    pub world: Option<World>,
 }
 
 impl App {
@@ -52,6 +44,12 @@ impl App {
             cubes,
             world: None,
         }
+    }
+}
+
+impl Default for App {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -125,16 +123,4 @@ impl ApplicationHandler for App {
             camera.handle_mouse(delta);
         }
     }
-}
-
-fn main() -> anyhow::Result<()> {
-    env_logger::init();
-
-    let event_loop = EventLoop::new()?;
-    event_loop.set_control_flow(ControlFlow::Poll);
-
-    let mut app = App::new();
-    event_loop.run_app(&mut app)?;
-
-    Ok(())
 }

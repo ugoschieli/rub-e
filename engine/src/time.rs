@@ -25,3 +25,9 @@ impl Time {
         self.frame_number += 1;
     }
 }
+
+impl Default for Time {
+    fn default() -> Self {
+        Self::new()
+    }
+}

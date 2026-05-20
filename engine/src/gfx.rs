@@ -1,8 +1,9 @@
+use crate::app::{App, CUBE_NUMBER};
 use crate::camera::Camera;
 use crate::chunk::World;
 use crate::frame_buffer::FrameBuffers;
 use crate::time::Time;
-use crate::{App, CUBE_NUMBER, utils};
+use crate::utils;
 use glam::{Mat4, Vec3};
 use std::f32::consts::{FRAC_PI_2, PI};
 use std::sync::Arc;
