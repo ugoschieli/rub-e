@@ -1,16 +1,14 @@
+use crate::constants::{CHUNK_SIZE, CHUNK_VOLUME};
 use crate::cube::Cube;
 use bytemuck::{Pod, Zeroable};
 use glam::{IVec3, UVec3};
 use rustc_hash::{FxBuildHasher, FxHashMap};
 use wgpu::util::DeviceExt;
 
-pub const CHUNK_SIZE: usize = 32;
-pub const CHUNK_VOLUME: usize = CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE;
-
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Default, Pod, Zeroable)]
 pub struct VoxelGpu {
-    color: u32,
+    pub color: u32,
 }
 
 #[repr(C)]

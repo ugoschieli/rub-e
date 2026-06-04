@@ -1,9 +1,11 @@
-use crate::gfx::FRAMES_IN_FLIGHT;
+pub mod bindgroup;
+pub mod pipeline;
+
 use bytemuck::NoUninit;
 use wgpu::util::DeviceExt;
 use winit::{dpi::PhysicalSize, event_loop::ActiveEventLoop};
 
-const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
+use crate::constants::{DEPTH_FORMAT, FRAMES_IN_FLIGHT};
 
 pub fn create_instance(event_loop: &ActiveEventLoop) -> wgpu::Instance {
     wgpu::Instance::new(wgpu::InstanceDescriptor::new_with_display_handle_from_env(
@@ -339,7 +341,7 @@ pub fn create_render_pipeline(
     surface_config: &wgpu::SurfaceConfiguration,
     bind_group_layout: &wgpu::BindGroupLayout,
 ) -> wgpu::RenderPipeline {
-    let shader = device.create_shader_module(wgpu::include_wgsl!("../shaders/draw.wgsl"));
+    let shader = device.create_shader_module(wgpu::include_wgsl!("../../shaders/draw.wgsl"));
 
     let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("ETIB Pipeline Layout"),

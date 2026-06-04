@@ -1,31 +1,53 @@
+use crate::constants::{FRAMES_IN_FLIGHT, SENSITIVITY, SPEED};
+use crate::gfx::Gfx;
 use crate::time::Time;
+use crate::utils;
 use glam::{Mat4, Quat, Vec3};
 use std::collections::HashSet;
 use std::f32::consts::FRAC_PI_4;
 use winit::dpi::PhysicalSize;
 use winit::keyboard::KeyCode;
 
-const SENSITIVITY: f32 = 0.05;
-const SPEED: f32 = 3.0;
-
-#[derive(Debug, Copy, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct Camera {
     pub position: Vec3,
     pub rotation: Quat,
     pub fovy: f32,
+    pub buffers: Vec<wgpu::Buffer>,
 }
 
 impl Camera {
-    pub fn new() -> Self {
+    pub fn new(gfx: &Gfx) -> Self {
+        let mut buffers = Vec::with_capacity(FRAMES_IN_FLIGHT);
+
+        for i in 0..FRAMES_IN_FLIGHT {
+            let buffer = utils::create_buffer_init(
+                &gfx.device,
+                format!("ETIB Camera Buffer {i}").as_str(),
+                wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                &[Mat4::ZERO],
+            );
+
+            buffers.push(buffer);
+        }
+
         Self {
             position: Vec3::new(0., 0., 2.),
             rotation: Quat::default(),
             fovy: FRAC_PI_4,
+            buffers,
         }
     }
 
+    pub fn upload(&self, gfx: &Gfx, size: PhysicalSize<u32>) {
+        let buffer = &self.buffers[gfx.frame_index];
+
+        gfx.queue
+            .write_buffer(buffer, 0, bytemuck::bytes_of(&self.matrix(size)));
+    }
+
     pub fn matrix(&self, size: PhysicalSize<u32>) -> Mat4 {
-        let forward = self.rotation * Vec3::new(0., 0., -1.);
+        let forward = self.rotation * -Vec3::Z;
 
         let view = Mat4::look_at_rh(
             self.position,           // Move the camera back to see the square
@@ -37,16 +59,14 @@ impl Camera {
         let projection =
             Mat4::perspective_infinite_rh(self.fovy, size.width as f32 / size.height as f32, 0.1);
 
-        // WGPU uses a 0.0 to 1.0 depth range, while glam's projection matrices
-        // target the -1.0 to 1.0 range used by OpenGL. We need to remap it.
-        let correction = Mat4::from_cols(
+        let base_change = Mat4::from_cols(
             glam::Vec4::new(1.0, 0.0, 0.0, 0.0),
+            glam::Vec4::new(0.0, 0.0, -1.0, 0.0),
             glam::Vec4::new(0.0, 1.0, 0.0, 0.0),
-            glam::Vec4::new(0.0, 0.0, 0.5, 0.0),
-            glam::Vec4::new(0.0, 0.0, 0.5, 1.0),
+            glam::Vec4::new(0.0, 0.0, 0.0, 1.0),
         );
 
-        correction * projection * view
+        projection * view * base_change
     }
 
     pub fn handle_keyboard(&mut self, keys_held: &HashSet<KeyCode>, time: &Time) {

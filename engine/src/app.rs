@@ -1,10 +1,12 @@
 use crate::camera::Camera;
 use crate::chunk::World;
+use crate::constants::{CUBE_NUMBER, CUBE_RANGE};
 use crate::cube::Cube;
 use crate::gfx::Gfx;
+use crate::renderer::Renderer;
+use crate::renderer::static_renderer::StaticRenderer;
 use crate::time::Time;
 use std::collections::HashSet;
-use std::ops::Range;
 use std::sync::Arc;
 use winit::application::ApplicationHandler;
 use winit::dpi::PhysicalSize;
@@ -12,9 +14,6 @@ use winit::event::{DeviceEvent, ElementState, WindowEvent};
 use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::{CursorGrabMode, Fullscreen, Window, WindowId};
-
-pub const CUBE_NUMBER: usize = 1_000_000;
-pub const CUBE_RANGE: Range<i32> = -128..128;
 
 #[derive(Debug)]
 pub struct App {
@@ -26,6 +25,7 @@ pub struct App {
     pub time: Time,
     pub cubes: Vec<Cube>,
     pub world: Option<World>,
+    pub renderers: Vec<Box<dyn Renderer>>,
 }
 
 impl App {
@@ -43,6 +43,7 @@ impl App {
             time: Time::new(),
             cubes,
             world: None,
+            renderers: vec![],
         }
     }
 }
@@ -68,9 +69,15 @@ impl ApplicationHandler for App {
         window.set_cursor_grab(CursorGrabMode::Locked).unwrap();
         window.set_cursor_visible(false);
 
-        self.gfx = Some(Gfx::new(event_loop, window.clone(), self));
+        let gfx = Gfx::new(event_loop, window.clone(), self);
+        let camera = Camera::new(&gfx);
+
+        let renderer = StaticRenderer::init(&gfx, self.world.as_ref().unwrap(), &camera);
+
+        self.gfx = Some(gfx);
         self.window = Some(window);
-        self.camera = Some(Camera::new());
+        self.camera = Some(camera);
+        self.renderers.push(Box::new(renderer));
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
@@ -92,18 +99,25 @@ impl ApplicationHandler for App {
             }
             WindowEvent::RedrawRequested => {
                 self.time.tick();
-                let camera = self.camera.as_mut().unwrap();
-                camera.handle_keyboard(&self.keys_held, &self.time);
 
                 let gfx = self.gfx.as_mut().unwrap();
+                let camera = self.camera.as_mut().unwrap();
                 let window = self.window.as_ref().unwrap();
+                let world = self.world.as_ref().unwrap();
 
-                gfx.render(
-                    camera,
-                    self.window_size,
-                    &self.time,
-                    self.world.as_ref().unwrap(),
-                );
+                camera.handle_keyboard(&self.keys_held, &self.time);
+
+                gfx.update(&self.time);
+
+                if gfx.surface_texture.is_some() {
+                    camera.upload(gfx, self.window_size);
+
+                    for renderer in &mut self.renderers {
+                        renderer.render(gfx, world, camera, self.window_size);
+                    }
+
+                    gfx.submit();
+                }
 
                 window.request_redraw();
             }

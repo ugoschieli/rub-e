@@ -58,15 +58,17 @@ fn main(
         let voxel = voxels[chunk.offset + vi];
         if voxel.color == 0u { continue; }
 
-        let x = vi % CHUNK_SIZE;
-        let y = (vi / CHUNK_SIZE) % CHUNK_SIZE;
-        let z = vi / (CHUNK_SIZE * CHUNK_SIZE);
-        let world_pos = chunk.position * i32(CHUNK_SIZE) + vec3<i32>(i32(x), i32(y), i32(z));
+        // needed to cast to f32 because of a wgpu bug in Metal shader code gen
+        // normally fixed
+        let x = f32(vi % CHUNK_SIZE);
+        let y = f32((vi / CHUNK_SIZE) % CHUNK_SIZE);
+        let z = f32(vi / (CHUNK_SIZE * CHUNK_SIZE));
+        let world_pos: vec3<f32> = vec3<f32>(chunk.position) * f32(CHUNK_SIZE) + vec3<f32>(x, y, z);
 
         // Claim 6 consecutive face slots; vertex_count tracks total vertices (6 per face).
         let base = atomicAdd(&draw_args.vertex_count, 36u) / 6u;
         for (var d = 0u; d < 6u; d++) {
-            faces[base + d] = Face(world_pos, d, voxel.color);
+            faces[base + d] = Face(vec3<i32>(world_pos), d, voxel.color);
         }
     }
 }
