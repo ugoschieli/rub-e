@@ -4,8 +4,12 @@ use crate::constants::{CUBE_NUMBER, CUBE_RANGE};
 use crate::cube::Cube;
 use crate::gfx::Gfx;
 use crate::renderer::Renderer;
+use crate::renderer::dynamic_renderer::DynamicRenderer;
 use crate::renderer::static_renderer::StaticRenderer;
 use crate::time::Time;
+use crate::updater::orbit_updater::OrbitUpdater;
+use crate::updater::line_updater::LineUpdater;
+use crate::updater::{TransformBuffers, Updater};
 use std::collections::HashSet;
 use std::sync::Arc;
 use winit::application::ApplicationHandler;
@@ -25,6 +29,8 @@ pub struct App {
     pub time: Time,
     pub cubes: Vec<Cube>,
     pub world: Option<World>,
+    pub transforms: Option<TransformBuffers>,
+    pub updaters: Vec<Box<dyn Updater>>,
     pub renderers: Vec<Box<dyn Renderer>>,
 }
 
@@ -43,6 +49,8 @@ impl App {
             time: Time::new(),
             cubes,
             world: None,
+            transforms: None,
+            updaters: vec![],
             renderers: vec![],
         }
     }
@@ -72,12 +80,32 @@ impl ApplicationHandler for App {
         let gfx = Gfx::new(event_loop, window.clone(), self);
         let camera = Camera::new(&gfx);
 
+        // Shared transform buffers the updaters write and the renderer reads.
+        let transforms = TransformBuffers::new(&gfx, &self.cubes);
+
+        // Split the cubes in half: the first half orbits, the second oscillates
+        // along a line. Each updater writes its own contiguous transform range.
+        let half = self.cubes.len() / 2;
+        let orbit = OrbitUpdater::init(&gfx, &self.cubes[..half], transforms.buffers(), 0);
+        let line = LineUpdater::init(
+            &gfx,
+            &self.cubes[half..],
+            transforms.buffers(),
+            half as u32,
+        );
+
         let renderer = StaticRenderer::init(&gfx, self.world.as_ref().unwrap(), &camera);
+        let dynamic = DynamicRenderer::init(&gfx, &camera, &self.cubes, transforms.buffers());
 
         self.gfx = Some(gfx);
         self.window = Some(window);
         self.camera = Some(camera);
+        self.transforms = Some(transforms);
+        self.updaters.push(Box::new(orbit));
+        self.updaters.push(Box::new(line));
         self.renderers.push(Box::new(renderer));
+        // Pushed after StaticRenderer so it loads/composites over the cleared pass.
+        self.renderers.push(Box::new(dynamic));
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
@@ -111,6 +139,12 @@ impl ApplicationHandler for App {
 
                 if gfx.surface_texture.is_some() {
                     camera.upload(gfx, self.window_size);
+
+                    // Updaters write this frame's transforms before any renderer
+                    // reads them (the pass boundary is the memory barrier).
+                    for updater in &mut self.updaters {
+                        updater.update(gfx);
+                    }
 
                     for renderer in &mut self.renderers {
                         renderer.render(gfx, world, camera, self.window_size);

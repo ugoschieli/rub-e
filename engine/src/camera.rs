@@ -59,14 +59,25 @@ impl Camera {
         let projection =
             Mat4::perspective_infinite_rh(self.fovy, size.width as f32 / size.height as f32, 0.1);
 
-        let base_change = Mat4::from_cols(
+        projection * view * Self::base_change()
+    }
+
+    /// Maps raw world space (x, y, z) into the view's working space (x, z, -y).
+    /// Applied to world positions before `view` in [`Camera::matrix`].
+    pub fn base_change() -> Mat4 {
+        Mat4::from_cols(
             glam::Vec4::new(1.0, 0.0, 0.0, 0.0),
             glam::Vec4::new(0.0, 0.0, -1.0, 0.0),
             glam::Vec4::new(0.0, 1.0, 0.0, 0.0),
             glam::Vec4::new(0.0, 0.0, 0.0, 1.0),
-        );
+        )
+    }
 
-        projection * view * base_change
+    /// The camera position in raw world space (the same space as the voxels).
+    /// `self.position` is the eye fed to `look_at_rh`, which operates in
+    /// base-changed space, so undo the base change to recover world space.
+    pub fn world_position(&self) -> Vec3 {
+        Self::base_change().inverse().transform_point3(self.position)
     }
 
     pub fn handle_keyboard(&mut self, keys_held: &HashSet<KeyCode>, time: &Time) {

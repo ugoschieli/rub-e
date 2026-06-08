@@ -179,7 +179,7 @@ impl StaticRenderer {
 
         let shader = gfx
             .device
-            .create_shader_module(include_wgsl!("../../shaders/face_draw.wgsl"));
+            .create_shader_module(include_wgsl!("../../shaders/renderer/static/face_draw.wgsl"));
 
         let render_pipeline = utils::pipeline::RenderPipelineBuilder::new(&gfx.device)
             .bind_group(&bind_group.layout)

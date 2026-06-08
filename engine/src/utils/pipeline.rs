@@ -73,6 +73,11 @@ impl<'a> RenderPipelineBuilder<'a> {
         self
     }
 
+    pub fn with_frontface_culling(mut self) -> Self {
+        self.cull_mode = Some(wgpu::Face::Front);
+        self
+    }
+
     pub fn build(self) -> wgpu::RenderPipeline {
         let vs = self.vertex_shader.expect("vertex shader required");
         let fs = self.fragment_shader.expect("fragment shader required");

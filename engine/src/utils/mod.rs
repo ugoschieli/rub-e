@@ -336,12 +336,36 @@ pub fn create_compute_pipeline(
     })
 }
 
+/// Build a `main`-entry compute pipeline over a single bind group layout from an
+/// already-created shader module (e.g. via `include_wgsl!`).
+pub fn create_compute_pipeline_from_module(
+    device: &wgpu::Device,
+    label: &str,
+    bind_group_layout: &wgpu::BindGroupLayout,
+    module: &wgpu::ShaderModule,
+) -> wgpu::ComputePipeline {
+    let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some(label),
+        bind_group_layouts: &[Some(bind_group_layout)],
+        immediate_size: 0,
+    });
+
+    device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+        label: Some(label),
+        layout: Some(&layout),
+        module,
+        entry_point: Some("main"),
+        cache: None,
+        compilation_options: wgpu::PipelineCompilationOptions::default(),
+    })
+}
+
 pub fn create_render_pipeline(
     device: &wgpu::Device,
     surface_config: &wgpu::SurfaceConfiguration,
     bind_group_layout: &wgpu::BindGroupLayout,
 ) -> wgpu::RenderPipeline {
-    let shader = device.create_shader_module(wgpu::include_wgsl!("../../shaders/draw.wgsl"));
+    let shader = device.create_shader_module(wgpu::include_wgsl!("../../shaders/renderer/draw.wgsl"));
 
     let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("ETIB Pipeline Layout"),
@@ -468,6 +492,38 @@ pub fn create_render_pass<'a>(
             view: depth_texture_view,
             depth_ops: Some(wgpu::Operations {
                 load: wgpu::LoadOp::Clear(1.0),
+                store: wgpu::StoreOp::Store,
+            }),
+            stencil_ops: None,
+        }),
+        timestamp_writes: None,
+        occlusion_query_set: None,
+        multiview_mask: None,
+    })
+}
+
+/// Like [`create_render_pass`] but preserves the existing color and depth
+/// contents (`LoadOp::Load`) so the pass composites over earlier renderers.
+pub fn create_loading_render_pass<'a>(
+    encoder: &'a mut wgpu::CommandEncoder,
+    current_surface_texture_view: &wgpu::TextureView,
+    depth_texture_view: &wgpu::TextureView,
+) -> wgpu::RenderPass<'a> {
+    encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+        label: Some("ETIB Loading Render Pass"),
+        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+            view: current_surface_texture_view,
+            ops: wgpu::Operations {
+                load: wgpu::LoadOp::Load,
+                store: wgpu::StoreOp::Store,
+            },
+            depth_slice: None,
+            resolve_target: None,
+        })],
+        depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+            view: depth_texture_view,
+            depth_ops: Some(wgpu::Operations {
+                load: wgpu::LoadOp::Load,
                 store: wgpu::StoreOp::Store,
             }),
             stencil_ops: None,

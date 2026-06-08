@@ -8,4 +8,5 @@ pub mod gfx;
 pub mod mesher;
 pub mod renderer;
 pub mod time;
+pub mod updater;
 pub mod utils;
