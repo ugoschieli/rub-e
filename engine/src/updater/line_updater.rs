@@ -68,7 +68,7 @@ impl LineUpdater {
                     anchor: c.position.as_vec3() + 0.5,
                     amplitude: rng.random_range(2.0..30.0),
                     dir,
-                    speed: rng.random_range(0.5..2.0),
+                    speed: rng.random_range(0.2..0.5),
                     axis,
                     phase: rng.random_range(0.0..TAU),
                 }

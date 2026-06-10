@@ -1,3 +1,4 @@
+use std::time::Instant;
 use wgpu::include_wgsl;
 use winit::dpi::PhysicalSize;
 
@@ -37,6 +38,8 @@ pub struct DynamicRenderer {
     // `instance_count` is reset to 0 and then filled by the cull pass each frame.
     draw_args_buffers: Vec<wgpu::Buffer>,
     cube_count: usize,
+    // App start; its elapsed seconds drive the per-box spawn "pop" in the shader.
+    start: Instant,
 }
 
 impl DynamicRenderer {
@@ -175,6 +178,7 @@ impl DynamicRenderer {
             camera_pos_buffers,
             draw_args_buffers,
             cube_count,
+            start: Instant::now(),
         }
     }
 }
@@ -183,10 +187,13 @@ impl Renderer for DynamicRenderer {
     fn render(&mut self, gfx: &mut Gfx, _world: &World, camera: &Camera, _size: PhysicalSize<u32>) {
         // The voxels live in raw world space, so the ray origin must be the
         // camera's world-space position (camera.position is in base-changed space).
+        // The unused w channel carries elapsed seconds, which the vertex shader
+        // uses to stagger each box's spawn "pop" (scale-in) on startup.
+        let time = self.start.elapsed().as_secs_f32();
         gfx.queue.write_buffer(
             &self.camera_pos_buffers[gfx.frame_index],
             0,
-            bytemuck::bytes_of(&camera.world_position().extend(0.0)),
+            bytemuck::bytes_of(&camera.world_position().extend(time)),
         );
 
         let draw_args = &self.draw_args_buffers[gfx.frame_index];

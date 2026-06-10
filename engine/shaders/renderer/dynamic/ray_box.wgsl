@@ -40,6 +40,8 @@ struct BoxHit {
 }
 
 @group(0) @binding(0) var<uniform> camera: mat4x4<f32>;
+// xyz: camera world position (ray origin). w: elapsed seconds since startup,
+// driving the per-box spawn "pop" below.
 @group(0) @binding(1) var<uniform> camera_pos: vec4<f32>;
 @group(0) @binding(2) var<storage, read> transforms: array<BoxTransform>;
 // Compacted indices of the boxes that survived GPU frustum culling, written by
@@ -73,6 +75,40 @@ const BOX_VERTICES = array<vec3<f32>, 36>(
     vec3<f32>(0.0, 1.0, 0.0), vec3<f32>(1.0, 1.0, 1.0), vec3<f32>(1.0, 1.0, 0.0),
 );
 
+// Per-box spawn animation. Each box stays invisible until its own start time,
+// then scales from 0 up to full size over POP_DURATION. Start times are spread
+// pseudo-randomly across POP_SPREAD seconds (keyed on the box index), so the
+// boxes pop in progressively rather than all at once on startup.
+const POP_SPREAD: f32 = 60.0;    // window over which every box has begun popping
+const POP_DURATION: f32 = 0.6;  // grow time for a single box
+
+// Hash a box index to a pseudo-random value in [0, 1), used as its spawn delay.
+fn hash11(p: u32) -> f32 {
+    var x = p;
+    x = (x ^ 61u) ^ (x >> 16u);
+    x = x + (x << 3u);
+    x = x ^ (x >> 4u);
+    x = x * 0x27d4eb2du;
+    x = x ^ (x >> 15u);
+    return f32(x & 0xffffffu) / f32(0xffffffu);
+}
+
+// Ease-out-back: reaches 1 at x=1 with a slight overshoot before settling, which
+// gives the scale-in its springy "pop".
+fn ease_out_back(x: f32) -> f32 {
+    let c1 = 1.70158;
+    let c3 = c1 + 1.0;
+    let xm = x - 1.0;
+    return 1.0 + c3 * xm * xm * xm + c1 * xm * xm;
+}
+
+// Scale factor in [0, ~1] for the box `index` at elapsed `time` seconds.
+fn spawn_pop(index: u32, time: f32) -> f32 {
+    let start = hash11(index) * POP_SPREAD;
+    let p = clamp((time - start) / POP_DURATION, 0.0, 1.0);
+    return ease_out_back(p);
+}
+
 // Rotate vector `v` by unit quaternion `q` (object -> world).
 fn quat_rotate(q: vec4<f32>, v: vec3<f32>) -> vec3<f32> {
     let u = q.xyz;
@@ -95,8 +131,9 @@ fn vs_main(
     let t = transforms[index];
     // [0,1] corner -> [-half, +half] local -> rotate -> translate to center.
     // Uniform half-extent: the scalar broadcasts to all three axes, so the proxy
-    // stays a cube.
-    let half_extents = vec3<f32>(t.half_extent);
+    // stays a cube. Scaled by the spawn pop so boxes grow in progressively; at
+    // scale 0 the proxy collapses to a point and the box is simply not drawn.
+    let half_extents = vec3<f32>(t.half_extent * spawn_pop(index, camera_pos.w));
     let local = (BOX_VERTICES[vertex_index] * 2.0 - 1.0) * half_extents;
     let world_pos = t.center + quat_rotate(t.rotation, local);
 

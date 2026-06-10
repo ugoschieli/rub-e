@@ -112,17 +112,17 @@ impl StaticRenderer {
 
         let mut chunk = [VoxelGpu { color: 0 }; CHUNK_SIZE_3];
 
-        chunk[chunk_index(uvec3(0, 0, 0))] = VoxelGpu {color: 1023};
-        chunk[chunk_index(uvec3(1, 0, 0))] = VoxelGpu {color: 1023};
-        chunk[chunk_index(uvec3(2, 0, 0))] = VoxelGpu {color: 1023};
-        chunk[chunk_index(uvec3(0, 0, 1))] = VoxelGpu {color: 1023};
-        chunk[chunk_index(uvec3(1, 0, 1))] = VoxelGpu {color: 2u32.pow(20) - 1};
-        chunk[chunk_index(uvec3(2, 0, 1))] = VoxelGpu {color: 1023};
-        chunk[chunk_index(uvec3(0, 0, 2))] = VoxelGpu {color: 1023};
-        chunk[chunk_index(uvec3(1, 0, 2))] = VoxelGpu {color: 1023};
-        chunk[chunk_index(uvec3(2, 0, 2))] = VoxelGpu {color: 1023};
-
-        chunk[chunk_index(uvec3(0, 1, 0))] = VoxelGpu {color: 1023};
+        chunk[chunk_index(uvec3(0, 0, 10))] = VoxelGpu {color: 1023};
+        // chunk[chunk_index(uvec3(1, 0, 0))] = VoxelGpu {color: 1023};
+        // chunk[chunk_index(uvec3(2, 0, 0))] = VoxelGpu {color: 1023};
+        // chunk[chunk_index(uvec3(0, 0, 1))] = VoxelGpu {color: 1023};
+        // chunk[chunk_index(uvec3(1, 0, 1))] = VoxelGpu {color: 2u32.pow(20) - 1};
+        // chunk[chunk_index(uvec3(2, 0, 1))] = VoxelGpu {color: 1023};
+        // chunk[chunk_index(uvec3(0, 0, 2))] = VoxelGpu {color: 1023};
+        // chunk[chunk_index(uvec3(1, 0, 2))] = VoxelGpu {color: 1023};
+        // chunk[chunk_index(uvec3(2, 0, 2))] = VoxelGpu {color: 1023};
+        //
+        // chunk[chunk_index(uvec3(0, 1, 0))] = VoxelGpu {color: 1023};
 
         let faces = mesh_chunk(&chunk).iter().map(|face| face.to_gpu()).collect::<Vec<FaceGpu>>();
 

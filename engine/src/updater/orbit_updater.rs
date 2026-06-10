@@ -62,7 +62,7 @@ impl OrbitUpdater {
                     center: c.position.as_vec3() + 0.5,
                     radius: rng.random_range(2.0..30.0),
                     u: plane * Vec3::X,
-                    speed: rng.random_range(-1.5..1.5),
+                    speed: rng.random_range(-0.5..0.5),
                     v: plane * Vec3::Y,
                     phase: rng.random_range(0.0..TAU),
                 }
