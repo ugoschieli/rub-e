@@ -61,7 +61,7 @@ impl Game for MyGame {
         let camera = if params.is_isometric {
             etib::camera::Camera::new(
                 &ctx.gfx.device,
-                (50.0, 50.0, 50.0).into(),
+                (0.0, 0.0, 0.0).into(),
                 (0.0, 0.0, 0.0).into(),
                 cgmath::Vector3::unit_y(),
                 ctx.window_size().width as f32 / ctx.window_size().height as f32,
@@ -72,8 +72,8 @@ impl Game for MyGame {
         } else {
             etib::camera::Camera::new(
                 &ctx.gfx.device,
-                (0.0, 30.0, 80.0).into(),
-                (0.0, 10.0, 0.0).into(),
+                (0.0, 0.0, 0.0).into(),
+                (0.0, 0.0, 0.0).into(),
                 cgmath::Vector3::unit_y(),
                 ctx.window_size().width as f32 / ctx.window_size().height as f32,
                 etib::camera::Projection::Perspective { fovy: 45.0 },
@@ -83,7 +83,7 @@ impl Game for MyGame {
         };
 
         // Static model: load from file, fixed in place.
-        let map_path = Path::new(&params.model_root).join("world.model");
+        let map_path = Path::new(&params.model_root).join("raytracing.model");
         let cat_path = Path::new(&params.model_root).join("cat.model");
 
         let static_cubes =
@@ -92,7 +92,7 @@ impl Game for MyGame {
         // Dynamic model: same file, offset and animated each frame.
         let mut orbiting = etib::cube::DynamicModel::load(cat_path.to_str().unwrap())
             .expect("Failed to load dynamic model");
-        orbiting.position = cgmath::Vector3::new(30.0, 0.0, 0.0);
+        orbiting.position = cgmath::Vector3::new(30.0, 10000000.0, 0.0);
 
         let mut scene = etib::Scene::new(ctx, camera, &static_cubes, orbiting.cube_count().max(1));
         let orbiting_id = scene.add_dynamic(orbiting);

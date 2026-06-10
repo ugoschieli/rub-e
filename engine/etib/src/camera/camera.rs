@@ -210,6 +210,38 @@ impl Camera {
 
         view_proj
     }
+
+    /// Move the camera's eye (position).
+    ///
+    /// Call [`Camera::update_matrix`] afterwards to upload the change to the GPU.
+    pub fn set_position(&mut self, eye: cgmath::Point3<f32>) {
+        self.eye = eye;
+    }
+
+    /// Aim the camera at `target`.
+    ///
+    /// Call [`Camera::update_matrix`] afterwards to upload the change to the GPU.
+    pub fn look_at(&mut self, target: cgmath::Point3<f32>) {
+        self.target = target;
+    }
+
+    /// Position the camera on a circular orbit around `center` and aim it at that point.
+    ///
+    /// - `radius` is the horizontal distance from `center`.
+    /// - `angle` is the azimuth, in radians, around the world up (Z) axis.
+    /// - `height` is the vertical offset above `center`.
+    ///
+    /// The [`Camera::up`] vector is left untouched, so callers should set it to the
+    /// world up axis (e.g. `Vector3::unit_z()`) for a level horizon while orbiting.
+    /// Call [`Camera::update_matrix`] afterwards to upload the change to the GPU.
+    pub fn orbit(&mut self, center: cgmath::Point3<f32>, radius: f32, angle: f32, height: f32) {
+        self.eye = cgmath::Point3::new(
+            center.x + radius * angle.cos(),
+            center.y + radius * angle.sin(),
+            center.z + height,
+        );
+        self.target = center;
+    }
 }
 
 impl CameraController {

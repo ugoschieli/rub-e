@@ -37,6 +37,7 @@ pub fn create_device(
     adapter.request_device(&wgpu::DeviceDescriptor {
         required_features: wgpu::Features::empty(),
         label: Some("ETIB: device"),
+        required_limits: adapter.limits(),
         ..Default::default()
     })
 }

@@ -63,6 +63,10 @@ const CAM_EYE: (f32, f32, f32) = (0.0, -60.0, 40.0);
 const CAM_TARGET: (f32, f32, f32) = (0.0, 2.0, 0.0);
 const CAM_FOVY: f32 = 55.0;
 
+/// How long (seconds) the demo follow-cam rises up after a goal before settling
+/// back onto the ball.
+const DEMO_GOAL_CAM_DURATION: f32 = 2.5;
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -525,6 +529,10 @@ struct PongGame {
     game_started: bool,
     paused: bool,
     prev_start_pressed: bool,
+    /// Attract/demo mode: UI hidden, paddles and camera driven programmatically.
+    demo: DemoMode,
+    /// Countdown (seconds) for the demo follow-cam's post-goal rise-and-return.
+    demo_goal_timer: f32,
 
     // Networking
     client_socket: Option<UdpSocket>,
@@ -619,6 +627,197 @@ fn spawn_explosion(
             velocity: Vector3::new(vx, vy, vz),
             life: 1.0 + (i as f32 * 5.0).sin().abs() * 1.0,
         });
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Demo / attract-mode control
+// ---------------------------------------------------------------------------
+
+/// How the demo/attract mode is driven.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DemoMode {
+    /// Not in demo mode — normal interactive play.
+    Off,
+    /// `--demo`: the camera slowly orbits the pitch.
+    Orbit,
+    /// `--demo2`: the camera chases the ball from behind.
+    Follow,
+}
+
+impl DemoMode {
+    /// Whether any demo mode is active (UI hidden, paddles self-playing).
+    fn is_active(self) -> bool {
+        self != DemoMode::Off
+    }
+}
+
+/// Predict the ball's Y when it reaches `plane_x`, accounting for top/bottom wall
+/// bounces, so a paddle can position itself precisely instead of chasing.
+fn predict_ball_y(ball: &Ball, plane_x: f32) -> f32 {
+    if ball.v.x.abs() < 0.01 {
+        return ball.p.y;
+    }
+    let t = (plane_x - ball.p.x) / ball.v.x;
+    if t <= 0.0 {
+        return ball.p.y; // ball moving away — just hold the current line
+    }
+    let unbounded = ball.p.y + ball.v.y * t;
+
+    // Fold the unbounded prediction back into [-WALL_LIMIT, WALL_LIMIT] as a
+    // triangle wave (mirror reflections off each wall).
+    let span = 2.0 * WALL_LIMIT;
+    let mut m = (unbounded + WALL_LIMIT).rem_euclid(2.0 * span);
+    if m > span {
+        m = 2.0 * span - m;
+    }
+    m - WALL_LIMIT
+}
+
+/// Programmatically control a paddle for demo mode.
+///
+/// The paddle *predicts* where the ball will arrive (so rallies last) and adds a
+/// small wandering offset so contact lands across the paddle, including the edges
+/// and side faces, for angled returns instead of flat centre bounces. When the
+/// ball is incoming and lined up it dashes to land a smash. The result is fed into
+/// [`step_physics`] exactly like a human or networked input would be, so all
+/// collisions and scoring still apply.
+fn demo_paddle_input(player: &Player, ball: &Ball, time: f32, is_left: bool) -> PlayerInput {
+    // Desync the two paddles so they never act in lockstep.
+    let phase = if is_left { 0.0 } else { 2.2 };
+
+    let approaching = if is_left { ball.v.x < 0.0 } else { ball.v.x > 0.0 };
+    let dist_x = (ball.p.x - player.x).abs();
+
+    // Aim at the predicted arrival point so the paddle is almost always there in
+    // time → far fewer misses, much longer exchanges.
+    let predicted_y = predict_ball_y(ball, player.x);
+
+    // Don't react instantly: while the ball is still far away the paddle lazily
+    // tracks its *current* line, and only commits to the predicted landing spot as
+    // the ball gets close. This adds human-like reaction lag instead of snapping
+    // into position the instant the opponent returns the ball.
+    const REACT_DIST: f32 = 45.0; // start reacting once within this X distance
+    const REACT_RANGE: f32 = 28.0; // ramp from lazy → committed over this span
+    let react = ((REACT_DIST - dist_x) / REACT_RANGE).clamp(0.0, 1.0);
+    let aim_y = ball.p.y + (predicted_y - ball.p.y) * react;
+
+    // Small wandering offset for angle variety. Kept well inside the paddle height
+    // so the ball still connects (it lands off-centre / on an edge, not past it).
+    let wobble = ((time * 1.3 + phase).sin() * 0.6 + (time * 0.7 + phase).sin() * 0.4)
+        * (PADDLE_HALF_H * 0.45);
+    let target_y = aim_y + wobble;
+    let dy = target_y - player.y;
+
+    // Snappy vertical tracking. A tiny swipe keeps the paddle sweeping through the
+    // ball so the top/bottom faces still catch it, without flinging it off target.
+    let swipe = (time * 5.0 + phase).sin() * 0.2;
+    let move_y = (dy * 1.5 + swipe).clamp(-1.0, 1.0);
+
+    // Forward/backward motion along the paddle's own axis. "Forward" is toward the
+    // centre line. The paddle lunges forward to meet an incoming ball (scaled by the
+    // same reaction ramp as the Y aim) and retreats toward its home column afterward,
+    // with a constant slow sway so it is never frozen on X.
+    let home_x = if is_left { -PADDLE_X } else { PADDLE_X };
+    let forward_dir = if is_left { 1.0 } else { -1.0 };
+    let lunge = if approaching { forward_dir * react * 9.0 } else { 0.0 };
+    let sway = forward_dir * (time * 0.8 + phase).sin() * 3.5;
+    let target_x = home_x + lunge + sway;
+    let move_x = ((target_x - player.x) * 1.5).clamp(-1.0, 1.0);
+
+    // No smashes: the paddle never dashes, so every return is a normal-speed shot.
+    let dash_pressed = false;
+
+    // Lob on *some* strikes, not all: a slow sine opens a lob "window" roughly a
+    // third of the time. The 6s lob cooldown rate-limits it further.
+    let near_strike = approaching && dist_x < 11.0;
+    let lob_pressed = near_strike && ((time + phase) * 0.6).sin() > 0.5;
+
+    // Boost now and then for flashy colour pulses (its own cooldown rate-limits it).
+    let boost_pressed = ((time + phase) * 0.5).sin() > 0.9;
+
+    PlayerInput {
+        move_y,
+        move_x,
+        lob_pressed,
+        boost_pressed,
+        dash_pressed,
+        sequence_number: 0,
+    }
+}
+
+impl PongGame {
+    /// Drive the camera programmatically for the active demo mode.
+    ///
+    /// Z is the world up axis in this scene, so the camera up vector is kept on it
+    /// for a level horizon.
+    fn update_demo_camera(&mut self, queue: &wgpu::Queue, dt: f32) {
+        self.scene.camera.up = cgmath::Vector3::unit_z();
+
+        match self.demo {
+            DemoMode::Orbit => {
+                // Centre roughly on the playfield, slightly above the ground.
+                let center = cgmath::Point3::new(0.0, 2.0, 4.0);
+                let angle = self.time * 0.15; // slow azimuth sweep
+                let radius = 75.0 + (self.time * 0.3).sin() * 15.0; // gentle dolly in/out
+                let height = 35.0 + (self.time * 0.5).sin() * 10.0; // gentle vertical bob
+                self.scene.camera.orbit(center, radius, angle, height);
+            }
+            DemoMode::Follow => {
+                let ball = self.ball.p;
+
+                // Horizontal heading of the ball; fall back to +X when nearly still.
+                let (mut dx, mut dy) = (self.ball.v.x, self.ball.v.y);
+                let mag = (dx * dx + dy * dy).sqrt();
+                if mag < 0.001 {
+                    dx = 1.0;
+                    dy = 0.0;
+                } else {
+                    dx /= mag;
+                    dy /= mag;
+                }
+
+                // Goal celebration: a sine over the countdown gives lift 0 → 1 → 0,
+                // so the camera rises high above the pitch right after a goal and
+                // then settles back down onto the ball.
+                self.demo_goal_timer = (self.demo_goal_timer - dt).max(0.0);
+                let lift = if DEMO_GOAL_CAM_DURATION > 0.0 {
+                    let progress = 1.0 - self.demo_goal_timer / DEMO_GOAL_CAM_DURATION;
+                    (progress * std::f32::consts::PI).sin()
+                } else {
+                    0.0
+                };
+
+                // Desired eye sits close behind and just above the ball, relative
+                // to its heading — a tight chase cam — plus the celebration lift.
+                const FOLLOW_DIST: f32 = 14.0;
+                const FOLLOW_HEIGHT: f32 = 6.0;
+                const GOAL_CAM_RISE: f32 = 70.0;
+                let desired = cgmath::Point3::new(
+                    ball.x - dx * FOLLOW_DIST,
+                    ball.y - dy * FOLLOW_DIST,
+                    ball.z + FOLLOW_HEIGHT + lift * GOAL_CAM_RISE,
+                );
+
+                // Smooth the eye toward the target so direction flips on bounces
+                // don't snap the camera (frame-rate independent exponential easing).
+                // A higher rate keeps the camera glued more tightly to the ball.
+                let cur = self.scene.camera.eye;
+                let t = 1.0 - (-dt * 6.0).exp();
+                let new_eye = cur + (desired - cur) * t;
+
+                self.scene.camera.set_position(new_eye);
+                // Aim slightly ahead of the ball along its heading for a chase feel.
+                self.scene.camera.look_at(cgmath::Point3::new(
+                    ball.x + dx * 6.0,
+                    ball.y + dy * 6.0,
+                    ball.z,
+                ));
+            }
+            DemoMode::Off => return,
+        }
+
+        self.scene.camera.update_matrix(queue);
     }
 }
 
@@ -1021,6 +1220,13 @@ impl Game for PongGame {
         };
 
         let args = Args::parse();
+        let demo = if args.demo2 {
+            DemoMode::Follow
+        } else if args.demo {
+            DemoMode::Orbit
+        } else {
+            DemoMode::Off
+        };
         let (client_socket, server_addr) = if let Some(ip) = args.client {
             let socket = UdpSocket::bind("0.0.0.0:0").expect("Failed to bind client UDP port");
             socket.set_nonblocking(true).unwrap();
@@ -1031,15 +1237,19 @@ impl Game for PongGame {
             (None, None)
         };
 
-        // Hide models initially for the startup scene
-        scene.get_dynamic_mut(left_player.id).unwrap().position = Vector3::new(0.0, 0.0, 1000.0);
-        scene.get_dynamic_mut(right_player.id).unwrap().position = Vector3::new(0.0, 0.0, 1000.0);
-        scene.get_dynamic_mut(ball.id).unwrap().position = Vector3::new(0.0, 0.0, 1000.0);
-        if let Some(id) = left_player.score_id {
-            scene.get_dynamic_mut(id).unwrap().position = Vector3::new(0.0, 0.0, 1000.0);
-        }
-        if let Some(id) = right_player.score_id {
-            scene.get_dynamic_mut(id).unwrap().position = Vector3::new(0.0, 0.0, 1000.0);
+        // Hide models initially for the startup scene. In demo mode there is no
+        // menu, so leave everything visible and let `update` position it.
+        if !demo.is_active() {
+            scene.get_dynamic_mut(left_player.id).unwrap().position = Vector3::new(0.0, 0.0, 1000.0);
+            scene.get_dynamic_mut(right_player.id).unwrap().position =
+                Vector3::new(0.0, 0.0, 1000.0);
+            scene.get_dynamic_mut(ball.id).unwrap().position = Vector3::new(0.0, 0.0, 1000.0);
+            if let Some(id) = left_player.score_id {
+                scene.get_dynamic_mut(id).unwrap().position = Vector3::new(0.0, 0.0, 1000.0);
+            }
+            if let Some(id) = right_player.score_id {
+                scene.get_dynamic_mut(id).unwrap().position = Vector3::new(0.0, 0.0, 1000.0);
+            }
         }
 
         let mut trail_ids = Vec::new();
@@ -1148,9 +1358,11 @@ impl Game for PongGame {
             ball,
             left_player,
             right_player,
-            game_started: false,
+            game_started: demo.is_active(),
             paused: false,
             prev_start_pressed: false,
+            demo,
+            demo_goal_timer: 0.0,
             client_socket,
             server_addr,
             seq_num: 0,
@@ -1171,6 +1383,11 @@ impl Game for PongGame {
     fn update(&mut self, ctx: &mut EngineContext) {
         let dt = ctx.time.dt;
         self.time += dt;
+
+        // Demo mode drives the camera programmatically.
+        if self.demo.is_active() {
+            self.update_demo_camera(&ctx.gfx.queue, dt);
+        }
 
         // Start ambient the first frame the game is running (track doesn't exist during menu).
         if self.game_started {
@@ -1201,29 +1418,38 @@ impl Game for PongGame {
             return;
         }
 
-        let mut start_pressed = false;
-        for (_, gamepad) in ctx.gilrs.gamepads() {
-            if gamepad.is_pressed(gilrs::Button::Start) {
-                start_pressed = true;
+        // Demo mode never pauses and shows no menus.
+        if !self.demo.is_active() {
+            let mut start_pressed = false;
+            for (_, gamepad) in ctx.gilrs.gamepads() {
+                if gamepad.is_pressed(gilrs::Button::Start) {
+                    start_pressed = true;
+                }
             }
-        }
-        let start_just_pressed = start_pressed && !self.prev_start_pressed;
-        self.prev_start_pressed = start_pressed;
+            let start_just_pressed = start_pressed && !self.prev_start_pressed;
+            self.prev_start_pressed = start_pressed;
 
-        if ctx.input.is_key_just_pressed(KeyCode::Escape) || start_just_pressed {
-            self.paused = !self.paused;
-        }
+            if ctx.input.is_key_just_pressed(KeyCode::Escape) || start_just_pressed {
+                self.paused = !self.paused;
+            }
 
-        if self.paused {
-            return;
+            if self.paused {
+                return;
+            }
         }
 
         let prev_ball_pos = self.ball.p;
 
         // Apply local physics if NOT connected to a server
         if self.client_socket.is_none() {
-            let left_input = PlayerInput::left_input(ctx);
-            let right_input = PlayerInput::right_input(ctx);
+            let (left_input, right_input) = if self.demo.is_active() {
+                (
+                    demo_paddle_input(&self.left_player, &self.ball, self.time, true),
+                    demo_paddle_input(&self.right_player, &self.ball, self.time, false),
+                )
+            } else {
+                (PlayerInput::left_input(ctx), PlayerInput::right_input(ctx))
+            };
 
             step_physics(
                 &mut self.ball,
@@ -1262,6 +1488,7 @@ impl Game for PongGame {
             let eye = scene.camera.eye;
             self.sound_manager
                 .play_oneshot(self.crowd_cheer.clone(), [eye.x - 8.0, eye.y, eye.z]);
+            self.demo_goal_timer = DEMO_GOAL_CAM_DURATION;
         }
 
         if self.right_player.score as i32 != self.right_player.rendered_score {
@@ -1289,6 +1516,7 @@ impl Game for PongGame {
             let eye = scene.camera.eye;
             self.sound_manager
                 .play_oneshot(self.crowd_cheer.clone(), [eye.x + 8.0, eye.y, eye.z]);
+            self.demo_goal_timer = DEMO_GOAL_CAM_DURATION;
         }
 
         // --- Sync GPU transforms ---
@@ -1502,6 +1730,11 @@ impl Game for PongGame {
     }
 
     fn ui(&mut self, _ctx: &mut EngineContext, ui_ctx: &etib::egui::Context) {
+        // Demo mode hides all menus and HUD.
+        if self.demo.is_active() {
+            return;
+        }
+
         if !self.game_started {
             etib::egui::Area::new(etib::egui::Id::new("Main Menu"))
                 .anchor(etib::egui::Align2::CENTER_CENTER, [0.0, 0.0])
@@ -2180,6 +2413,19 @@ struct Args {
     /// Port to listen (server) or send (client) on
     #[arg(long, default_value_t = 8080)]
     port: u16,
+
+    /// Export the generated static stadium geometry to a `.model` file and exit
+    #[arg(long, value_name = "PATH")]
+    export_static: Option<String>,
+
+    /// Run an attract/demo mode: no menus or HUD, paddles play themselves while the
+    /// camera slowly orbits the pitch
+    #[arg(long, default_value_t = false)]
+    demo: bool,
+
+    /// Like `--demo`, but the camera chases the ball from behind
+    #[arg(long, default_value_t = false)]
+    demo2: bool,
 }
 
 // ---------------------------------------------------------------------------
@@ -2189,6 +2435,14 @@ fn main() -> anyhow::Result<()> {
     env_logger::init();
     let config = EngineConfig::load_from_file("config.json");
     let args = Args::parse();
+
+    if let Some(path) = args.export_static {
+        let (walls, _seats) = make_static_geometry();
+        etib::cube::save_model(&path, &walls)?;
+        log::info!("Exported {} static cubes to {}", walls.len(), path);
+        println!("Exported {} sttic cubes to {}", walls.len(), path);
+        return Ok(());
+    }
 
     if args.server {
         run_server(args.port)?;

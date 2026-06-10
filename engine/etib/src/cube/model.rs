@@ -99,6 +99,39 @@ pub fn load_model(path: &str) -> anyhow::Result<Vec<ModelCube>> {
     Ok(cubes)
 }
 
+/// Save cubes to a model file.
+///
+/// Writes one cube per line in the `x y z r g b` format understood by
+/// [`load_model`], so a saved file round-trips back into the same cubes.
+///
+/// # Arguments
+/// * `path` - Path to write the model file to
+/// * `cubes` - The cubes to serialize
+///
+/// # Errors
+/// Returns an error if the file cannot be written.
+///
+/// # Example
+/// ```no_run
+/// use etib::cube::{load_model, save_model};
+///
+/// let cubes = load_model("models/cat.model").expect("Failed to load model");
+/// save_model("models/cat_copy.model", &cubes).expect("Failed to save model");
+/// ```
+pub fn save_model(path: &str, cubes: &[ModelCube]) -> anyhow::Result<()> {
+    use std::fmt::Write as _;
+
+    let mut content = String::with_capacity(cubes.len() * 32);
+    for cube in cubes {
+        let p = cube.position;
+        let c = cube.color;
+        writeln!(content, "{} {} {} {} {} {}", p.x, p.y, p.z, c.x, c.y, c.z)?;
+    }
+    fs::write(path, content)?;
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -158,6 +191,27 @@ mod tests {
         let cubes = load_model(file.path().to_str().unwrap()).unwrap();
         assert_eq!(cubes.len(), 1);
         assert_eq!(cubes[0].position, cgmath::Vector3::new(5.0, 6.0, 7.0));
+    }
+
+    #[test]
+    fn test_save_model_round_trips() {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        let path = file.path().to_str().unwrap();
+        let cubes = vec![
+            ModelCube {
+                position: cgmath::Vector3::new(0.0, 1.0, 2.0),
+                color: cgmath::Vector3::new(1.0, 0.0, 0.0),
+            },
+            ModelCube {
+                position: cgmath::Vector3::new(-3.0, -4.0, -5.0),
+                color: cgmath::Vector3::new(0.0, 1.0, 0.5),
+            },
+        ];
+
+        save_model(path, &cubes).unwrap();
+        let loaded = load_model(path).unwrap();
+
+        assert_eq!(loaded, cubes);
     }
 
     #[test]

@@ -6,7 +6,7 @@ use winit::event::{DeviceEvent, DeviceId, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow};
 use winit::window::{CursorGrabMode, Window, WindowAttributes, WindowId};
 use winit::{application::ApplicationHandler, error::EventLoopError, event_loop::EventLoop};
-
+use winit::window::Fullscreen::Borderless;
 use crate::config::EngineConfig;
 use crate::input::InputState;
 use crate::time::TimeState;
@@ -177,7 +177,7 @@ impl<G: Game> ApplicationHandler for EngineRunner<G> {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let window = Arc::new(
             event_loop
-                .create_window(WindowAttributes::default())
+                .create_window(WindowAttributes::default().with_fullscreen(Some(Borderless(None))))
                 .unwrap(),
         );
 

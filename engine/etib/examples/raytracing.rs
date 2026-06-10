@@ -91,7 +91,7 @@ impl RaytracingExample {
                 Material::Metal(Vec3::new(0.0, 0.0, 1.0), 0.3),
             ),
             Cube::new(
-                Vec3::new(0.0, 2.0, 0.0),
+                Vec3::new(0.0, 100000.0, 0.0),
                 0.5,
                 Material::Emissive(Vec3::new(300.0, 100.0, 0.0)),
             ),
