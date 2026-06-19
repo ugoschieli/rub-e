@@ -10,7 +10,6 @@ use crate::constants::CHUNK_SIZE_3;
 use crate::mesher::{chunk_index, mesh_chunk};
 use crate::{
     camera::Camera,
-    chunk::World,
     gfx::Gfx,
     renderer::Renderer,
     utils::{self, bindgroup::FrameBuffered},
@@ -108,7 +107,7 @@ pub struct StaticRenderer {
 }
 
 impl StaticRenderer {
-    pub fn init(gfx: &Gfx, world: &World, camera: &Camera) -> Self {
+    pub fn init(gfx: &Gfx, camera: &Camera) -> Self {
 
         // Heap-allocate the chunk: as a stack array it's ~931 KB (62^3 * 4 B),
         // which overflows Windows' 1 MB main-thread stack (macOS gets 8 MB).
@@ -203,7 +202,7 @@ impl StaticRenderer {
 }
 
 impl Renderer for StaticRenderer {
-    fn render(&mut self, gfx: &mut Gfx, world: &World, camera: &Camera, size: PhysicalSize<u32>) {
+    fn render(&mut self, gfx: &mut Gfx, camera: &Camera, size: PhysicalSize<u32>) {
         let mut encoder = gfx.encoder.as_mut().unwrap();
         {
             let mut render_pass = utils::create_render_pass(

@@ -1,5 +1,4 @@
 use crate::app::App;
-use crate::chunk::World;
 use crate::constants::FRAMES_IN_FLIGHT;
 use crate::time::Time;
 use crate::utils;
@@ -30,8 +29,6 @@ impl Gfx {
         let (device, queue) = utils::create_device(&adapter);
         let (surface, surface_config) =
             utils::create_surface(&instance, &adapter, &device, window, size);
-
-        app.world = Some(World::new(&device, &app.cubes));
 
         let (_depth_texture, depth_texture_view) = utils::create_depth_texture(&device, size);
 

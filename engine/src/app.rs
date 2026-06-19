@@ -1,5 +1,4 @@
 use crate::camera::Camera;
-use crate::chunk::World;
 use crate::constants::{CUBE_NUMBER, CUBE_RANGE};
 use crate::cube::Cube;
 use crate::gfx::Gfx;
@@ -28,7 +27,6 @@ pub struct App {
     pub keys_held: HashSet<KeyCode>,
     pub time: Time,
     pub cubes: Vec<Cube>,
-    pub world: Option<World>,
     pub transforms: Option<TransformBuffers>,
     pub updaters: Vec<Box<dyn Updater>>,
     pub renderers: Vec<Box<dyn Renderer>>,
@@ -48,7 +46,6 @@ impl App {
             keys_held: HashSet::default(),
             time: Time::new(),
             cubes,
-            world: None,
             transforms: None,
             updaters: vec![],
             renderers: vec![],
@@ -94,7 +91,7 @@ impl ApplicationHandler for App {
             half as u32,
         );
 
-        let renderer = StaticRenderer::init(&gfx, self.world.as_ref().unwrap(), &camera);
+        let renderer = StaticRenderer::init(&gfx, &camera);
         let dynamic = DynamicRenderer::init(&gfx, &camera, &self.cubes, transforms.buffers());
 
         self.gfx = Some(gfx);
@@ -131,7 +128,6 @@ impl ApplicationHandler for App {
                 let gfx = self.gfx.as_mut().unwrap();
                 let camera = self.camera.as_mut().unwrap();
                 let window = self.window.as_ref().unwrap();
-                let world = self.world.as_ref().unwrap();
 
                 camera.handle_keyboard(&self.keys_held, &self.time);
 
@@ -147,7 +143,7 @@ impl ApplicationHandler for App {
                     }
 
                     for renderer in &mut self.renderers {
-                        renderer.render(gfx, world, camera, self.window_size);
+                        renderer.render(gfx, camera, self.window_size);
                     }
 
                     gfx.submit();
