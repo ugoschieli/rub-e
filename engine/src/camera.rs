@@ -1,9 +1,9 @@
 use crate::constants::{FRAMES_IN_FLIGHT, SENSITIVITY, SPEED};
 use crate::gfx::Gfx;
+use crate::input::InputState;
 use crate::time::Time;
 use crate::utils;
 use glam::{Mat4, Quat, Vec3};
-use std::collections::HashSet;
 use std::f32::consts::FRAC_PI_4;
 use winit::dpi::PhysicalSize;
 use winit::keyboard::KeyCode;
@@ -77,30 +77,32 @@ impl Camera {
     /// `self.position` is the eye fed to `look_at_rh`, which operates in
     /// base-changed space, so undo the base change to recover world space.
     pub fn world_position(&self) -> Vec3 {
-        Self::base_change().inverse().transform_point3(self.position)
+        Self::base_change()
+            .inverse()
+            .transform_point3(self.position)
     }
 
-    pub fn handle_keyboard(&mut self, keys_held: &HashSet<KeyCode>, time: &Time) {
+    pub fn handle_keyboard(&mut self, input: &InputState, time: &Time) {
         let forward = self.rotation * Vec3::NEG_Z;
         let right = self.rotation * Vec3::X;
 
         let mut move_dir = Vec3::ZERO;
-        if keys_held.contains(&KeyCode::KeyW) {
+        if input.is_key_pressed(KeyCode::KeyW) {
             move_dir += forward;
         }
-        if keys_held.contains(&KeyCode::KeyS) {
+        if input.is_key_pressed(KeyCode::KeyS) {
             move_dir -= forward;
         }
-        if keys_held.contains(&KeyCode::KeyD) {
+        if input.is_key_pressed(KeyCode::KeyD) {
             move_dir += right;
         }
-        if keys_held.contains(&KeyCode::KeyA) {
+        if input.is_key_pressed(KeyCode::KeyA) {
             move_dir -= right;
         }
-        if keys_held.contains(&KeyCode::Space) {
+        if input.is_key_pressed(KeyCode::Space) {
             move_dir += Vec3::Y;
         }
-        if keys_held.contains(&KeyCode::ShiftLeft) {
+        if input.is_key_pressed(KeyCode::ShiftLeft) {
             move_dir -= Vec3::Y;
         }
         self.position += move_dir.normalize_or_zero() * SPEED * time.dt;

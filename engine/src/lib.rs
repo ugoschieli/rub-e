@@ -1,10 +1,10 @@
-pub mod app;
 pub mod camera;
-pub mod chunk;
+pub mod config;
 pub mod constants;
 pub mod cube;
-pub mod frame_buffer;
+pub mod game;
 pub mod gfx;
+pub mod input;
 pub mod mesher;
 pub mod renderer;
 pub mod time;

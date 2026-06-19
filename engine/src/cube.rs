@@ -3,6 +3,12 @@ use glam::{IVec3, UVec3};
 use rand::RngExt;
 use std::ops::Range;
 
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Default, Pod, Zeroable)]
+pub struct VoxelGpu {
+    pub color: u32,
+}
+
 #[derive(Debug, Copy, Clone, Default)]
 pub struct Cube {
     pub position: IVec3,

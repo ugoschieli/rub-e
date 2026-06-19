@@ -4,7 +4,7 @@ use bytemuck::{Pod, Zeroable};
 use glam::{UVec3, uvec3};
 
 use crate::{
-    chunk::VoxelGpu,
+    cube::VoxelGpu,
     constants::{CHUNK_SIZE_1, CHUNK_SIZE_2, CHUNK_SIZE_3, CHUNK_SIZE_P},
 };
 use crate::renderer::static_renderer::{unpack_color, Face, FaceDirection};

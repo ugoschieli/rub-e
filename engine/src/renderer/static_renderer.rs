@@ -1,12 +1,12 @@
 use std::f32::consts::{FRAC_PI_2, PI};
 
 use bytemuck::{Pod, Zeroable};
-use glam::{uvec3, Mat4, UVec3, Vec3};
+use glam::{Mat4, UVec3, Vec3, uvec3};
 use wgpu::include_wgsl;
-use winit::dpi::PhysicalSize;
 
-use crate::chunk::VoxelGpu;
+use crate::cube::VoxelGpu;
 use crate::constants::CHUNK_SIZE_3;
+use crate::game::EngineContext;
 use crate::mesher::{chunk_index, mesh_chunk};
 use crate::{
     camera::Camera,
@@ -66,12 +66,12 @@ impl Face {
 
 #[derive(Debug, Clone, Copy)]
 pub enum FaceDirection {
-    Right,  // +X = 0
-    Left,   // -X = 1
-    Forward,   // +Y = 2
-    Backward,  // -Y = 3
-    Up,    // +Z = 4
-    Down, // -Z = 5
+    Right,    // +X = 0
+    Left,     // -X = 1
+    Forward,  // +Y = 2
+    Backward, // -Y = 3
+    Up,       // +Z = 4
+    Down,     // -Z = 5
 }
 
 impl FaceDirection {
@@ -108,7 +108,6 @@ pub struct StaticRenderer {
 
 impl StaticRenderer {
     pub fn init(gfx: &Gfx, camera: &Camera) -> Self {
-
         // Heap-allocate the chunk: as a stack array it's ~931 KB (62^3 * 4 B),
         // which overflows Windows' 1 MB main-thread stack (macOS gets 8 MB).
         let mut chunk: Box<[VoxelGpu; CHUNK_SIZE_3]> = vec![VoxelGpu { color: 0 }; CHUNK_SIZE_3]
@@ -116,7 +115,7 @@ impl StaticRenderer {
             .try_into()
             .unwrap();
 
-        chunk[chunk_index(uvec3(0, 0, 10))] = VoxelGpu {color: 1023};
+        chunk[chunk_index(uvec3(0, 0, 10))] = VoxelGpu { color: 1023 };
         // chunk[chunk_index(uvec3(1, 0, 0))] = VoxelGpu {color: 1023};
         // chunk[chunk_index(uvec3(2, 0, 0))] = VoxelGpu {color: 1023};
         // chunk[chunk_index(uvec3(0, 0, 1))] = VoxelGpu {color: 1023};
@@ -128,7 +127,10 @@ impl StaticRenderer {
         //
         // chunk[chunk_index(uvec3(0, 1, 0))] = VoxelGpu {color: 1023};
 
-        let faces = mesh_chunk(&chunk).iter().map(|face| face.to_gpu()).collect::<Vec<FaceGpu>>();
+        let faces = mesh_chunk(&chunk)
+            .iter()
+            .map(|face| face.to_gpu())
+            .collect::<Vec<FaceGpu>>();
 
         // The flipped faces (Left, Forward, Down) are pure rotations: their
         // rotation mirrors an extent axis, so a constant translation can only
@@ -137,8 +139,8 @@ impl StaticRenderer {
         let face_matrices = &[
             Mat4::from_translation(Vec3::new(1.0, 0.0, 0.0)) * Mat4::from_rotation_z(FRAC_PI_2), // Right Face
             Mat4::from_rotation_z(-FRAC_PI_2), // Left Face
-            Mat4::from_rotation_z(PI), // Back Face
-            Mat4::IDENTITY, // Front Face
+            Mat4::from_rotation_z(PI),         // Back Face
+            Mat4::IDENTITY,                    // Front Face
             Mat4::from_translation(Vec3::new(0.0, 0.0, 1.0)) * Mat4::from_rotation_x(-FRAC_PI_2), // Top Face
             Mat4::from_rotation_x(FRAC_PI_2), // Bottom Face
         ];
@@ -181,9 +183,9 @@ impl StaticRenderer {
             ]
         });
 
-        let shader = gfx
-            .device
-            .create_shader_module(include_wgsl!("../../shaders/renderer/static/face_draw.wgsl"));
+        let shader = gfx.device.create_shader_module(include_wgsl!(
+            "../../shaders/renderer/static/face_draw.wgsl"
+        ));
 
         let render_pipeline = utils::pipeline::RenderPipelineBuilder::new(&gfx.device)
             .bind_group(&bind_group.layout)
@@ -202,17 +204,17 @@ impl StaticRenderer {
 }
 
 impl Renderer for StaticRenderer {
-    fn render(&mut self, gfx: &mut Gfx, camera: &Camera, size: PhysicalSize<u32>) {
-        let mut encoder = gfx.encoder.as_mut().unwrap();
+    fn render(&mut self, ctx: &mut EngineContext, camera: &Camera) {
+        let mut encoder = ctx.gfx.encoder.as_mut().unwrap();
         {
             let mut render_pass = utils::create_render_pass(
                 &mut encoder,
-                gfx.surface_texture_view.as_ref().unwrap(),
-                &gfx.depth_texture_view,
+                ctx.gfx.surface_texture_view.as_ref().unwrap(),
+                &ctx.gfx.depth_texture_view,
             );
 
             render_pass.set_pipeline(&self.render_pipeline);
-            render_pass.set_bind_group(0, self.bind_group.current(gfx.frame_index), &[]);
+            render_pass.set_bind_group(0, self.bind_group.current(ctx.gfx.frame_index), &[]);
             render_pass.draw(0..(6 * self.faces_len as u32), 0..1);
             // render_pass.draw_indirect(&frame_buffer.draw_indirect_buffer, 0);
         }

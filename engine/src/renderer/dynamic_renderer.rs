@@ -1,10 +1,10 @@
 use std::time::Instant;
 use wgpu::include_wgsl;
-use winit::dpi::PhysicalSize;
 
 use crate::camera::Camera;
 use crate::constants::FRAMES_IN_FLIGHT;
 use crate::cube::Cube;
+use crate::game::EngineContext;
 use crate::gfx::Gfx;
 use crate::renderer::Renderer;
 use crate::utils::{self, bindgroup::FrameBuffered};
@@ -115,9 +115,9 @@ impl DynamicRenderer {
             ]
         });
 
-        let cull_shader = gfx
-            .device
-            .create_shader_module(include_wgsl!("../../shaders/renderer/dynamic/box_cull.wgsl"));
+        let cull_shader = gfx.device.create_shader_module(include_wgsl!(
+            "../../shaders/renderer/dynamic/box_cull.wgsl"
+        ));
 
         let cull_pipeline = utils::create_compute_pipeline_from_module(
             &gfx.device,
@@ -183,7 +183,8 @@ impl DynamicRenderer {
 }
 
 impl Renderer for DynamicRenderer {
-    fn render(&mut self, gfx: &mut Gfx, camera: &Camera, _size: PhysicalSize<u32>) {
+    fn render(&mut self, ctx: &mut EngineContext, camera: &Camera) {
+        let gfx = &mut ctx.gfx;
         // The voxels live in raw world space, so the ray origin must be the
         // camera's world-space position (camera.position is in base-changed space).
         // The unused w channel carries elapsed seconds, which the vertex shader
