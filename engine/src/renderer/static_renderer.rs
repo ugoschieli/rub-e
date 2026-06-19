@@ -110,7 +110,12 @@ pub struct StaticRenderer {
 impl StaticRenderer {
     pub fn init(gfx: &Gfx, world: &World, camera: &Camera) -> Self {
 
-        let mut chunk = [VoxelGpu { color: 0 }; CHUNK_SIZE_3];
+        // Heap-allocate the chunk: as a stack array it's ~931 KB (62^3 * 4 B),
+        // which overflows Windows' 1 MB main-thread stack (macOS gets 8 MB).
+        let mut chunk: Box<[VoxelGpu; CHUNK_SIZE_3]> = vec![VoxelGpu { color: 0 }; CHUNK_SIZE_3]
+            .into_boxed_slice()
+            .try_into()
+            .unwrap();
 
         chunk[chunk_index(uvec3(0, 0, 10))] = VoxelGpu {color: 1023};
         // chunk[chunk_index(uvec3(1, 0, 0))] = VoxelGpu {color: 1023};
