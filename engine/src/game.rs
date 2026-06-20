@@ -1,9 +1,5 @@
 use std::sync::Arc;
 
-use crate::config::EngineConfig;
-use crate::gfx::Gfx;
-use crate::input::InputState;
-use crate::time::Time;
 use winit::dpi::PhysicalSize;
 use winit::error::ExternalError;
 use winit::event::{DeviceEvent, DeviceId, WindowEvent};
@@ -11,6 +7,12 @@ use winit::event_loop::{ActiveEventLoop, ControlFlow};
 use winit::window::Fullscreen::Borderless;
 use winit::window::{CursorGrabMode, Window, WindowAttributes, WindowId};
 use winit::{application::ApplicationHandler, error::EventLoopError, event_loop::EventLoop};
+
+use crate::config::EngineConfig;
+use crate::gfx::Gfx;
+use crate::input::InputState;
+use crate::time::Time;
+use crate::ui::UiState;
 
 /// All engine-owned state passed to the game on every callback.
 ///
@@ -29,17 +31,9 @@ pub struct EngineContext {
     pub gilrs: gilrs::Gilrs,
     /// Engine configuration (vsync, HDR, …)
     pub config: Arc<EngineConfig>,
-    // window is NOT exposed directly — engine handles it
+    /// window is NOT exposed directly — engine handles it
     window: Arc<Window>,
-
-    /// The egui context used to build UI each frame
-    pub egui_ctx: egui::Context,
-    /// egui - winitbridge that converts window events to egui input
-    pub egui_state: egui_winit::State,
-    /// wgpu renderer for egui primitives
-    pub egui_renderer: egui_wgpu::Renderer,
-    /// Egui output produced during the current frame's UI pass, consumed by [`EngineContext::render_ui`]
-    pub egui_output: Option<egui::FullOutput>,
+    ui: UiState,
 }
 
 impl EngineContext {
@@ -54,76 +48,13 @@ impl EngineContext {
     }
 
     /// Show or hide the OS cursor.
-    pub fn set_cursor_visible(&mut self, visible: bool) {
+    pub fn set_cursor_visible(&self, visible: bool) {
         self.window.set_cursor_visible(visible);
     }
 
     /// Set the window title shown in the title bar.
     pub fn set_window_title(&self, title: &str) {
         self.window.set_title(title);
-    }
-
-    /// Render the egui UI produced during this frame's [`Game::ui`] callback into `view`.
-    fn render_ui(&mut self, encoder: &mut wgpu::CommandEncoder) {
-        let Some(full_output) = self.egui_output.take() else {
-            return;
-        };
-
-        let Some(view) = self.gfx.surface_texture_view.as_ref() else {
-            return;
-        };
-
-        let device = &self.gfx.device;
-        let queue = &self.gfx.queue;
-
-        let primitives = self
-            .egui_ctx
-            .tessellate(full_output.shapes, full_output.pixels_per_point);
-
-        let screen_descriptor = egui_wgpu::ScreenDescriptor {
-            size_in_pixels: [
-                self.gfx.surface_config.width,
-                self.gfx.surface_config.height,
-            ],
-            pixels_per_point: self.window.scale_factor() as f32,
-        };
-
-        for (id, image_delta) in &full_output.textures_delta.set {
-            self.egui_renderer
-                .update_texture(device, queue, *id, image_delta);
-        }
-
-        self.egui_renderer
-            .update_buffers(device, queue, encoder, &primitives, &screen_descriptor);
-
-        {
-            let render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("egui_render_pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Load,
-                        store: wgpu::StoreOp::Store,
-                    },
-                    depth_slice: None,
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-                multiview_mask: None,
-            });
-
-            self.egui_renderer.render(
-                &mut render_pass.forget_lifetime(),
-                &primitives,
-                &screen_descriptor,
-            );
-        }
-
-        for id in &full_output.textures_delta.free {
-            self.egui_renderer.free_texture(id);
-        }
     }
 }
 
@@ -140,7 +71,7 @@ pub trait Game {
     fn update(&mut self, ctx: &mut EngineContext);
 
     /// Build egui UI for this frame. Called between `update` and `render`.
-    fn ui(&mut self, _ctx: &mut EngineContext, _ui_ctx: &egui::Context) {}
+    fn ui(&mut self, ui: &mut egui::Ui) {}
 
     /// Called for window-level input events (keyboard, mouse buttons, …) not consumed by egui.
     fn input(&mut self, _ctx: &mut EngineContext, _event: &WindowEvent) {}
@@ -167,26 +98,11 @@ impl<G: Game> ApplicationHandler for EngineRunner<G> {
                 .unwrap(),
         );
 
-        let egui_ctx = egui::Context::default();
-        let viewport_id = egui::ViewportId::ROOT;
-        let egui_state = egui_winit::State::new(
-            egui_ctx.clone(),
-            viewport_id,
-            &window,
-            Some(window.scale_factor() as f32),
-            None,
-            None,
-        );
-
         let gfx = Gfx::new(window.clone(), &self.config);
 
-        let gilrs = gilrs::Gilrs::new().expect("Failed to initialize gilrs");
+        let ui = UiState::new(&window, &gfx);
 
-        let egui_renderer = egui_wgpu::Renderer::new(
-            &gfx.device,
-            gfx.surface_config.format,
-            egui_wgpu::RendererOptions::default(),
-        );
+        let gilrs = gilrs::Gilrs::new().expect("Failed to initialize gilrs");
 
         let mut ctx = EngineContext {
             gfx,
@@ -195,10 +111,7 @@ impl<G: Game> ApplicationHandler for EngineRunner<G> {
             gilrs,
             config: self.config.clone(),
             window: window.clone(),
-            egui_ctx,
-            egui_state,
-            egui_renderer,
-            egui_output: None,
+            ui,
         };
 
         let params = self.params.take().unwrap();
@@ -220,7 +133,7 @@ impl<G: Game> ApplicationHandler for EngineRunner<G> {
             return;
         };
 
-        let response = ctx.egui_state.on_window_event(&ctx.window, &event);
+        let response = ctx.ui.state.on_window_event(&ctx.window, &event);
         if response.repaint {
             ctx.window.request_redraw();
         }
@@ -246,25 +159,8 @@ impl<G: Game> ApplicationHandler for EngineRunner<G> {
 
                     game.update(ctx);
 
-                    let raw_input = ctx.egui_state.take_egui_input(&ctx.window);
-                    let egui_ctx = ctx.egui_ctx.clone();
-                    let full_output = egui_ctx.run(raw_input, |ui_ctx| {
-                        game.ui(ctx, ui_ctx);
-                    });
-
-                    let mut ui_encoder =
-                        ctx.gfx
-                            .device
-                            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                                label: Some("UI command encoder"),
-                            });
-
-                    ctx.egui_state
-                        .handle_platform_output(&ctx.window, full_output.platform_output.clone());
-                    ctx.egui_output = Some(full_output);
-
-                    ctx.render_ui(&mut ui_encoder);
-                    ctx.gfx.queue.submit(Some(ui_encoder.finish()));
+                    let ui_output = ctx.ui.update(game, &ctx.window);
+                    ctx.ui.render(&ctx.window, &ctx.gfx, ui_output);
 
                     ctx.gfx.present();
 
