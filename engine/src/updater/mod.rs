@@ -93,5 +93,5 @@ impl TransformBuffers {
 /// visible (a compute-pass boundary acts as the memory barrier).
 pub trait Updater: Debug {
     /// Record this frame's transform update into `gfx.encoder`.
-    fn update(&mut self, gfx: &mut Gfx);
+    fn update(&mut self, gfx: &mut Gfx, encoder: &mut wgpu::CommandEncoder);
 }

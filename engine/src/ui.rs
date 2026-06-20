@@ -1,5 +1,5 @@
 use crate::game::Game;
-use crate::gfx::Gfx;
+use crate::gfx::{Frame, Gfx};
 use winit::window::Window;
 
 pub(crate) struct UiState {
@@ -41,22 +41,18 @@ impl UiState {
     pub fn update<G: Game>(&mut self, game: &mut G, window: &Window) -> egui::FullOutput {
         let raw_input = self.state.take_egui_input(window);
         let full_output = self.ctx.run_ui(raw_input, |ui| game.ui(ui));
-        self.state
-            .handle_platform_output(window, full_output.platform_output.clone());
         full_output
     }
 
-    pub fn render(&mut self, window: &Window, gfx: &Gfx, full_output: egui::FullOutput) {
-        let Some(view) = gfx.surface_texture_view.as_ref() else {
-            return;
-        };
-
+    pub fn render(
+        &mut self,
+        window: &Window,
+        gfx: &Gfx,
+        full_output: egui::FullOutput,
+        frame: &mut Frame,
+    ) {
         let device = &gfx.device;
         let queue = &gfx.queue;
-
-        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("UI command encoder"),
-        });
 
         let primitives = self
             .ctx
@@ -72,26 +68,33 @@ impl UiState {
                 .update_texture(device, queue, *id, image_delta);
         }
 
-        self.renderer
-            .update_buffers(device, queue, &mut encoder, &primitives, &screen_descriptor);
+        self.renderer.update_buffers(
+            device,
+            queue,
+            &mut frame.encoder,
+            &primitives,
+            &screen_descriptor,
+        );
 
         {
-            let render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("egui_render_pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Load,
-                        store: wgpu::StoreOp::Store,
-                    },
-                    depth_slice: None,
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-                multiview_mask: None,
-            });
+            let render_pass = frame
+                .encoder
+                .begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("egui_render_pass"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &frame.view,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Load,
+                            store: wgpu::StoreOp::Store,
+                        },
+                        depth_slice: None,
+                    })],
+                    depth_stencil_attachment: None,
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                    multiview_mask: None,
+                });
 
             self.renderer.render(
                 &mut render_pass.forget_lifetime(),
@@ -103,7 +106,5 @@ impl UiState {
         for id in &full_output.textures_delta.free {
             self.renderer.free_texture(id);
         }
-
-        queue.submit(Some(encoder.finish()));
     }
 }

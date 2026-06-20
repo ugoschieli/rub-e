@@ -1,7 +1,9 @@
+use egui::Ui;
 use etib::camera::Camera;
 use etib::constants::{CUBE_NUMBER, CUBE_RANGE};
 use etib::cube::Cube;
 use etib::game::{EngineContext, Game};
+use etib::gfx::Frame;
 use etib::renderer::Renderer;
 use etib::renderer::dynamic_renderer::DynamicRenderer;
 use etib::renderer::static_renderer::StaticRenderer;
@@ -9,6 +11,7 @@ use etib::updater::line_updater::LineUpdater;
 use etib::updater::orbit_updater::OrbitUpdater;
 use etib::updater::{TransformBuffers, Updater};
 use winit::event::DeviceEvent;
+use winit::window::CursorGrabMode;
 
 struct Hello {
     cubes: Vec<Cube>,
@@ -23,6 +26,7 @@ impl Game for Hello {
 
     fn init(ctx: &mut EngineContext, _params: Self::InitParams) -> Self {
         ctx.set_cursor_visible(false);
+        ctx.set_cursor_grab(CursorGrabMode::Locked);
 
         let cubes = (0..CUBE_NUMBER)
             .map(|_| Cube::random_cube(CUBE_RANGE))
@@ -71,23 +75,32 @@ impl Game for Hello {
         }
     }
 
+    fn ui(&mut self, ui: &mut Ui) {
+        let rect = ui.max_rect();
+        ui.painter().text(
+            rect.center(),
+            egui::Align2::CENTER_CENTER,
+            "Hello, ETIB!",
+            egui::FontId::proportional(48.0),
+            egui::Color32::from_rgb(255, 128, 0),
+        );
+    }
+
     fn update(&mut self, ctx: &mut EngineContext) {
         self.camera.handle_keyboard(&ctx.input, &ctx.time);
 
-        if ctx.gfx.surface_texture.is_some() {
-            self.camera.upload(&ctx.gfx, ctx.window_size());
+        self.camera.upload(&ctx.gfx, ctx.window_size());
+    }
 
-            // Updaters write this frame's transforms before any renderer
-            // reads them (the pass boundary is the memory barrier).
-            for updater in &mut self.updaters {
-                updater.update(&mut ctx.gfx);
-            }
+    fn render(&mut self, ctx: &mut EngineContext, frame: &mut Frame) {
+        // Updaters write this frame's transforms before any renderer
+        // reads them (the pass boundary is the memory barrier).
+        for updater in &mut self.updaters {
+            updater.update(&mut ctx.gfx, &mut frame.encoder);
+        }
 
-            for renderer in &mut self.renderers {
-                renderer.render(ctx, &self.camera);
-            }
-
-            ctx.gfx.submit();
+        for renderer in &mut self.renderers {
+            renderer.render(ctx, &self.camera, frame);
         }
     }
 

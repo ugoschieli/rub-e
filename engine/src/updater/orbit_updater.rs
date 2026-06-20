@@ -19,7 +19,7 @@ use crate::utils::{self, bindgroup::FrameBuffered};
 struct Orbit {
     center: Vec3, // orbit center in raw world space
     radius: f32,
-    u: Vec3, // orthonormal in-plane basis vectors
+    u: Vec3,    // orthonormal in-plane basis vectors
     speed: f32, // angular speed, rad/s (signed for direction)
     v: Vec3,
     phase: f32, // initial angle
@@ -141,7 +141,7 @@ impl OrbitUpdater {
 }
 
 impl Updater for OrbitUpdater {
-    fn update(&mut self, gfx: &mut Gfx) {
+    fn update(&mut self, gfx: &mut Gfx, encoder: &mut wgpu::CommandEncoder) {
         // The only per-frame upload: elapsed seconds driving every orbit.
         let time = self.start.elapsed().as_secs_f32();
         gfx.queue.write_buffer(
@@ -155,8 +155,7 @@ impl Updater for OrbitUpdater {
             }),
         );
 
-        let mut encoder = gfx.encoder.as_mut().unwrap();
-        let mut pass = utils::create_compute_pass(&mut encoder);
+        let mut pass = utils::create_compute_pass(encoder);
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, self.bind_group.current(gfx.frame_index), &[]);
         pass.dispatch_workgroups((self.count as usize).div_ceil(64) as u32, 1, 1);

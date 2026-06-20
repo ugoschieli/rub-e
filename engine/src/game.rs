@@ -9,7 +9,7 @@ use winit::window::{CursorGrabMode, Window, WindowAttributes, WindowId};
 use winit::{application::ApplicationHandler, error::EventLoopError, event_loop::EventLoop};
 
 use crate::config::EngineConfig;
-use crate::gfx::Gfx;
+use crate::gfx::{Frame, Gfx};
 use crate::input::InputState;
 use crate::time::Time;
 use crate::ui::UiState;
@@ -69,6 +69,9 @@ pub trait Game {
 
     /// Called every frame before rendering. Update game logic here.
     fn update(&mut self, ctx: &mut EngineContext);
+
+    /// Render to the current frame with access to the `CommandEncoder` inside `Frame`
+    fn render(&mut self, ctx: &mut EngineContext, frame: &mut Frame);
 
     /// Build egui UI for this frame. Called between `update` and `render`.
     fn ui(&mut self, ui: &mut egui::Ui) {}
@@ -153,20 +156,22 @@ impl<G: Game> ApplicationHandler for EngineRunner<G> {
                 self.last_window_size = size;
             }
             WindowEvent::RedrawRequested => {
-                if ctx.gfx.acquire_frame(&ctx.time) {
-                    // Pump gamepad events
-                    while let Some(_) = ctx.gilrs.next_event() {}
+                game.update(ctx);
+                // Pump gamepad events
+                while let Some(_) = ctx.gilrs.next_event() {}
 
-                    game.update(ctx);
+                let frame = ctx.gfx.begin_frame();
+                if let Some(mut frame) = frame {
+                    game.render(ctx, &mut frame);
 
                     let ui_output = ctx.ui.update(game, &ctx.window);
-                    ctx.ui.render(&ctx.window, &ctx.gfx, ui_output);
+                    ctx.ui.render(&ctx.window, &ctx.gfx, ui_output, &mut frame);
 
-                    ctx.gfx.present();
-
-                    ctx.time.tick();
-                    ctx.input.clear_frame_state();
+                    ctx.gfx.end_frame(frame);
                 }
+
+                ctx.time.tick();
+                ctx.input.clear_frame_state();
 
                 if let Some(window) = &self.window {
                     window.request_redraw();

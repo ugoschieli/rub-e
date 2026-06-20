@@ -4,9 +4,10 @@ use bytemuck::{Pod, Zeroable};
 use glam::{Mat4, UVec3, Vec3, uvec3};
 use wgpu::include_wgsl;
 
-use crate::cube::VoxelGpu;
 use crate::constants::CHUNK_SIZE_3;
+use crate::cube::VoxelGpu;
 use crate::game::EngineContext;
+use crate::gfx::Frame;
 use crate::mesher::{chunk_index, mesh_chunk};
 use crate::{
     camera::Camera,
@@ -204,14 +205,11 @@ impl StaticRenderer {
 }
 
 impl Renderer for StaticRenderer {
-    fn render(&mut self, ctx: &mut EngineContext, camera: &Camera) {
-        let mut encoder = ctx.gfx.encoder.as_mut().unwrap();
+    fn render(&mut self, ctx: &mut EngineContext, _camera: &Camera, frame: &mut Frame) {
+        let encoder = &mut frame.encoder;
         {
-            let mut render_pass = utils::create_render_pass(
-                &mut encoder,
-                ctx.gfx.surface_texture_view.as_ref().unwrap(),
-                &ctx.gfx.depth_texture_view,
-            );
+            let mut render_pass =
+                utils::create_render_pass(encoder, &frame.view, &ctx.gfx.depth_texture_view);
 
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_bind_group(0, self.bind_group.current(ctx.gfx.frame_index), &[]);

@@ -5,7 +5,7 @@ use crate::camera::Camera;
 use crate::constants::FRAMES_IN_FLIGHT;
 use crate::cube::Cube;
 use crate::game::EngineContext;
-use crate::gfx::Gfx;
+use crate::gfx::{Frame, Gfx};
 use crate::renderer::Renderer;
 use crate::utils::{self, bindgroup::FrameBuffered};
 
@@ -183,7 +183,7 @@ impl DynamicRenderer {
 }
 
 impl Renderer for DynamicRenderer {
-    fn render(&mut self, ctx: &mut EngineContext, camera: &Camera) {
+    fn render(&mut self, ctx: &mut EngineContext, camera: &Camera, frame: &mut Frame) {
         let gfx = &mut ctx.gfx;
         // The voxels live in raw world space, so the ray origin must be the
         // camera's world-space position (camera.position is in base-changed space).
@@ -198,14 +198,14 @@ impl Renderer for DynamicRenderer {
 
         let draw_args = &self.draw_args_buffers[gfx.frame_index];
 
-        let mut encoder = gfx.encoder.as_mut().unwrap();
+        let encoder = &mut frame.encoder;
 
         // Reset the survivor counter (instance_count, the second u32) before the
         // cull pass repopulates it. vertex_count and the offsets are left intact.
         encoder.clear_buffer(draw_args, 4, Some(4));
 
         {
-            let mut cull_pass = utils::create_compute_pass(&mut encoder);
+            let mut cull_pass = utils::create_compute_pass(encoder);
             cull_pass.set_pipeline(&self.cull_pipeline);
             cull_pass.set_bind_group(0, self.cull_bind_group.current(gfx.frame_index), &[]);
             cull_pass.dispatch_workgroups(
@@ -215,11 +215,8 @@ impl Renderer for DynamicRenderer {
             );
         }
         {
-            let mut render_pass = utils::create_loading_render_pass(
-                &mut encoder,
-                gfx.surface_texture_view.as_ref().unwrap(),
-                &gfx.depth_texture_view,
-            );
+            let mut render_pass =
+                utils::create_loading_render_pass(encoder, &frame.view, &gfx.depth_texture_view);
 
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_bind_group(0, self.render_bind_group.current(gfx.frame_index), &[]);

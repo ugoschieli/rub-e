@@ -17,12 +17,12 @@ use crate::utils::{self, bindgroup::FrameBuffered};
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
 struct Line {
-    anchor: Vec3, // line midpoint in raw world space
+    anchor: Vec3,   // line midpoint in raw world space
     amplitude: f32, // half-length of the travel
-    dir: Vec3, // unit travel direction
-    speed: f32, // oscillation angular speed, rad/s
-    axis: Vec3, // unit spin axis
-    phase: f32, // initial angle
+    dir: Vec3,      // unit travel direction
+    speed: f32,     // oscillation angular speed, rad/s
+    axis: Vec3,     // unit spin axis
+    phase: f32,     // initial angle
 }
 
 /// Slides its assigned boxes back and forth along their own fixed straight
@@ -147,7 +147,7 @@ impl LineUpdater {
 }
 
 impl Updater for LineUpdater {
-    fn update(&mut self, gfx: &mut Gfx) {
+    fn update(&mut self, gfx: &mut Gfx, encoder: &mut wgpu::CommandEncoder) {
         // The only per-frame upload: elapsed seconds driving every line.
         let time = self.start.elapsed().as_secs_f32();
         gfx.queue.write_buffer(
@@ -161,8 +161,7 @@ impl Updater for LineUpdater {
             }),
         );
 
-        let mut encoder = gfx.encoder.as_mut().unwrap();
-        let mut pass = utils::create_compute_pass(&mut encoder);
+        let mut pass = utils::create_compute_pass(encoder);
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, self.bind_group.current(gfx.frame_index), &[]);
         pass.dispatch_workgroups((self.count as usize).div_ceil(64) as u32, 1, 1);
