@@ -3,11 +3,14 @@ use wgpu::include_wgsl;
 
 use crate::camera::Camera;
 use crate::constants::FRAMES_IN_FLIGHT;
+use crate::core::bind_group::FrameBuffered;
+use crate::core::render_pass::RenderPassBuilder;
+use crate::core::surface::Frame;
 use crate::cube::Cube;
 use crate::game::EngineContext;
-use crate::gfx::{Frame, Gfx};
+use crate::gfx::Gfx;
 use crate::renderer::Renderer;
-use crate::utils::{self, bindgroup::FrameBuffered};
+use crate::utils::{self};
 
 /// Number of vertices in the unit-box proxy (12 triangles). This is the constant
 /// `vertex_count` of every indirect draw issued by this renderer.
@@ -86,7 +89,7 @@ impl DynamicRenderer {
 
         // Compute cull pass: view-projection (uniform), transforms (read), the
         // indirect draw args (read_write, atomic counter), and the survivor list.
-        let cull_layout = utils::bindgroup::BindGroupLayoutBuilder::new(&gfx.device)
+        let cull_layout = crate::core::bind_group::BindGroupLayoutBuilder::new(&gfx.device)
             .visibility(wgpu::ShaderStages::COMPUTE)
             .uniform(0) // Camera view-projection matrix
             .storage(1, true) // Box transforms (from the updater)
@@ -128,7 +131,7 @@ impl DynamicRenderer {
 
         // Render pass: camera + the transforms plus the survivor list, which the
         // vertex shader indexes by `instance_index` to recover the real box.
-        let render_layout = utils::bindgroup::BindGroupLayoutBuilder::new(&gfx.device)
+        let render_layout = crate::core::bind_group::BindGroupLayoutBuilder::new(&gfx.device)
             .visibility(wgpu::ShaderStages::VERTEX_FRAGMENT)
             .uniform(0) // Camera view-projection matrix
             .uniform(1) // Camera world position
@@ -161,10 +164,10 @@ impl DynamicRenderer {
             .device
             .create_shader_module(include_wgsl!("../../shaders/renderer/dynamic/ray_box.wgsl"));
 
-        let render_pipeline = utils::pipeline::RenderPipelineBuilder::new(&gfx.device)
+        let render_pipeline = crate::core::pipeline::RenderPipelineBuilder::new(&gfx.device)
             .bind_group(&render_bind_group.layout)
             .vertex(&shader, &[])
-            .fragment(&shader, &[Some(gfx.surface_config.format.into())])
+            .fragment(&shader, &[Some(gfx.surface.config.format.into())])
             .with_depth_test()
             .with_frontface_culling()
             .build();
@@ -215,8 +218,11 @@ impl Renderer for DynamicRenderer {
             );
         }
         {
-            let mut render_pass =
-                utils::create_loading_render_pass(encoder, &frame.view, &gfx.depth_texture_view);
+            let mut render_pass = RenderPassBuilder::new()
+                .target(&frame.view, wgpu::LoadOp::Load, wgpu::StoreOp::Store)
+                .depth_stencil_view(&gfx.depth.view)
+                .depth_ops(wgpu::LoadOp::Load, wgpu::StoreOp::Store)
+                .build(encoder);
 
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_bind_group(0, self.render_bind_group.current(gfx.frame_index), &[]);

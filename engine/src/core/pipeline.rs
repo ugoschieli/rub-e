@@ -13,7 +13,7 @@ pub struct RenderPipelineBuilder<'a> {
 }
 
 impl<'a> RenderPipelineBuilder<'a> {
-    pub fn new(device: &'a wgpu::Device) -> Self {
+    pub const fn new(device: &'a wgpu::Device) -> Self {
         Self {
             device,
             bindgroups: vec![],
@@ -27,11 +27,13 @@ impl<'a> RenderPipelineBuilder<'a> {
         }
     }
 
+    #[must_use]
     pub fn bind_group(mut self, layout: &'a wgpu::BindGroupLayout) -> Self {
         self.bindgroups.push(layout);
         self
     }
 
+    #[must_use]
     pub fn vertex(
         mut self,
         module: &'a wgpu::ShaderModule,
@@ -42,6 +44,7 @@ impl<'a> RenderPipelineBuilder<'a> {
         self
     }
 
+    #[must_use]
     pub fn fragment(
         mut self,
         module: &'a wgpu::ShaderModule,
@@ -52,11 +55,13 @@ impl<'a> RenderPipelineBuilder<'a> {
         self
     }
 
-    pub fn depth_stencil(mut self, state: wgpu::DepthStencilState) -> Self {
+    #[must_use]
+    pub const fn depth_stencil(mut self, state: wgpu::DepthStencilState) -> Self {
         self.depth_stencil = Some(state);
         self
     }
 
+    #[must_use]
     pub fn with_depth_test(mut self) -> Self {
         self.depth_stencil = Some(wgpu::DepthStencilState {
             format: DEPTH_FORMAT,
@@ -68,12 +73,14 @@ impl<'a> RenderPipelineBuilder<'a> {
         self
     }
 
-    pub fn with_backface_culling(mut self) -> Self {
+    #[must_use]
+    pub const fn with_backface_culling(mut self) -> Self {
         self.cull_mode = Some(wgpu::Face::Back);
         self
     }
 
-    pub fn with_frontface_culling(mut self) -> Self {
+    #[must_use]
+    pub const fn with_frontface_culling(mut self) -> Self {
         self.cull_mode = Some(wgpu::Face::Front);
         self
     }
@@ -82,7 +89,7 @@ impl<'a> RenderPipelineBuilder<'a> {
         let vs = self.vertex_shader.expect("vertex shader required");
         let fs = self.fragment_shader.expect("fragment shader required");
 
-        let layout = if self.bindgroups.len() == 0 {
+        let layout = if self.bindgroups.is_empty() {
             None
         } else {
             Some(
@@ -105,16 +112,16 @@ impl<'a> RenderPipelineBuilder<'a> {
                 label: self.label,
                 layout,
                 vertex: wgpu::VertexState {
-                    module: &vs,
+                    module: vs,
                     entry_point: Some("vs_main"),
                     buffers: &self.vertex_buffers,
-                    compilation_options: Default::default(),
+                    compilation_options: wgpu::PipelineCompilationOptions::default(),
                 },
                 fragment: Some(wgpu::FragmentState {
-                    module: &fs,
+                    module: fs,
                     entry_point: Some("fs_main"),
                     targets: &self.color_targets,
-                    compilation_options: Default::default(),
+                    compilation_options: wgpu::PipelineCompilationOptions::default(),
                 }),
                 primitive: wgpu::PrimitiveState {
                     front_face: wgpu::FrontFace::Ccw,

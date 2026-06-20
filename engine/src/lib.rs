@@ -1,6 +1,7 @@
 pub mod camera;
 pub mod config;
 pub mod constants;
+pub mod core;
 pub mod cube;
 pub mod game;
 pub mod gfx;

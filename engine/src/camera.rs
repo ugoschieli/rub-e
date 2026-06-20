@@ -64,7 +64,7 @@ impl Camera {
 
     /// Maps raw world space (x, y, z) into the view's working space (x, z, -y).
     /// Applied to world positions before `view` in [`Camera::matrix`].
-    pub fn base_change() -> Mat4 {
+    pub const fn base_change() -> Mat4 {
         Mat4::from_cols(
             glam::Vec4::new(1.0, 0.0, 0.0, 0.0),
             glam::Vec4::new(0.0, 0.0, -1.0, 0.0),

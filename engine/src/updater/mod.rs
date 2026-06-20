@@ -12,7 +12,7 @@ pub mod line_updater;
 pub mod orbit_updater;
 
 /// One box's full per-box data. Mirrors `BoxTransform` in the shaders
-/// (rotation@0, center@16, half_extent@28, color@32, 48-byte stride).
+/// (`rotation`@0, `center`@16, `half_extent`@28, `color`@32, 48-byte stride).
 ///
 /// `rotation` and `center` are *hot*: an updater's compute pass overwrites them
 /// every frame. `half_extent` and `color` are *cold*: written once when the

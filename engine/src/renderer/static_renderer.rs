@@ -5,15 +5,17 @@ use glam::{Mat4, UVec3, Vec3, uvec3};
 use wgpu::include_wgsl;
 
 use crate::constants::CHUNK_SIZE_3;
+use crate::core::bind_group::FrameBuffered;
+use crate::core::render_pass::RenderPassBuilder;
+use crate::core::surface::Frame;
 use crate::cube::VoxelGpu;
 use crate::game::EngineContext;
-use crate::gfx::Frame;
 use crate::mesher::{chunk_index, mesh_chunk};
 use crate::{
     camera::Camera,
     gfx::Gfx,
     renderer::Renderer,
-    utils::{self, bindgroup::FrameBuffered},
+    utils::{self},
 };
 
 #[repr(C)]
@@ -37,7 +39,7 @@ pub struct Face {
 }
 
 impl Face {
-    pub fn new(
+    pub const fn new(
         position: Vec3,
         width: u32,
         height: u32,
@@ -53,7 +55,7 @@ impl Face {
         }
     }
 
-    pub fn to_gpu(&self) -> FaceGpu {
+    pub const fn to_gpu(&self) -> FaceGpu {
         FaceGpu {
             position: self.position,
             width: self.width,
@@ -76,23 +78,23 @@ pub enum FaceDirection {
 }
 
 impl FaceDirection {
-    pub fn to_gpu(&self) -> u32 {
+    pub const fn to_gpu(&self) -> u32 {
         match self {
-            FaceDirection::Right => 0,
-            FaceDirection::Left => 1,
-            FaceDirection::Forward => 2,
-            FaceDirection::Backward => 3,
-            FaceDirection::Up => 4,
-            FaceDirection::Down => 5,
+            Self::Right => 0,
+            Self::Left => 1,
+            Self::Forward => 2,
+            Self::Backward => 3,
+            Self::Up => 4,
+            Self::Down => 5,
         }
     }
 }
 
-pub fn pack_color(color: UVec3) -> u32 {
+pub const fn pack_color(color: UVec3) -> u32 {
     color.x | (color.y << 10) | (color.z << 20) // packed color (10 bit for each channel)
 }
 
-pub fn unpack_color(color: u32) -> UVec3 {
+pub const fn unpack_color(color: u32) -> UVec3 {
     let r = color & 1023;
     let g = (color >> 10) & 1023;
     let b = (color >> 20) & 1023;
@@ -130,7 +132,7 @@ impl StaticRenderer {
 
         let faces = mesh_chunk(&chunk)
             .iter()
-            .map(|face| face.to_gpu())
+            .map(Face::to_gpu)
             .collect::<Vec<FaceGpu>>();
 
         // The flipped faces (Left, Forward, Down) are pure rotations: their
@@ -160,7 +162,7 @@ impl StaticRenderer {
             &faces,
         );
 
-        let layout = utils::bindgroup::BindGroupLayoutBuilder::new(&gfx.device)
+        let layout = crate::core::bind_group::BindGroupLayoutBuilder::new(&gfx.device)
             .visibility(wgpu::ShaderStages::COMPUTE | wgpu::ShaderStages::VERTEX_FRAGMENT)
             .uniform(0) // Camera
             .uniform(1) // Face Matrices
@@ -188,10 +190,10 @@ impl StaticRenderer {
             "../../shaders/renderer/static/face_draw.wgsl"
         ));
 
-        let render_pipeline = utils::pipeline::RenderPipelineBuilder::new(&gfx.device)
+        let render_pipeline = crate::core::pipeline::RenderPipelineBuilder::new(&gfx.device)
             .bind_group(&bind_group.layout)
             .vertex(&shader, &[])
-            .fragment(&shader, &[Some(gfx.surface_config.format.into())])
+            .fragment(&shader, &[Some(gfx.surface.config.format.into())])
             .with_depth_test()
             .with_backface_culling()
             .build();
@@ -208,8 +210,15 @@ impl Renderer for StaticRenderer {
     fn render(&mut self, ctx: &mut EngineContext, _camera: &Camera, frame: &mut Frame) {
         let encoder = &mut frame.encoder;
         {
-            let mut render_pass =
-                utils::create_render_pass(encoder, &frame.view, &ctx.gfx.depth_texture_view);
+            let mut render_pass = RenderPassBuilder::new()
+                .target(
+                    &frame.view,
+                    wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                    wgpu::StoreOp::Store,
+                )
+                .depth_stencil_view(&ctx.gfx.depth.view)
+                .depth_ops(wgpu::LoadOp::Clear(1.0), wgpu::StoreOp::Store)
+                .build(encoder);
 
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_bind_group(0, self.bind_group.current(ctx.gfx.frame_index), &[]);

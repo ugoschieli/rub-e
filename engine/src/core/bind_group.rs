@@ -10,7 +10,7 @@ pub struct BindGroupBuilder<'a> {
 }
 
 impl<'a> BindGroupBuilder<'a> {
-    pub fn new(device: &'a wgpu::Device) -> Self {
+    pub const fn new(device: &'a wgpu::Device) -> Self {
         Self {
             device,
             entries: vec![],
@@ -19,11 +19,13 @@ impl<'a> BindGroupBuilder<'a> {
         }
     }
 
-    pub fn visibility(mut self, visibility: wgpu::ShaderStages) -> Self {
+    #[must_use]
+    pub const fn visibility(mut self, visibility: wgpu::ShaderStages) -> Self {
         self.visibility = Some(visibility);
         self
     }
 
+    #[must_use]
     pub fn uniform(mut self, binding: u32, buffer: &'a wgpu::Buffer) -> Self {
         self.entries.push((
             binding,
@@ -37,6 +39,7 @@ impl<'a> BindGroupBuilder<'a> {
         self
     }
 
+    #[must_use]
     pub fn storage(mut self, binding: u32, buffer: &'a wgpu::Buffer, read_only: bool) -> Self {
         self.entries.push((
             binding,
@@ -50,6 +53,7 @@ impl<'a> BindGroupBuilder<'a> {
         self
     }
 
+    #[must_use]
     pub fn texture(
         mut self,
         binding: u32,
@@ -68,6 +72,7 @@ impl<'a> BindGroupBuilder<'a> {
         self
     }
 
+    #[must_use]
     pub fn sampler(mut self, binding: u32, sampler: &'a wgpu::Sampler) -> Self {
         self.entries.push((
             binding,
@@ -117,7 +122,7 @@ impl<'a> BindGroupBuilder<'a> {
     }
 }
 
-/// Only creates the layout not the BindGroup
+/// Only creates the layout not the `BindGroup`
 /// Use when double buffering is necessary
 #[derive(Debug)]
 pub struct BindGroupLayoutBuilder<'a> {
@@ -128,7 +133,7 @@ pub struct BindGroupLayoutBuilder<'a> {
 }
 
 impl<'a> BindGroupLayoutBuilder<'a> {
-    pub fn new(device: &'a wgpu::Device) -> Self {
+    pub const fn new(device: &'a wgpu::Device) -> Self {
         Self {
             device,
             entries: Vec::new(),
@@ -137,16 +142,19 @@ impl<'a> BindGroupLayoutBuilder<'a> {
         }
     }
 
-    pub fn visibility(mut self, visibility: wgpu::ShaderStages) -> Self {
+    #[must_use]
+    pub const fn visibility(mut self, visibility: wgpu::ShaderStages) -> Self {
         self.visibility = visibility;
         self
     }
 
-    pub fn label(mut self, label: &'a str) -> Self {
+    #[must_use]
+    pub const fn label(mut self, label: &'a str) -> Self {
         self.label = Some(label);
         self
     }
 
+    #[must_use]
     pub fn uniform(mut self, binding: u32) -> Self {
         self.entries.push(wgpu::BindGroupLayoutEntry {
             binding,
@@ -161,6 +169,7 @@ impl<'a> BindGroupLayoutBuilder<'a> {
         self
     }
 
+    #[must_use]
     pub fn storage(mut self, binding: u32, read_only: bool) -> Self {
         self.entries.push(wgpu::BindGroupLayoutEntry {
             binding,
@@ -175,9 +184,10 @@ impl<'a> BindGroupLayoutBuilder<'a> {
         self
     }
 
+    #[must_use]
     pub fn texture(mut self, binding: u32, sample_type: wgpu::TextureSampleType) -> Self {
         self.entries.push(wgpu::BindGroupLayoutEntry {
-            binding: binding,
+            binding,
             visibility: self.visibility,
             ty: wgpu::BindingType::Texture {
                 sample_type,
@@ -189,6 +199,7 @@ impl<'a> BindGroupLayoutBuilder<'a> {
         self
     }
 
+    #[must_use]
     pub fn sampler(mut self, binding: u32) -> Self {
         self.entries.push(wgpu::BindGroupLayoutEntry {
             binding,
@@ -232,7 +243,7 @@ impl FrameBuffered {
         Self { layout, groups }
     }
 
-    pub fn current(&self, frame: usize) -> &wgpu::BindGroup {
-        &self.groups[(frame as usize) % FRAMES_IN_FLIGHT]
+    pub const fn current(&self, frame: usize) -> &wgpu::BindGroup {
+        &self.groups[frame % FRAMES_IN_FLIGHT]
     }
 }

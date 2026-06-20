@@ -1,9 +1,9 @@
 use egui::Ui;
 use etib::camera::Camera;
 use etib::constants::{CUBE_NUMBER, CUBE_RANGE};
+use etib::core::surface::Frame;
 use etib::cube::Cube;
 use etib::game::{EngineContext, Game};
-use etib::gfx::Frame;
 use etib::renderer::Renderer;
 use etib::renderer::dynamic_renderer::DynamicRenderer;
 use etib::renderer::static_renderer::StaticRenderer;

@@ -1,5 +1,6 @@
+use crate::core::surface::Frame;
 use crate::game::Game;
-use crate::gfx::{Frame, Gfx};
+use crate::gfx::Gfx;
 use winit::window::Window;
 
 pub(crate) struct UiState {
@@ -27,7 +28,7 @@ impl UiState {
 
         let renderer = egui_wgpu::Renderer::new(
             &gfx.device,
-            gfx.surface_config.format,
+            gfx.surface.config.format,
             egui_wgpu::RendererOptions::default(),
         );
 
@@ -40,8 +41,7 @@ impl UiState {
 
     pub fn update<G: Game>(&mut self, game: &mut G, window: &Window) -> egui::FullOutput {
         let raw_input = self.state.take_egui_input(window);
-        let full_output = self.ctx.run_ui(raw_input, |ui| game.ui(ui));
-        full_output
+        self.ctx.run_ui(raw_input, |ui| game.ui(ui))
     }
 
     pub fn render(
@@ -59,7 +59,7 @@ impl UiState {
             .tessellate(full_output.shapes, full_output.pixels_per_point);
 
         let screen_descriptor = egui_wgpu::ScreenDescriptor {
-            size_in_pixels: [gfx.surface_config.width, gfx.surface_config.height],
+            size_in_pixels: [gfx.surface.config.width, gfx.surface.config.height],
             pixels_per_point: window.scale_factor() as f32,
         };
 

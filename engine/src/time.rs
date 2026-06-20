@@ -18,7 +18,7 @@ impl Default for Time {
 }
 
 impl Time {
-    /// Create a new TimeState
+    /// Create a new `TimeState`
     pub fn new() -> Self {
         Self {
             now: Instant::now(),

@@ -6,10 +6,11 @@ use std::time::Instant;
 use wgpu::include_wgsl;
 
 use crate::constants::FRAMES_IN_FLIGHT;
+use crate::core::bind_group::FrameBuffered;
 use crate::cube::Cube;
 use crate::gfx::Gfx;
 use crate::updater::{Params, Updater};
-use crate::utils::{self, bindgroup::FrameBuffered};
+use crate::utils::{self};
 
 /// Cold, static orbit of one box. Uploaded once at init; the GPU update pass
 /// derives the per-frame position/orientation from this plus the time uniform.
@@ -94,7 +95,7 @@ impl OrbitUpdater {
         }
 
         // params (uniform), orbits (read), shared transforms (write).
-        let layout = utils::bindgroup::BindGroupLayoutBuilder::new(&gfx.device)
+        let layout = crate::core::bind_group::BindGroupLayoutBuilder::new(&gfx.device)
             .visibility(wgpu::ShaderStages::COMPUTE)
             .uniform(0) // Params (time + range)
             .storage(1, true) // Orbits (cold)

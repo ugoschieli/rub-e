@@ -16,7 +16,7 @@ pub enum HdrMode {
 /// The engine configuration struct
 #[derive(Debug, Deserialize)]
 pub struct EngineConfig {
-    /// Whether VSync is enabled
+    /// Whether vsync is enabled
     #[serde(default = "default_vsync")]
     pub vsync: bool,
     /// HDR rendering mode (auto, enabled, disabled)
@@ -27,15 +27,15 @@ pub struct EngineConfig {
     pub peak_brightness_nits: f32,
 }
 
-fn default_vsync() -> bool {
+const fn default_vsync() -> bool {
     true
 }
 
-fn default_hdr_mode() -> HdrMode {
+const fn default_hdr_mode() -> HdrMode {
     HdrMode::Auto
 }
 
-fn default_peak_brightness_nits() -> f32 {
+const fn default_peak_brightness_nits() -> f32 {
     1000.0
 }
 

@@ -9,7 +9,8 @@ use winit::window::{CursorGrabMode, Window, WindowAttributes, WindowId};
 use winit::{application::ApplicationHandler, error::EventLoopError, event_loop::EventLoop};
 
 use crate::config::EngineConfig;
-use crate::gfx::{Frame, Gfx};
+use crate::core::surface::Frame;
+use crate::gfx::Gfx;
 use crate::input::InputState;
 use crate::time::Time;
 use crate::ui::UiState;
