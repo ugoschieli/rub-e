@@ -123,12 +123,8 @@ impl OrbitUpdater {
             .device
             .create_shader_module(include_wgsl!("../../shaders/orbit.wgsl"));
 
-        let pipeline = utils::create_compute_pipeline_from_module(
-            &gfx.device,
-            "ETIB Orbit Update",
-            &bind_group.layout,
-            &shader,
-        );
+        let pipeline =
+            gfx.create_compute_pipeline("ETIB Orbit Update", &bind_group.layout, 0, &shader);
 
         Self {
             pipeline,
@@ -156,7 +152,7 @@ impl Updater for OrbitUpdater {
             }),
         );
 
-        let mut pass = utils::create_compute_pass(encoder);
+        let mut pass = gfx.create_compute_pass("orbit_updater compute pass", encoder);
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, self.bind_group.current(gfx.frame_index), &[]);
         pass.dispatch_workgroups((self.count as usize).div_ceil(64) as u32, 1, 1);

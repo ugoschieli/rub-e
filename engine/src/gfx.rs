@@ -5,6 +5,7 @@ use winit::window::Window;
 
 use crate::config::EngineConfig;
 use crate::constants::{DEPTH_FORMAT, FRAMES_IN_FLIGHT};
+use crate::core::compute::{create_compute_pass, create_compute_pipeline};
 use crate::core::surface::{Frame, Surface};
 use crate::core::texture::Texture;
 
@@ -107,5 +108,29 @@ impl Gfx {
         height: u32,
     ) -> Texture {
         Texture::new_2d(&self.device, label, format, usage, width, height)
+    }
+
+    pub fn create_compute_pipeline(
+        &self,
+        label: &str,
+        bind_group_layout: &wgpu::BindGroupLayout,
+        immediate_size: u32,
+        shader: &wgpu::ShaderModule,
+    ) -> wgpu::ComputePipeline {
+        create_compute_pipeline(
+            &self.device,
+            label,
+            bind_group_layout,
+            immediate_size,
+            shader,
+        )
+    }
+
+    pub fn create_compute_pass<'encoder>(
+        &self,
+        label: &str,
+        encoder: &'encoder mut wgpu::CommandEncoder,
+    ) -> wgpu::ComputePass<'encoder> {
+        create_compute_pass(label, encoder)
     }
 }

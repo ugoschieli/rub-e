@@ -122,10 +122,10 @@ impl DynamicRenderer {
             "../../shaders/renderer/dynamic/box_cull.wgsl"
         ));
 
-        let cull_pipeline = utils::create_compute_pipeline_from_module(
-            &gfx.device,
+        let cull_pipeline = gfx.create_compute_pipeline(
             "ETIB Dynamic Cull",
             &cull_bind_group.layout,
+            0,
             &cull_shader,
         );
 
@@ -208,7 +208,7 @@ impl Renderer for DynamicRenderer {
         encoder.clear_buffer(draw_args, 4, Some(4));
 
         {
-            let mut cull_pass = utils::create_compute_pass(encoder);
+            let mut cull_pass = gfx.create_compute_pass("dynamic_renderer cull pass", encoder);
             cull_pass.set_pipeline(&self.cull_pipeline);
             cull_pass.set_bind_group(0, self.cull_bind_group.current(gfx.frame_index), &[]);
             cull_pass.dispatch_workgroups(
