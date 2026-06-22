@@ -3,10 +3,19 @@ use crate::gfx::Gfx;
 use crate::input::InputState;
 use crate::time::Time;
 use crate::utils;
-use glam::{Mat4, Quat, Vec3};
+use bytemuck::{Pod, Zeroable};
+use glam::{Mat4, Quat, Vec3, Vec4};
 use std::f32::consts::FRAC_PI_4;
 use winit::dpi::PhysicalSize;
 use winit::keyboard::KeyCode;
+
+#[repr(C)]
+#[derive(Copy, Clone, Pod, Zeroable)]
+struct CameraGpu {
+    view_matrix: Mat4,
+    inv_view_matrix: Mat4,
+    world_position: Vec4,
+}
 
 #[derive(Debug, Clone)]
 pub struct Camera {
@@ -21,14 +30,14 @@ impl Camera {
         let mut buffers = Vec::with_capacity(FRAMES_IN_FLIGHT);
 
         for i in 0..FRAMES_IN_FLIGHT {
-            let buffer = utils::create_buffer_init(
+            let new_buffer = utils::create_buffer_init(
                 &gfx.device,
-                format!("ETIB Camera Buffer {i}").as_str(),
+                format!("{i}").as_str(),
                 wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-                &[Mat4::ZERO],
+                &[CameraGpu::zeroed()],
             );
 
-            buffers.push(buffer);
+            buffers.push(new_buffer);
         }
 
         Self {
@@ -39,11 +48,22 @@ impl Camera {
         }
     }
 
-    pub fn upload(&self, gfx: &Gfx, size: PhysicalSize<u32>) {
-        let buffer = &self.buffers[gfx.frame_index];
+    pub fn upload(&self, gfx: &Gfx, size: PhysicalSize<u32>, time: &Time) {
+        let new_buffer = &self.buffers[gfx.frame_index];
 
         gfx.queue
-            .write_buffer(buffer, 0, bytemuck::bytes_of(&self.matrix(size)));
+            .write_buffer(new_buffer, 0, bytemuck::bytes_of(&self.to_gpu(size, time)));
+    }
+
+    fn to_gpu(&self, size: PhysicalSize<u32>, time: &Time) -> CameraGpu {
+        let matrix = self.matrix(size);
+        CameraGpu {
+            view_matrix: matrix,
+            inv_view_matrix: matrix.transpose(),
+            world_position: self
+                .world_position()
+                .extend(time.start.elapsed().as_secs_f32()),
+        }
     }
 
     pub fn matrix(&self, size: PhysicalSize<u32>) -> Mat4 {
@@ -66,10 +86,10 @@ impl Camera {
     /// Applied to world positions before `view` in [`Camera::matrix`].
     const fn base_change() -> Mat4 {
         Mat4::from_cols(
-            glam::Vec4::new(1.0, 0.0, 0.0, 0.0),
-            glam::Vec4::new(0.0, 0.0, -1.0, 0.0),
-            glam::Vec4::new(0.0, 1.0, 0.0, 0.0),
-            glam::Vec4::new(0.0, 0.0, 0.0, 1.0),
+            Vec4::new(1.0, 0.0, 0.0, 0.0),
+            Vec4::new(0.0, 0.0, -1.0, 0.0),
+            Vec4::new(0.0, 1.0, 0.0, 0.0),
+            Vec4::new(0.0, 0.0, 0.0, 1.0),
         )
     }
 

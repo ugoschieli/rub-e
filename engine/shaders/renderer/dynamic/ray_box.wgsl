@@ -39,15 +39,20 @@ struct BoxHit {
     normal: vec3<f32>,
 }
 
-@group(0) @binding(0) var<uniform> camera: mat4x4<f32>;
+struct Camera {
+    view_matrix: mat4x4<f32>,
+    inv_view_matrix: mat4x4<f32>,
+    world_pos: vec4<f32>,
+}
+
 // xyz: camera world position (ray origin). w: elapsed seconds since startup,
 // driving the per-box spawn "pop" below.
-@group(0) @binding(1) var<uniform> camera_pos: vec4<f32>;
-@group(0) @binding(2) var<storage, read> transforms: array<BoxTransform>;
+@group(0) @binding(0) var<uniform> camera: Camera;
+@group(0) @binding(1) var<storage, read> transforms: array<BoxTransform>;
 // Compacted indices of the boxes that survived GPU frustum culling, written by
 // `box_cull.wgsl`. The indirect draw issues one instance per survivor, so the
 // instance index selects a slot here, which in turn selects the real box.
-@group(0) @binding(3) var<storage, read> visible_indices: array<u32>;
+@group(0) @binding(2) var<storage, read> visible_indices: array<u32>;
 
 // Unit cube corners in [0,1]^3, 12 triangles (36 vertices), outward faces wound
 // CCW to match FrontFace::Ccw. The pipeline culls front faces, so the back faces
@@ -133,11 +138,11 @@ fn vs_main(
     // Uniform half-extent: the scalar broadcasts to all three axes, so the proxy
     // stays a cube. Scaled by the spawn pop so boxes grow in progressively; at
     // scale 0 the proxy collapses to a point and the box is simply not drawn.
-    let half_extents = vec3<f32>(t.half_extent * spawn_pop(index, camera_pos.w));
+    let half_extents = vec3<f32>(t.half_extent * spawn_pop(index, camera.world_pos.w));
     let local = (BOX_VERTICES[vertex_index] * 2.0 - 1.0) * half_extents;
     let world_pos = t.center + quat_rotate(t.rotation, local);
 
-    out.clip_position = camera * vec4<f32>(world_pos, 1.0);
+    out.clip_position = camera.view_matrix * vec4<f32>(world_pos, 1.0);
     out.world_pos = world_pos;
     out.center = t.center;
     out.half_extents = half_extents;
@@ -201,7 +206,7 @@ fn ray_box_intersect(
 
 @fragment
 fn fs_main(in: VertexOutput) -> FragmentOutput {
-    let ro = camera_pos.xyz;
+    let ro = camera.world_pos.xyz;
     let rd = in.world_pos - ro;
 
     let hit = ray_box_intersect(ro, rd, in.center, in.half_extents, in.rotation, true);
@@ -210,7 +215,7 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
     }
 
     let hit_world = ro + rd * hit.dist;
-    let clip = camera * vec4<f32>(hit_world, 1.0);
+    let clip = camera.view_matrix * vec4<f32>(hit_world, 1.0);
 
     let base = vec3<f32>(
         f32(in.color & 1023u) / 1023.0,

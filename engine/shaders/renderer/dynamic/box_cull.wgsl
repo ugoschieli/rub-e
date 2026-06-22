@@ -30,7 +30,15 @@ struct DrawArgs {
     first_instance: u32,
 }
 
-@group(0) @binding(0) var<uniform> view_proj: mat4x4<f32>;
+struct Camera {
+    view_matrix: mat4x4<f32>,
+    inv_view_matrix: mat4x4<f32>,
+    world_pos: vec4<f32>,
+}
+
+// xyz: camera world position (ray origin). w: elapsed seconds since startup,
+// driving the per-box spawn "pop" below.
+@group(0) @binding(0) var<uniform> camera: Camera;
 @group(0) @binding(1) var<storage, read> transforms: array<BoxTransform>;
 @group(0) @binding(2) var<storage, read_write> draw_args: DrawArgs;
 @group(0) @binding(3) var<storage, read_write> visible_indices: array<u32>;
@@ -93,7 +101,7 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     let world_min = t.center - half_size;
     let world_max = t.center + half_size;
 
-    let planes = extract_planes(view_proj);
+    let planes = extract_planes(camera.view_matrix);
     for (var i = 0; i < 5; i++) {
         if outside_plane(planes[i], world_min, world_max) {
             return;

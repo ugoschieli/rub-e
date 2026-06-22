@@ -1,13 +1,12 @@
-use std::collections::HashMap;
-
-use bytemuck::{Pod, Zeroable};
-use glam::{UVec3, uvec3};
-
 use crate::renderer::static_renderer::{Face, FaceDirection, unpack_color};
 use crate::{
-    constants::{CHUNK_SIZE_1, CHUNK_SIZE_2, CHUNK_SIZE_3, CHUNK_SIZE_P},
+    constants::{CHUNK_SIZE_1, CHUNK_SIZE_3, CHUNK_SIZE_P},
     cube::VoxelGpu,
 };
+use bytemuck::{Pod, Zeroable};
+use glam::{UVec3, uvec3};
+use std::collections::HashMap;
+use std::hash::BuildHasher;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
@@ -22,30 +21,25 @@ pub struct FaceGpu {
     pub data: u64,
 }
 
-#[derive(Debug, PartialEq)]
-pub struct GreedyQuad {
-    pub u: u8,
-    pub v: u8,
-    pub w: u8,
-    pub h: u8,
+#[derive(Debug, PartialEq, Eq)]
+struct GreedyQuad {
+    u: u8,
+    v: u8,
+    w: u8,
+    h: u8,
 }
 
 impl GreedyQuad {
-    pub fn new(u: u32, v: u32, w: u32, h: u32) -> Self {
-        Self {
-            u: u as u8,
-            v: v as u8,
-            w: w as u8,
-            h: h as u8,
-        }
+    const fn new(u: u8, v: u8, w: u8, h: u8) -> Self {
+        Self { u, v, w, h }
     }
 }
 
 pub fn mesh_chunk(chunk: &[VoxelGpu; CHUNK_SIZE_3]) -> Vec<Face> {
     // solid binary for each x,y,z axis (3)
-    let mut axis_cols = [[[0u64; CHUNK_SIZE_P]; CHUNK_SIZE_P]; 3];
+    let mut axis_cols: Box<[[[u64; CHUNK_SIZE_P]; CHUNK_SIZE_P]; 3]> = bytemuck::zeroed_box();
     // the cull mask to perform greedy slicing, based on solids on previous axis_cols
-    let mut col_face_masks = [[[0u64; CHUNK_SIZE_P]; CHUNK_SIZE_P]; 6];
+    let mut col_face_masks: Box<[[[u64; CHUNK_SIZE_P]; CHUNK_SIZE_P]; 6]> = bytemuck::zeroed_box();
 
     // iterate over all voxels in the chunk to fill axis_cols
     fill_axis_cols(chunk, &mut axis_cols);
@@ -84,16 +78,16 @@ pub fn mesh_chunk(chunk: &[VoxelGpu; CHUNK_SIZE_3]) -> Vec<Face> {
             _ => FaceDirection::Down,
         };
 
-        for (color, axis_plane) in block_data.into_iter() {
-            for (axis_pos, plane) in axis_plane.into_iter() {
+        for (color, axis_plane) in block_data {
+            for (axis_pos, plane) in axis_plane {
                 let quads_from_axis = greedy_mesh_binary_plane(plane);
-                quads_from_axis.into_iter().for_each(|q| {
+                for q in quads_from_axis {
                     let w = axis_pos;
 
                     let voxel_pos = match axis {
-                        0 | 1 => uvec3(w, q.v as u32, q.u as u32), // left, right
-                        2 | 3 => uvec3(q.u as u32, w, q.v as u32), // forward, back
-                        _ => uvec3(q.u as u32, q.v as u32, w),     // down,up
+                        0 | 1 => uvec3(w, u32::from(q.v), u32::from(q.u)), // left, right
+                        2 | 3 => uvec3(u32::from(q.u), w, u32::from(q.v)), // forward, back
+                        _ => uvec3(u32::from(q.u), u32::from(q.v), w),     // down,up
                     };
 
                     // For X faces the greedy plane is transposed relative to the
@@ -101,8 +95,8 @@ pub fn mesh_chunk(chunk: &[VoxelGpu; CHUNK_SIZE_3]) -> Vec<Face> {
                     // height scales local Z -> world Z), so width/height must be
                     // swapped. Y and Z faces already align.
                     let (width, height) = match axis {
-                        0 | 1 => (q.h as u32, q.w as u32),
-                        _ => (q.w as u32, q.h as u32),
+                        0 | 1 => (u32::from(q.h), u32::from(q.w)),
+                        _ => (u32::from(q.w), u32::from(q.h)),
                     };
 
                     // The Left/Forward/Down face matrices are pure rotations that
@@ -124,7 +118,7 @@ pub fn mesh_chunk(chunk: &[VoxelGpu; CHUNK_SIZE_3]) -> Vec<Face> {
                         height,
                         direction,
                     });
-                });
+                }
             }
         }
     }
@@ -135,16 +129,14 @@ pub const fn chunk_index(pos: UVec3) -> usize {
     pos.x as usize + CHUNK_SIZE_1 * (pos.y as usize + CHUNK_SIZE_1 * pos.z as usize)
 }
 
-pub const fn chunk_pos(i: usize) -> UVec3 {
-    UVec3::new(
-        (i % CHUNK_SIZE_1) as u32,
-        (i.div_euclid(CHUNK_SIZE_1) % CHUNK_SIZE_1) as u32,
-        i.div_euclid(CHUNK_SIZE_2) as u32,
-    )
-}
+// fn chunk_pos(i: u32) -> UVec3 {
+//     let cs = u32::try_from(CHUNK_SIZE_1).unwrap();
+//     let cs2 = u32::try_from(CHUNK_SIZE_2).unwrap();
+//     UVec3::new(i % cs, i.div_euclid(cs) % cs, i.div_euclid(cs2))
+// }
 
 const fn add_voxel_to_axis_cols(
-    b: &VoxelGpu,
+    b: VoxelGpu,
     x: usize,
     y: usize,
     z: usize,
@@ -160,21 +152,25 @@ const fn add_voxel_to_axis_cols(
     }
 }
 
-pub fn fill_axis_cols(
+fn fill_axis_cols(
     chunk: &[VoxelGpu; CHUNK_SIZE_3],
     axis_cols: &mut [[[u64; CHUNK_SIZE_P]; CHUNK_SIZE_P]; 3],
 ) {
     for z in 0..CHUNK_SIZE_1 {
         for y in 0..CHUNK_SIZE_1 {
             for x in 0..CHUNK_SIZE_1 {
-                let i = chunk_index(uvec3(x as u32, y as u32, z as u32));
-                add_voxel_to_axis_cols(&chunk[i], x + 1, y + 1, z + 1, axis_cols);
+                let i = chunk_index(uvec3(
+                    u32::try_from(x).unwrap(),
+                    u32::try_from(y).unwrap(),
+                    u32::try_from(z).unwrap(),
+                ));
+                add_voxel_to_axis_cols(chunk[i], x + 1, y + 1, z + 1, axis_cols);
             }
         }
     }
 }
 
-pub fn cull_axis_cols(
+fn cull_axis_cols(
     axis_cols: &[[[u64; CHUNK_SIZE_P]; CHUNK_SIZE_P]; 3],
     col_face_masks: &mut [[[u64; CHUNK_SIZE_P]; CHUNK_SIZE_P]; 6],
 ) {
@@ -191,10 +187,14 @@ pub fn cull_axis_cols(
     }
 }
 
-pub fn build_binary_planes(
+type BinaryPlane = [u64; CHUNK_SIZE_1];
+type PlanesByType<S2> = HashMap<u32, BinaryPlane, S2>;
+type PlanesByAxis<S1, S2> = HashMap<u32, PlanesByType<S2>, S1>;
+type BinaryPlaneData<S1, S2> = [PlanesByAxis<S1, S2>; 6];
+fn build_binary_planes<S1: BuildHasher, S2: Default + BuildHasher>(
     col_face_masks: &[[[u64; CHUNK_SIZE_P]; CHUNK_SIZE_P]; 6],
     chunk: &[VoxelGpu; CHUNK_SIZE_3],
-    data: &mut [HashMap<u32, HashMap<u32, [u64; CHUNK_SIZE_1]>>; 6],
+    data: &mut BinaryPlaneData<S1, S2>,
 ) {
     for axis in 0..6 {
         for v in 0..CHUNK_SIZE_1 {
@@ -213,10 +213,12 @@ pub fn build_binary_planes(
                     col &= col - 1;
 
                     // get the voxel position based on axis
+                    let u = u32::try_from(u).unwrap();
+                    let v = u32::try_from(v).unwrap();
                     let voxel_pos = match axis {
-                        0 | 1 => uvec3(w, v as u32, u as u32), // left, right
-                        2 | 3 => uvec3(u as u32, w, v as u32), // forward, back
-                        _ => uvec3(u as u32, v as u32, w),     // down,up
+                        0 | 1 => uvec3(w, v, u), // left, right
+                        2 | 3 => uvec3(u, w, v), // forward, back
+                        _ => uvec3(u, v, w),     // down,up
                     };
 
                     let current_voxel = chunk[chunk_index(voxel_pos)];
@@ -227,14 +229,14 @@ pub fn build_binary_planes(
                         .or_default()
                         .entry(w)
                         .or_insert([0; CHUNK_SIZE_1]);
-                    data[u] |= 1 << v;
+                    data[u as usize] |= 1 << v;
                 }
             }
         }
     }
 }
 
-pub fn greedy_mesh_binary_plane(mut data: [u64; CHUNK_SIZE_1]) -> Vec<GreedyQuad> {
+fn greedy_mesh_binary_plane(mut data: [u64; CHUNK_SIZE_1]) -> Vec<GreedyQuad> {
     let mut quads = vec![];
     for u in 0..CHUNK_SIZE_1 {
         let mut v = 0;
@@ -264,7 +266,12 @@ pub fn greedy_mesh_binary_plane(mut data: [u64; CHUNK_SIZE_1]) -> Vec<GreedyQuad
 
                 w += 1;
             }
-            quads.push(GreedyQuad::new(u as u32, v as u32, w as u32, h));
+            quads.push(GreedyQuad::new(
+                u8::try_from(u).unwrap(),
+                u8::try_from(v).unwrap(),
+                u8::try_from(w).unwrap(),
+                u8::try_from(h).unwrap(),
+            ));
             v += h as usize;
         }
     }
@@ -277,8 +284,8 @@ mod tests {
 
     #[test]
     fn fill_axis_cols_test() {
-        let mut chunk = [VoxelGpu { color: 0 }; CHUNK_SIZE_3];
-        let mut axis_cols = [[[0u64; CHUNK_SIZE_P]; CHUNK_SIZE_P]; 3];
+        let mut chunk: Box<[VoxelGpu; CHUNK_SIZE_3]> = bytemuck::zeroed_box();
+        let mut axis_cols: Box<[[[u64; CHUNK_SIZE_P]; CHUNK_SIZE_P]; 3]> = bytemuck::zeroed_box();
 
         chunk[chunk_index(uvec3(0, 0, 0))] = VoxelGpu { color: 1023 };
         chunk[chunk_index(uvec3(1, 0, 0))] = VoxelGpu { color: 1023 };
@@ -300,9 +307,10 @@ mod tests {
 
     #[test]
     fn cull_axis_cols_test() {
-        let mut chunk = [VoxelGpu { color: 0 }; CHUNK_SIZE_3];
-        let mut axis_cols = [[[0u64; CHUNK_SIZE_P]; CHUNK_SIZE_P]; 3];
-        let mut col_face_masks = [[[0u64; CHUNK_SIZE_P]; CHUNK_SIZE_P]; 6];
+        let mut chunk: Box<[VoxelGpu; CHUNK_SIZE_3]> = bytemuck::zeroed_box();
+        let mut axis_cols: Box<[[[u64; CHUNK_SIZE_P]; CHUNK_SIZE_P]; 3]> = bytemuck::zeroed_box();
+        let mut col_face_masks: Box<[[[u64; CHUNK_SIZE_P]; CHUNK_SIZE_P]; 6]> =
+            bytemuck::zeroed_box();
 
         chunk[chunk_index(uvec3(0, 0, 0))] = VoxelGpu { color: 1023 };
         chunk[chunk_index(uvec3(1, 0, 0))] = VoxelGpu { color: 1023 };
@@ -323,9 +331,10 @@ mod tests {
 
     #[test]
     fn build_binary_planes_test() {
-        let mut chunk = [VoxelGpu { color: 0 }; CHUNK_SIZE_3];
-        let mut axis_cols = [[[0u64; CHUNK_SIZE_P]; CHUNK_SIZE_P]; 3];
-        let mut col_face_masks = [[[0u64; CHUNK_SIZE_P]; CHUNK_SIZE_P]; 6];
+        let mut chunk: Box<[VoxelGpu; CHUNK_SIZE_3]> = bytemuck::zeroed_box();
+        let mut axis_cols: Box<[[[u64; CHUNK_SIZE_P]; CHUNK_SIZE_P]; 3]> = bytemuck::zeroed_box();
+        let mut col_face_masks: Box<[[[u64; CHUNK_SIZE_P]; CHUNK_SIZE_P]; 6]> =
+            bytemuck::zeroed_box();
 
         chunk[chunk_index(uvec3(1, 0, 1))] = VoxelGpu { color: 1023 };
         chunk[chunk_index(uvec3(1, 0, 2))] = VoxelGpu { color: 1023 };
@@ -375,7 +384,7 @@ mod tests {
 
     #[test]
     fn mesh_chunk_test() {
-        let mut chunk = [VoxelGpu { color: 0 }; CHUNK_SIZE_3];
+        let mut chunk: Box<[VoxelGpu; CHUNK_SIZE_3]> = bytemuck::zeroed_box();
         chunk[chunk_index(uvec3(0, 0, 0))] = VoxelGpu { color: 1023 };
         chunk[chunk_index(uvec3(1, 0, 0))] = VoxelGpu { color: 1023 };
         chunk[chunk_index(uvec3(2, 0, 0))] = VoxelGpu { color: 1023 };

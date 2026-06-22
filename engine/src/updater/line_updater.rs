@@ -29,7 +29,7 @@ struct Line {
 /// Slides its assigned boxes back and forth along their own fixed straight
 /// lines, on the GPU.
 ///
-/// Owns the line parameters (uploaded once) and writes the `[base, base + count)`
+/// Owns the line parameters (uploaded once) and writes the `[base, base + count]`
 /// range of the shared transform buffers each frame from one time uniform.
 #[derive(Debug)]
 pub struct LineUpdater {
@@ -76,7 +76,7 @@ impl LineUpdater {
             })
             .collect::<Vec<Line>>();
 
-        let count = cubes.len() as u32;
+        let count = u32::try_from(cubes.len()).unwrap();
 
         let line_buffer = utils::create_buffer_init(
             &gfx.device,
@@ -161,6 +161,6 @@ impl Updater for LineUpdater {
         let mut pass = gfx.create_compute_pass("line_update compute pass", encoder);
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, self.bind_group.current(gfx.frame_index), &[]);
-        pass.dispatch_workgroups((self.count as usize).div_ceil(64) as u32, 1, 1);
+        pass.dispatch_workgroups(self.count.div_ceil(64), 1, 1);
     }
 }

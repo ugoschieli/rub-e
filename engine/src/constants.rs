@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-pub const CUBE_NUMBER: usize = 100_000;
+pub const CUBE_NUMBER: usize = 4_000_000;
 pub const CUBE_RANGE: Range<i32> = -128..128;
 
 pub const SENSITIVITY: f32 = 0.05;

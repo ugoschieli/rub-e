@@ -21,6 +21,7 @@ impl UiState {
             ctx.clone(),
             viewport_id,
             window,
+            #[allow(clippy::cast_possible_truncation)]
             Some(window.scale_factor() as f32),
             None,
             None,
@@ -60,6 +61,7 @@ impl UiState {
 
         let screen_descriptor = egui_wgpu::ScreenDescriptor {
             size_in_pixels: [gfx.surface.config.width, gfx.surface.config.height],
+            #[allow(clippy::cast_possible_truncation)]
             pixels_per_point: window.scale_factor() as f32,
         };
 

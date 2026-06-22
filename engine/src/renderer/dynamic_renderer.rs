@@ -1,9 +1,8 @@
-use std::time::Instant;
 use wgpu::include_wgsl;
 
 use crate::camera::Camera;
 use crate::constants::FRAMES_IN_FLIGHT;
-use crate::core::bind_group::FrameBuffered;
+use crate::core::bind_group::{BindGroupLayoutBuilder, FrameBuffered};
 use crate::core::render_pass::RenderPassBuilder;
 use crate::core::surface::Frame;
 use crate::cube::Cube;
@@ -35,13 +34,10 @@ pub struct DynamicRenderer {
     cull_bind_group: FrameBuffered,
     render_pipeline: wgpu::RenderPipeline,
     render_bind_group: FrameBuffered,
-    camera_pos_buffers: Vec<wgpu::Buffer>,
     // Per frame-in-flight: [vertex_count, instance_count, first_vertex, first_instance].
     // `instance_count` is reset to 0 and then filled by the cull pass each frame.
     draw_args_buffers: Vec<wgpu::Buffer>,
     cube_count: usize,
-    // App start; its elapsed seconds drive the per-box spawn "pop" in the shader.
-    start: Instant,
 }
 
 impl DynamicRenderer {
@@ -56,17 +52,9 @@ impl DynamicRenderer {
     ) -> Self {
         let cube_count = cubes.len();
 
-        let mut camera_pos_buffers = Vec::with_capacity(FRAMES_IN_FLIGHT);
         let mut draw_args_buffers = Vec::with_capacity(FRAMES_IN_FLIGHT);
         let mut visible_index_buffers = Vec::with_capacity(FRAMES_IN_FLIGHT);
         for i in 0..FRAMES_IN_FLIGHT {
-            camera_pos_buffers.push(utils::create_buffer_init(
-                &gfx.device,
-                format!("ETIB Dynamic Camera Pos Buffer {i}").as_str(),
-                wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-                &[glam::Vec4::ZERO],
-            ));
-
             // vertex_count fixed at the box proxy size; instance_count starts at 0
             // and is rebuilt by the cull pass every frame.
             draw_args_buffers.push(utils::create_buffer_init(
@@ -89,7 +77,7 @@ impl DynamicRenderer {
 
         // Compute cull pass: view-projection (uniform), transforms (read), the
         // indirect draw args (read_write, atomic counter), and the survivor list.
-        let cull_layout = crate::core::bind_group::BindGroupLayoutBuilder::new(&gfx.device)
+        let cull_layout = BindGroupLayoutBuilder::new(&gfx.device)
             .visibility(wgpu::ShaderStages::COMPUTE)
             .uniform(0) // Camera view-projection matrix
             .storage(1, true) // Box transforms (from the updater)
@@ -131,12 +119,11 @@ impl DynamicRenderer {
 
         // Render pass: camera + the transforms plus the survivor list, which the
         // vertex shader indexes by `instance_index` to recover the real box.
-        let render_layout = crate::core::bind_group::BindGroupLayoutBuilder::new(&gfx.device)
+        let render_layout = BindGroupLayoutBuilder::new(&gfx.device)
             .visibility(wgpu::ShaderStages::VERTEX_FRAGMENT)
-            .uniform(0) // Camera view-projection matrix
-            .uniform(1) // Camera world position
-            .storage(2, true) // Box transforms (from the updater)
-            .storage(3, true) // Compacted visible indices
+            .uniform(0) // Camera struct
+            .storage(1, true) // Box transforms (from the updater)
+            .storage(2, true) // Compacted visible indices
             .build();
 
         let render_bind_group = FrameBuffered::new(&gfx.device, render_layout, |i| {
@@ -147,14 +134,10 @@ impl DynamicRenderer {
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: camera_pos_buffers[i].as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
                     resource: transform_buffers[i].as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
-                    binding: 3,
+                    binding: 2,
                     resource: visible_index_buffers[i].as_entire_binding(),
                 },
             ]
@@ -177,27 +160,15 @@ impl DynamicRenderer {
             cull_bind_group,
             render_pipeline,
             render_bind_group,
-            camera_pos_buffers,
             draw_args_buffers,
             cube_count,
-            start: Instant::now(),
         }
     }
 }
 
 impl Renderer for DynamicRenderer {
-    fn render(&mut self, ctx: &mut EngineContext, camera: &Camera, frame: &mut Frame) {
+    fn render(&mut self, ctx: &mut EngineContext, frame: &mut Frame) {
         let gfx = &mut ctx.gfx;
-        // The voxels live in raw world space, so the ray origin must be the
-        // camera's world-space position (camera.position is in base-changed space).
-        // The unused w channel carries elapsed seconds, which the vertex shader
-        // uses to stagger each box's spawn "pop" (scale-in) on startup.
-        let time = self.start.elapsed().as_secs_f32();
-        gfx.queue.write_buffer(
-            &self.camera_pos_buffers[gfx.frame_index],
-            0,
-            bytemuck::bytes_of(&camera.world_position().extend(time)),
-        );
 
         let draw_args = &self.draw_args_buffers[gfx.frame_index];
 

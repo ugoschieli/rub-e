@@ -29,7 +29,7 @@ struct BoxTransform {
 }
 
 /// Per-frame uniform handed to every updater pass: the current time plus the
-/// `[base, base + count)` slice of the global transform array this pass owns.
+/// `[base, base + count]` slice of the global transform array this pass owns.
 /// Mirrors `Params` in the updater shaders (16-byte uniform payload).
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
@@ -40,8 +40,9 @@ struct Params {
     _pad: u32,
 }
 
-/// The shared per-box transform buffers, one per frame in flight. Several
-/// updaters write disjoint index ranges into these, and renderers read the whole
+/// The shared per-box transform buffers.
+///
+/// One per frame in flight. Several updaters write disjoint index ranges into these, and renderers read the whole
 /// thing. Owning them here (rather than in any single updater) is what lets
 /// multiple updaters cooperate on the same contiguous array.
 #[derive(Debug)]

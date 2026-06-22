@@ -48,11 +48,9 @@ impl<'a, 'tex> RenderPassBuilder<'a, 'tex> {
     }
 
     pub fn build(self, encoder: &'_ mut wgpu::CommandEncoder) -> wgpu::RenderPass<'_> {
-        let depth_stencil_attachment = if self.depth_stencil_view.is_some() {
+        let depth_stencil_attachment = if let Some(view) = self.depth_stencil_view {
             Some(wgpu::RenderPassDepthStencilAttachment {
-                view: self
-                    .depth_stencil_view
-                    .expect("The DepthStencil Texture is missing"),
+                view,
                 depth_ops: self.depth_ops,
                 stencil_ops: self.stencil_ops,
             })

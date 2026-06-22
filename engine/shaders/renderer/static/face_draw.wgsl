@@ -23,7 +23,15 @@ const FACE_VERTICES = array<vec3<f32>, 6>(
 );
 */
 
-@group(0) @binding(0) var<uniform> camera: mat4x4<f32>;
+struct Camera {
+    view_matrix: mat4x4<f32>,
+    inv_view_matrix: mat4x4<f32>,
+    world_pos: vec4<f32>,
+}
+
+// xyz: camera world position (ray origin). w: elapsed seconds since startup,
+// driving the per-box spawn "pop" below.
+@group(0) @binding(0) var<uniform> camera: Camera;
 @group(0) @binding(1) var<uniform> face_matrices: array<mat4x4<f32>, 6>;
 @group(0) @binding(2) var<storage, read> faces: array<Face>;
 
@@ -44,7 +52,7 @@ fn vs_main(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
 
     let model_vertex = face_matrices[current_face.direction] * scale * vec4<f32>(current_vertex, 1.);
     let position = vec4<f32>(vec3<f32>(current_face.position), 0.0);
-    out.clip_position = camera * (model_vertex + position);
+    out.clip_position = camera.view_matrix * (model_vertex + position);
     // out.clip_position = camera * face_matrices[current_face.direction] * vec4<f32>(current_vertex, 1.0);
     out.color = current_face.color;
 

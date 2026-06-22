@@ -44,6 +44,7 @@ impl EngineContext {
     }
 
     /// Set the cursor grab mode (e.g. lock the cursor inside the window).
+    /// # Errors
     pub fn set_cursor_grab(&self, mode: CursorGrabMode) -> Result<(), ExternalError> {
         self.window.set_cursor_grab(mode)
     }
@@ -75,7 +76,7 @@ pub trait Game {
     fn render(&mut self, ctx: &mut EngineContext, frame: &mut Frame);
 
     /// Build egui UI for this frame. Called between `update` and `render`.
-    fn ui(&mut self, ui: &mut egui::Ui) {}
+    fn ui(&mut self, ui: &mut egui::Ui);
 
     /// Called for window-level input events (keyboard, mouse buttons, …) not consumed by egui.
     fn input(&mut self, _ctx: &mut EngineContext, _event: &WindowEvent) {}
@@ -159,7 +160,7 @@ impl<G: Game> ApplicationHandler for EngineRunner<G> {
             WindowEvent::RedrawRequested => {
                 game.update(ctx);
                 // Pump gamepad events
-                while let Some(_) = ctx.gilrs.next_event() {}
+                while ctx.gilrs.next_event().is_some() {}
 
                 let frame = ctx.gfx.begin_frame();
                 if let Some(mut frame) = frame {
@@ -181,7 +182,7 @@ impl<G: Game> ApplicationHandler for EngineRunner<G> {
             WindowEvent::CloseRequested => event_loop.exit(),
             other => {
                 if !response.consumed {
-                    game.input(ctx, &other)
+                    game.input(ctx, &other);
                 }
             }
         }
@@ -201,6 +202,7 @@ impl<G: Game> ApplicationHandler for EngineRunner<G> {
 }
 
 /// Launch the game
+/// # Errors
 pub fn run<G: Game>(
     config: Option<EngineConfig>,
     params: Option<G::InitParams>,

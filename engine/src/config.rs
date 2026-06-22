@@ -52,24 +52,14 @@ impl Default for EngineConfig {
 impl EngineConfig {
     /// Load the configuration from a JSON file
     pub fn load_from_file(path: &str) -> Self {
-        let content = match fs::read_to_string(path) {
-            Ok(c) => c,
-            Err(_) => {
-                log::warn!("Config file '{}' not found, using defaults.", path);
-                return Self::default();
-            }
+        let Ok(content) = fs::read_to_string(path) else {
+            log::warn!("Config file '{path}' not found, using defaults.");
+            return Self::default();
         };
 
-        match serde_json::from_str(&content) {
-            Ok(config) => config,
-            Err(e) => {
-                log::error!(
-                    "Failed to parse config file '{}': {}, using defaults.",
-                    path,
-                    e
-                );
-                Self::default()
-            }
-        }
+        serde_json::from_str(&content).unwrap_or_else(|e| {
+            log::error!("Failed to parse config file '{path}': {e}, using defaults.");
+            Self::default()
+        })
     }
 }

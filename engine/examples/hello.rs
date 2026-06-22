@@ -62,7 +62,7 @@ impl Game for Hello {
                 &ctx.gfx,
                 &cubes[half..],
                 transforms.buffers(),
-                half as u32,
+                u32::try_from(half).unwrap(),
             )),
         ];
 
@@ -70,8 +70,26 @@ impl Game for Hello {
             cubes,
             camera,
             transforms,
-            renderers,
             updaters,
+            renderers,
+        }
+    }
+
+    fn update(&mut self, ctx: &mut EngineContext) {
+        self.camera.handle_keyboard(&ctx.input, &ctx.time);
+
+        self.camera.upload(&ctx.gfx, ctx.window_size(), &ctx.time);
+    }
+
+    fn render(&mut self, ctx: &mut EngineContext, frame: &mut Frame) {
+        // Updaters write this frame's transforms before any renderer
+        // reads them (the pass boundary is the memory barrier).
+        for updater in &mut self.updaters {
+            updater.update(&mut ctx.gfx, &mut frame.encoder);
+        }
+
+        for renderer in &mut self.renderers {
+            renderer.render(ctx, frame);
         }
     }
 
@@ -84,24 +102,6 @@ impl Game for Hello {
             egui::FontId::proportional(48.0),
             egui::Color32::from_rgb(255, 128, 0),
         );
-    }
-
-    fn update(&mut self, ctx: &mut EngineContext) {
-        self.camera.handle_keyboard(&ctx.input, &ctx.time);
-
-        self.camera.upload(&ctx.gfx, ctx.window_size());
-    }
-
-    fn render(&mut self, ctx: &mut EngineContext, frame: &mut Frame) {
-        // Updaters write this frame's transforms before any renderer
-        // reads them (the pass boundary is the memory barrier).
-        for updater in &mut self.updaters {
-            updater.update(&mut ctx.gfx, &mut frame.encoder);
-        }
-
-        for renderer in &mut self.renderers {
-            renderer.render(ctx, &self.camera, frame);
-        }
     }
 
     fn device_input(&mut self, _ctx: &mut EngineContext, event: &DeviceEvent) {

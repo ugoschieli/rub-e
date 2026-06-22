@@ -9,6 +9,8 @@ pub struct Time {
     pub frame_number: usize,
     /// The delta time since the last frame
     pub dt: f32,
+    /// The start time
+    pub start: Instant,
 }
 
 impl Default for Time {
@@ -24,6 +26,7 @@ impl Time {
             now: Instant::now(),
             frame_number: 0,
             dt: 0.,
+            start: Instant::now(),
         }
     }
 

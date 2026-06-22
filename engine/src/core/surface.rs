@@ -43,7 +43,7 @@ impl Surface {
     pub fn resize(&mut self, device: &wgpu::Device, size: PhysicalSize<u32>) {
         self.config.width = size.width;
         self.config.height = size.height;
-        self.surface.configure(&device, &self.config);
+        self.surface.configure(device, &self.config);
     }
 
     pub fn get_current_texture(&self, device: &wgpu::Device) -> Option<Frame> {

@@ -28,7 +28,7 @@ struct Orbit {
 
 /// Flies its assigned boxes along their own fixed circular orbits, on the GPU.
 ///
-/// Owns the orbit parameters (uploaded once) and writes the `[base, base + count)`
+/// Owns the orbit parameters (uploaded once) and writes the `[base, base + count]`
 /// range of the shared transform buffers each frame from one time uniform, so
 /// per-frame CPU work and upload are constant-size regardless of box count.
 #[derive(Debug)]
@@ -70,7 +70,7 @@ impl OrbitUpdater {
             })
             .collect::<Vec<Orbit>>();
 
-        let count = cubes.len() as u32;
+        let count = u32::try_from(cubes.len()).unwrap();
 
         let orbit_buffer = utils::create_buffer_init(
             &gfx.device,
@@ -155,6 +155,6 @@ impl Updater for OrbitUpdater {
         let mut pass = gfx.create_compute_pass("orbit_updater compute pass", encoder);
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, self.bind_group.current(gfx.frame_index), &[]);
-        pass.dispatch_workgroups((self.count as usize).div_ceil(64) as u32, 1, 1);
+        pass.dispatch_workgroups(self.count.div_ceil(64), 1, 1);
     }
 }
