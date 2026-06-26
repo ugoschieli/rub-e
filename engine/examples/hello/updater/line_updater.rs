@@ -5,12 +5,12 @@ use std::f32::consts::TAU;
 use std::time::Instant;
 use wgpu::include_wgsl;
 
-use crate::constants::FRAMES_IN_FLIGHT;
-use crate::core::bind_group::FrameBuffered;
-use crate::cube::Cube;
-use crate::gfx::Gfx;
-use crate::updater::{Params, Updater};
-use crate::utils::{self};
+use super::{Params, Updater};
+use etib::constants::FRAMES_IN_FLIGHT;
+use etib::core::bind_group::FrameBuffered;
+use etib::cube::Cube;
+use etib::gfx::Gfx;
+use etib::utils::{self};
 
 /// Cold, static line of one box. Uploaded once at init; the GPU update pass
 /// derives the per-frame position/orientation from this plus the time uniform.
@@ -101,7 +101,7 @@ impl LineUpdater {
         }
 
         // params (uniform), lines (read), shared transforms (write).
-        let layout = crate::core::bind_group::BindGroupLayoutBuilder::new(&gfx.device)
+        let layout = etib::core::bind_group::BindGroupLayoutBuilder::new(&gfx.device)
             .visibility(wgpu::ShaderStages::COMPUTE)
             .uniform(0) // Params (time + range)
             .storage(1, true) // Lines (cold)
@@ -127,7 +127,7 @@ impl LineUpdater {
 
         let shader = gfx
             .device
-            .create_shader_module(include_wgsl!("../../shaders/line.wgsl"));
+            .create_shader_module(include_wgsl!("../shaders/line.wgsl"));
 
         let pipeline =
             gfx.create_compute_pipeline("ETIB Line Update", &bind_group.layout, 0, &shader);

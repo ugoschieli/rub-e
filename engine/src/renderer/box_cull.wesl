@@ -1,3 +1,5 @@
+import etib::Camera;
+
 // GPU frustum-culling pass for the dynamic oriented-box renderer.
 //
 // One invocation per box. Each oriented box is reduced to a conservative
@@ -30,7 +32,7 @@ struct DrawArgs {
     first_instance: u32,
 }
 
-struct Camera {
+struct Cameralkaskhdlka {
     view_matrix: mat4x4<f32>,
     inv_view_matrix: mat4x4<f32>,
     world_pos: vec4<f32>,

@@ -1,24 +1,94 @@
-use crate::renderer::static_renderer::{Face, FaceDirection, unpack_color};
 use crate::{
     constants::{CHUNK_SIZE_1, CHUNK_SIZE_3, CHUNK_SIZE_P},
     cube::VoxelGpu,
 };
 use bytemuck::{Pod, Zeroable};
-use glam::{UVec3, uvec3};
+use glam::{UVec3, Vec3, uvec3};
 use std::collections::HashMap;
 use std::hash::BuildHasher;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
-/// The Face data uploaded to the GPU for vertex pulling
 pub struct FaceGpu {
-    /// The packed data of a Face:
-    /// The 18 first bits encode the chunk-local position (6 bits for each axis)
-    /// The 12 next bits encode the width and height (6 bits each)
-    /// The 3 next bits encode the normal direction (6 possible values)
-    /// The 30 next bits encode the RGB color (10 bits for each channel)
-    /// Total 63 bits
-    pub data: u64,
+    position: Vec3,
+    width: u32,
+    height: u32,
+    direction: u32,
+    color: u32,
+    _pad: u32,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct Face {
+    pub position: Vec3,
+    pub width: u32,
+    pub height: u32,
+    pub direction: FaceDirection,
+    pub color: UVec3,
+}
+
+impl Face {
+    pub const fn new(
+        position: Vec3,
+        width: u32,
+        height: u32,
+        direction: FaceDirection,
+        color: UVec3,
+    ) -> Self {
+        Self {
+            position,
+            width,
+            height,
+            direction,
+            color,
+        }
+    }
+
+    pub const fn to_gpu(&self) -> FaceGpu {
+        FaceGpu {
+            position: self.position,
+            width: self.width,
+            height: self.height,
+            direction: self.direction.to_gpu(),
+            color: pack_color(self.color),
+            _pad: 0,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum FaceDirection {
+    Right,    // +X = 0
+    Left,     // -X = 1
+    Forward,  // +Y = 2
+    Backward, // -Y = 3
+    Up,       // +Z = 4
+    Down,     // -Z = 5
+}
+
+impl FaceDirection {
+    pub const fn to_gpu(&self) -> u32 {
+        match self {
+            Self::Right => 0,
+            Self::Left => 1,
+            Self::Forward => 2,
+            Self::Backward => 3,
+            Self::Up => 4,
+            Self::Down => 5,
+        }
+    }
+}
+
+pub const fn pack_color(color: UVec3) -> u32 {
+    color.x | (color.y << 10) | (color.z << 20) // packed color (10 bit for each channel)
+}
+
+pub const fn unpack_color(color: u32) -> UVec3 {
+    let r = color & 1023;
+    let g = (color >> 10) & 1023;
+    let b = (color >> 20) & 1023;
+
+    UVec3::new(r, g, b)
 }
 
 #[derive(Debug, PartialEq, Eq)]

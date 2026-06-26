@@ -1,3 +1,5 @@
+import etib::Camera;
+
 struct Face {
     position: vec3<f32>,
     width: u32,
@@ -23,14 +25,6 @@ const FACE_VERTICES = array<vec3<f32>, 6>(
 );
 */
 
-struct Camera {
-    view_matrix: mat4x4<f32>,
-    inv_view_matrix: mat4x4<f32>,
-    world_pos: vec4<f32>,
-}
-
-// xyz: camera world position (ray origin). w: elapsed seconds since startup,
-// driving the per-box spawn "pop" below.
 @group(0) @binding(0) var<uniform> camera: Camera;
 @group(0) @binding(1) var<uniform> face_matrices: array<mat4x4<f32>, 6>;
 @group(0) @binding(2) var<storage, read> faces: array<Face>;

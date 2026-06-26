@@ -7,11 +7,13 @@ use etib::game::{EngineContext, Game};
 use etib::renderer::Renderer;
 use etib::renderer::dynamic_renderer::DynamicRenderer;
 use etib::renderer::static_renderer::StaticRenderer;
-use etib::updater::line_updater::LineUpdater;
-use etib::updater::orbit_updater::OrbitUpdater;
-use etib::updater::{TransformBuffers, Updater};
+use updater::line_updater::LineUpdater;
+use updater::orbit_updater::OrbitUpdater;
+use updater::{TransformBuffers, Updater};
 use winit::event::DeviceEvent;
 use winit::window::CursorGrabMode;
+
+pub mod updater;
 
 struct Hello {
     cubes: Vec<Cube>,

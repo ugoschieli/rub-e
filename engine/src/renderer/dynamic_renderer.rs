@@ -1,14 +1,13 @@
-use wgpu::include_wgsl;
-
+use super::Renderer;
 use crate::camera::Camera;
 use crate::constants::FRAMES_IN_FLIGHT;
 use crate::core::bind_group::{BindGroupLayoutBuilder, FrameBuffered};
 use crate::core::render_pass::RenderPassBuilder;
+use crate::core::shaders::ShaderBuilder;
 use crate::core::surface::Frame;
 use crate::cube::Cube;
 use crate::game::EngineContext;
 use crate::gfx::Gfx;
-use crate::renderer::Renderer;
 use crate::utils::{self};
 
 /// Number of vertices in the unit-box proxy (12 triangles). This is the constant
@@ -26,7 +25,7 @@ const BOX_VERTEX_COUNT: u32 = 36;
 /// 2. The render pass draws only the visible boxes via that indirect draw.
 ///
 /// All per-box data (position, rotation, size, color) lives in the transform
-/// buffers produced by a separate [`Updater`](crate::updater::Updater); this
+/// buffers produced by a separate [`Updater`](hello::updater::Updater); this
 /// renderer only reads them and owns no per-box buffers of its own.
 #[derive(Debug)]
 pub struct DynamicRenderer {
@@ -42,7 +41,7 @@ pub struct DynamicRenderer {
 
 impl DynamicRenderer {
     /// `transform_buffers` are the per-frame hot transforms written by an
-    /// [`Updater`](crate::updater::Updater); one per frame in flight, indexed by
+    /// [`Updater`](hello::updater::Updater); one per frame in flight, indexed by
     /// `gfx.frame_index`. The updater must run before this renderer each frame.
     pub fn init(
         gfx: &Gfx,
@@ -106,9 +105,9 @@ impl DynamicRenderer {
             ]
         });
 
-        let cull_shader = gfx.device.create_shader_module(include_wgsl!(
-            "../../shaders/renderer/dynamic/box_cull.wgsl"
-        ));
+        let cull_shader = ShaderBuilder::new(super::SHADER_DIR)
+            .build_wgsl(&gfx.device, "package::box_cull")
+            .expect("Failed to build shader");
 
         let cull_pipeline = gfx.create_compute_pipeline(
             "ETIB Dynamic Cull",
@@ -143,9 +142,9 @@ impl DynamicRenderer {
             ]
         });
 
-        let shader = gfx
-            .device
-            .create_shader_module(include_wgsl!("../../shaders/renderer/dynamic/ray_box.wgsl"));
+        let shader = ShaderBuilder::new(super::SHADER_DIR)
+            .build_wgsl(&gfx.device, "package::ray_box")
+            .expect("Failed to build shader");
 
         let render_pipeline = crate::core::pipeline::RenderPipelineBuilder::new(&gfx.device)
             .bind_group(&render_bind_group.layout)

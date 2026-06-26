@@ -1,106 +1,18 @@
 use std::f32::consts::{FRAC_PI_2, PI};
 
-use bytemuck::{Pod, Zeroable};
-use glam::{Mat4, UVec3, Vec3, uvec3};
-use wgpu::include_wgsl;
-
+use super::Renderer;
+use crate::camera::Camera;
 use crate::constants::CHUNK_SIZE_3;
 use crate::core::bind_group::FrameBuffered;
 use crate::core::render_pass::RenderPassBuilder;
+use crate::core::shaders::ShaderBuilder;
 use crate::core::surface::Frame;
 use crate::cube::VoxelGpu;
 use crate::game::EngineContext;
-use crate::mesher::{chunk_index, mesh_chunk};
-use crate::{
-    camera::Camera,
-    gfx::Gfx,
-    renderer::Renderer,
-    utils::{self},
-};
-
-#[repr(C)]
-#[derive(Debug, Clone, Copy, Pod, Zeroable)]
-pub struct FaceGpu {
-    position: Vec3,
-    width: u32,
-    height: u32,
-    direction: u32,
-    color: u32,
-    _pad: u32,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct Face {
-    pub position: Vec3,
-    pub width: u32,
-    pub height: u32,
-    pub direction: FaceDirection,
-    pub color: UVec3,
-}
-
-impl Face {
-    pub const fn new(
-        position: Vec3,
-        width: u32,
-        height: u32,
-        direction: FaceDirection,
-        color: UVec3,
-    ) -> Self {
-        Self {
-            position,
-            width,
-            height,
-            direction,
-            color,
-        }
-    }
-
-    pub const fn to_gpu(&self) -> FaceGpu {
-        FaceGpu {
-            position: self.position,
-            width: self.width,
-            height: self.height,
-            direction: self.direction.to_gpu(),
-            color: pack_color(self.color),
-            _pad: 0,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum FaceDirection {
-    Right,    // +X = 0
-    Left,     // -X = 1
-    Forward,  // +Y = 2
-    Backward, // -Y = 3
-    Up,       // +Z = 4
-    Down,     // -Z = 5
-}
-
-impl FaceDirection {
-    pub const fn to_gpu(&self) -> u32 {
-        match self {
-            Self::Right => 0,
-            Self::Left => 1,
-            Self::Forward => 2,
-            Self::Backward => 3,
-            Self::Up => 4,
-            Self::Down => 5,
-        }
-    }
-}
-
-pub const fn pack_color(color: UVec3) -> u32 {
-    color.x | (color.y << 10) | (color.z << 20) // packed color (10 bit for each channel)
-}
-
-pub const fn unpack_color(color: u32) -> UVec3 {
-    let r = color & 1023;
-    let g = (color >> 10) & 1023;
-    let b = (color >> 20) & 1023;
-
-    UVec3::new(r, g, b)
-}
+use crate::gfx::Gfx;
+use crate::mesher::{Face, FaceGpu, chunk_index, mesh_chunk};
+use crate::utils;
+use glam::{Mat4, Vec3, uvec3};
 
 #[derive(Debug)]
 pub struct StaticRenderer {
@@ -186,9 +98,9 @@ impl StaticRenderer {
             ]
         });
 
-        let shader = gfx.device.create_shader_module(include_wgsl!(
-            "../../shaders/renderer/static/face_draw.wgsl"
-        ));
+        let shader = ShaderBuilder::new(super::SHADER_DIR)
+            .build_wgsl(&gfx.device, "package::face_draw")
+            .unwrap();
 
         let render_pipeline = crate::core::pipeline::RenderPipelineBuilder::new(&gfx.device)
             .bind_group(&bind_group.layout)

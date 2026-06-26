@@ -3,10 +3,10 @@ use glam::{Vec3, Vec4};
 use rand::RngExt;
 use std::fmt::Debug;
 
-use crate::constants::FRAMES_IN_FLIGHT;
-use crate::cube::Cube;
-use crate::gfx::Gfx;
-use crate::utils;
+use etib::constants::FRAMES_IN_FLIGHT;
+use etib::cube::Cube;
+use etib::gfx::Gfx;
+use etib::utils;
 
 pub mod line_updater;
 pub mod orbit_updater;

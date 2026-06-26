@@ -10,5 +10,4 @@ pub mod mesher;
 pub mod renderer;
 pub mod time;
 pub mod ui;
-pub mod updater;
 pub mod utils;

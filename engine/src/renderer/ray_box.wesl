@@ -1,3 +1,5 @@
+import etib::Camera;
+
 // Per-voxel ray-box intersection renderer.
 //
 // Each voxel is drawn as one instanced oriented box (a coarse proxy). The
@@ -39,14 +41,6 @@ struct BoxHit {
     normal: vec3<f32>,
 }
 
-struct Camera {
-    view_matrix: mat4x4<f32>,
-    inv_view_matrix: mat4x4<f32>,
-    world_pos: vec4<f32>,
-}
-
-// xyz: camera world position (ray origin). w: elapsed seconds since startup,
-// driving the per-box spawn "pop" below.
 @group(0) @binding(0) var<uniform> camera: Camera;
 @group(0) @binding(1) var<storage, read> transforms: array<BoxTransform>;
 // Compacted indices of the boxes that survived GPU frustum culling, written by
