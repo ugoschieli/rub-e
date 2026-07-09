@@ -64,7 +64,7 @@ impl Gfx {
         log::info!("{adapter_limits:#?}");
 
         pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-            required_features: wgpu::Features::default(),
+            required_features: wgpu::Features::default() | wgpu::Features::BGRA8UNORM_STORAGE,
             required_limits: adapter_limits,
             experimental_features: unsafe { wgpu::ExperimentalFeatures::enabled() },
             ..Default::default()
@@ -113,7 +113,7 @@ impl Gfx {
     pub fn create_compute_pipeline(
         &self,
         label: &str,
-        bind_group_layout: &wgpu::BindGroupLayout,
+        bind_group_layout: Option<&wgpu::BindGroupLayout>,
         immediate_size: u32,
         shader: &wgpu::ShaderModule,
     ) -> wgpu::ComputePipeline {

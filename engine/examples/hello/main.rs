@@ -1,26 +1,191 @@
 use egui::Ui;
 use etib::camera::Camera;
-use etib::constants::{CUBE_NUMBER, CUBE_RANGE};
+use etib::core::bind_group::{BindGroupLayoutBuilder, FrameBuffered};
+use etib::core::shaders::ShaderBuilder;
 use etib::core::surface::Frame;
-use etib::cube::Cube;
+use etib::core::texture::Texture;
 use etib::game::{EngineContext, Game};
-use etib::renderer::Renderer;
-use etib::renderer::dynamic_renderer::DynamicRenderer;
-use etib::renderer::static_renderer::StaticRenderer;
-use updater::line_updater::LineUpdater;
-use updater::orbit_updater::OrbitUpdater;
-use updater::{TransformBuffers, Updater};
+use etib::renderer::{Renderer, SHADER_DIR};
+use glam::{USizeVec3, usizevec3};
+use noise::{NoiseFn, Perlin};
 use winit::event::DeviceEvent;
 use winit::window::CursorGrabMode;
 
 pub mod updater;
 
+/// Voxel counts per axis.
+const GRID_SIZE: USizeVec3 = usizevec3(1024 * 2, 1024 * 2, 32);
+
+/// Edge length of one (cubic) voxel in world units, i.e. meters.
+const VOXEL_SIZE: f32 = 0.01;
+
+/// Grid parameters uploaded to the DDA shader. The CPU owns these values so the
+/// shader can never drift out of sync. Layout matches `Grid` in `dda.wesl`: a
+/// `vec3<u32>` (16-byte aligned) with the trailing `f32` packed at offset 12,
+/// for 16 bytes total.
+#[repr(C)]
+#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+struct GridUniform {
+    size: [u32; 3],
+    voxel_size: f32,
+}
+
+/// Build the voxel occupancy grid on the CPU from 3D Perlin noise, packed one
+/// bit per voxel into u32 words in x-major order (matching `is_solid` in the
+/// shader: `index = x + y*size + z*size*size`).
+fn generate_occupancy(ctx: &EngineContext) -> Vec<u32> {
+    // Spacing between voxels in noise space; smaller -> larger, smoother blobs.
+    const FREQUENCY: f64 = 0.18;
+    // Perlin output is roughly [-1, 1]; a positive cutoff keeps the field sparse.
+    const THRESHOLD: f64 = 0.1;
+
+    let perlin = Perlin::new(ctx.time.frame_number as u32);
+    let total = GRID_SIZE.x * GRID_SIZE.y * GRID_SIZE.z;
+    let mut words = vec![0u32; total.div_ceil(32)];
+
+    for z in 0..GRID_SIZE.z {
+        for y in 0..GRID_SIZE.y {
+            for x in 0..GRID_SIZE.x {
+                let sample = perlin.get([
+                    x as f64 * FREQUENCY,
+                    y as f64 * FREQUENCY,
+                    z as f64 * FREQUENCY,
+                ]);
+                if sample > THRESHOLD {
+                    let index = x + y * GRID_SIZE.x + z * GRID_SIZE.x * GRID_SIZE.y;
+                    words[index / 32] |= 1u32 << (index % 32);
+                }
+            }
+        }
+    }
+
+    words
+}
+
 struct Hello {
-    cubes: Vec<Cube>,
     camera: Camera,
-    transforms: TransformBuffers,
-    updaters: Vec<Box<dyn Updater>>,
-    renderers: Vec<Box<dyn Renderer>>,
+    dda_renderer: DdaRenderer,
+}
+
+#[derive(Debug)]
+struct DdaRenderer {
+    output_texture: Texture,
+    // Static voxel occupancy, shared by every frame's bind group.
+    // occupancy_buffer: wgpu::Buffer,
+    bind_group: FrameBuffered,
+    pipeline: wgpu::ComputePipeline,
+}
+
+impl DdaRenderer {
+    fn new(ctx: &EngineContext, camera: &Camera) -> Self {
+        let gfx = &ctx.gfx;
+
+        let output_texture = gfx.create_texture_2d(
+            "dda_output_texture",
+            wgpu::TextureFormat::Bgra8Unorm,
+            wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::COPY_SRC,
+            gfx.surface.config.width,
+            gfx.surface.config.height,
+        );
+
+        let shader = ShaderBuilder::new(SHADER_DIR)
+            .build_wgsl(&gfx.device, "package::dda")
+            .unwrap();
+
+        let occupancy_buffer = etib::utils::create_buffer_init(
+            &gfx.device,
+            "dda_occupancy",
+            wgpu::BufferUsages::STORAGE,
+            &generate_occupancy(ctx),
+        );
+
+        let grid_buffer = etib::utils::create_buffer_init(
+            &gfx.device,
+            "dda_grid",
+            wgpu::BufferUsages::UNIFORM,
+            &[GridUniform {
+                size: [GRID_SIZE.x as u32, GRID_SIZE.y as u32, GRID_SIZE.z as u32],
+                voxel_size: VOXEL_SIZE,
+            }],
+        );
+
+        let bind_group_layout = BindGroupLayoutBuilder::new(&gfx.device)
+            .visibility(wgpu::ShaderStages::COMPUTE)
+            .storage_texture_2d(
+                0,
+                wgpu::StorageTextureAccess::WriteOnly,
+                output_texture.texture.format(),
+            )
+            .uniform(1) // Camera
+            .storage(2, true) // Voxel occupancy
+            .uniform(3) // Grid dimensions + voxel size
+            .build();
+
+        let bind_group = FrameBuffered::new(&gfx.device, bind_group_layout, |i| {
+            vec![
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&output_texture.view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: camera.buffers[i].as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: occupancy_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: grid_buffer.as_entire_binding(),
+                },
+            ]
+        });
+
+        let pipeline =
+            gfx.create_compute_pipeline("dda_compute_pass", Some(&bind_group.layout), 0, &shader);
+        Self {
+            output_texture,
+            // occupancy_buffer,
+            bind_group,
+            pipeline,
+        }
+    }
+}
+
+const WORKGROUP_SIZE_X: u32 = 8;
+const WORKGROUP_SIZE_Y: u32 = 8;
+
+impl Renderer for DdaRenderer {
+    fn render(&mut self, ctx: &mut EngineContext, frame: &mut Frame) {
+        {
+            let mut dda_pass = ctx.gfx.create_compute_pass("dda_pass", &mut frame.encoder);
+            dda_pass.set_pipeline(&self.pipeline);
+            dda_pass.set_bind_group(0, self.bind_group.current(ctx.gfx.frame_index), &[]);
+
+            let x = self
+                .output_texture
+                .texture
+                .width()
+                .div_ceil(WORKGROUP_SIZE_X);
+            let y = self
+                .output_texture
+                .texture
+                .height()
+                .div_ceil(WORKGROUP_SIZE_Y);
+            dda_pass.dispatch_workgroups(x, y, 1);
+        }
+
+        frame.encoder.copy_texture_to_texture(
+            self.output_texture.texture.as_image_copy(),
+            frame.surface_texture.texture.as_image_copy(),
+            wgpu::Extent3d {
+                width: frame.surface_texture.texture.width(),
+                height: frame.surface_texture.texture.height(),
+                depth_or_array_layers: 1,
+            },
+        );
+    }
 }
 
 impl Game for Hello {
@@ -28,52 +193,14 @@ impl Game for Hello {
 
     fn init(ctx: &mut EngineContext, _params: Self::InitParams) -> Self {
         ctx.set_cursor_visible(false);
-        ctx.set_cursor_grab(CursorGrabMode::Locked);
-
-        let cubes = (0..CUBE_NUMBER)
-            .map(|_| Cube::random_cube(CUBE_RANGE))
-            .collect::<Vec<Cube>>();
+        let _ = ctx.set_cursor_grab(CursorGrabMode::Locked);
 
         let camera = Camera::new(&ctx.gfx);
-
-        // Shared transform buffers the updaters write and the renderer reads.
-        let transforms = TransformBuffers::new(&ctx.gfx, &cubes);
-
-        // Split the cubes in half: the first half orbits, the second oscillates
-        // along a line. Each updater writes its own contiguous transform range.
-        let half = cubes.len() / 2;
-
-        let renderers: Vec<Box<dyn Renderer>> = vec![
-            Box::new(StaticRenderer::init(&ctx.gfx, &camera)),
-            Box::new(DynamicRenderer::init(
-                &ctx.gfx,
-                &camera,
-                &cubes,
-                transforms.buffers(),
-            )),
-        ];
-
-        let updaters: Vec<Box<dyn Updater>> = vec![
-            Box::new(OrbitUpdater::init(
-                &ctx.gfx,
-                &cubes[..half],
-                transforms.buffers(),
-                0,
-            )),
-            Box::new(LineUpdater::init(
-                &ctx.gfx,
-                &cubes[half..],
-                transforms.buffers(),
-                u32::try_from(half).unwrap(),
-            )),
-        ];
+        let dda_renderer = DdaRenderer::new(ctx, &camera);
 
         Self {
-            cubes,
             camera,
-            transforms,
-            updaters,
-            renderers,
+            dda_renderer,
         }
     }
 
@@ -84,15 +211,7 @@ impl Game for Hello {
     }
 
     fn render(&mut self, ctx: &mut EngineContext, frame: &mut Frame) {
-        // Updaters write this frame's transforms before any renderer
-        // reads them (the pass boundary is the memory barrier).
-        for updater in &mut self.updaters {
-            updater.update(&mut ctx.gfx, &mut frame.encoder);
-        }
-
-        for renderer in &mut self.renderers {
-            renderer.render(ctx, frame);
-        }
+        self.dda_renderer.render(ctx, frame);
     }
 
     fn ui(&mut self, ui: &mut Ui) {

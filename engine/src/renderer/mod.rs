@@ -1,5 +1,3 @@
-use std::fmt::Debug;
-
 use crate::core::surface::Frame;
 use crate::game::EngineContext;
 
@@ -10,6 +8,6 @@ pub mod static_renderer;
 /// `package::renderer::static::face_draw` -> `<SHADER_DIR>/renderer/static/face_draw.wgsl`.
 pub const SHADER_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/renderer");
 
-pub trait Renderer: Debug {
-    fn render(&mut self, gfx: &mut EngineContext, frame: &mut Frame);
+pub trait Renderer {
+    fn render(&mut self, ctx: &mut EngineContext, frame: &mut Frame);
 }

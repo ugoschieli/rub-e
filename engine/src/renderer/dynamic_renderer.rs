@@ -111,7 +111,7 @@ impl DynamicRenderer {
 
         let cull_pipeline = gfx.create_compute_pipeline(
             "ETIB Dynamic Cull",
-            &cull_bind_group.layout,
+            Some(&cull_bind_group.layout),
             0,
             &cull_shader,
         );

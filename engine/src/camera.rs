@@ -59,7 +59,7 @@ impl Camera {
         let matrix = self.matrix(size);
         CameraGpu {
             view_matrix: matrix,
-            inv_view_matrix: matrix.transpose(),
+            inv_view_matrix: matrix.inverse(),
             world_position: self
                 .world_position()
                 .extend(time.start.elapsed().as_secs_f32()),

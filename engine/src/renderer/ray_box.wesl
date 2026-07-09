@@ -1,4 +1,4 @@
-import etib::Camera;
+import etib::camera::Camera;
 
 // Per-voxel ray-box intersection renderer.
 //

@@ -130,7 +130,7 @@ impl LineUpdater {
             .create_shader_module(include_wgsl!("../shaders/line.wgsl"));
 
         let pipeline =
-            gfx.create_compute_pipeline("ETIB Line Update", &bind_group.layout, 0, &shader);
+            gfx.create_compute_pipeline("ETIB Line Update", Some(&bind_group.layout), 0, &shader);
 
         Self {
             pipeline,

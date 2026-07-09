@@ -33,6 +33,7 @@ impl Surface {
         config.desired_maximum_frame_latency = u32::try_from(FRAMES_IN_FLIGHT).unwrap();
         config.present_mode = wgpu::PresentMode::AutoVsync;
         config.present_mode = wgpu::PresentMode::Immediate;
+        config.usage |= wgpu::TextureUsages::COPY_DST;
         log::info!("{config:?}");
 
         surface.configure(device, &config);

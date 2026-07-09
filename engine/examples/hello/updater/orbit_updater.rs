@@ -124,7 +124,7 @@ impl OrbitUpdater {
             .create_shader_module(include_wgsl!("../shaders/orbit.wgsl"));
 
         let pipeline =
-            gfx.create_compute_pipeline("ETIB Orbit Update", &bind_group.layout, 0, &shader);
+            gfx.create_compute_pipeline("ETIB Orbit Update", Some(&bind_group.layout), 0, &shader);
 
         Self {
             pipeline,

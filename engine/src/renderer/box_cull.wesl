@@ -1,4 +1,4 @@
-import etib::Camera;
+import etib::camera::Camera;
 
 // GPU frustum-culling pass for the dynamic oriented-box renderer.
 //

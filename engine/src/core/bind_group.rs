@@ -185,6 +185,26 @@ impl<'a> BindGroupLayoutBuilder<'a> {
     }
 
     #[must_use]
+    pub fn storage_texture_2d(
+        mut self,
+        binding: u32,
+        access: wgpu::StorageTextureAccess,
+        format: wgpu::TextureFormat,
+    ) -> Self {
+        self.entries.push(wgpu::BindGroupLayoutEntry {
+            binding,
+            visibility: self.visibility,
+            ty: wgpu::BindingType::StorageTexture {
+                access,
+                format,
+                view_dimension: wgpu::TextureViewDimension::D2,
+            },
+            count: None,
+        });
+        self
+    }
+
+    #[must_use]
     pub fn texture(mut self, binding: u32, sample_type: wgpu::TextureSampleType) -> Self {
         self.entries.push(wgpu::BindGroupLayoutEntry {
             binding,
