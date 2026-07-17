@@ -51,6 +51,14 @@ struct Hit {
 @group(0) @binding(2) var<storage, read> occupancy: array<u32>;
 // Grid dimensions and voxel size, owned by the CPU so the two never drift.
 @group(0) @binding(3) var<uniform> grid: Grid;
+// Coarse occupancy: one bit per BRICK^3 block, set if the block holds any solid
+// voxel. Lets the traversal skip empty space a whole brick at a time.
+@group(0) @binding(4) var<storage, read> brick_occupancy: array<u32>;
+
+// Edge length of a brick, in voxels.
+const BRICK: u32 = 8u;
+// Sentinel "no distance limit", for unbounded primary and shadow rays.
+const T_MAX: f32 = 1e30;
 
 fn primary_ray(pixel: vec2<u32>, cam: Camera, resolution: vec2<u32>) -> Ray {
     let uv = (vec2<f32>(pixel) + vec2<f32>(0.5)) / vec2<f32>(resolution);
@@ -85,35 +93,6 @@ fn grid_entry(ray: Ray, grid: Grid) -> Entry {
     return entry;
 }
 
-// Set up DDA state for a ray that enters the grid at parameter `t_enter`.
-fn dda_init(ray: Ray, grid: Grid, t_enter: f32) -> Dda {
-    let inv_dir = 1.0 / ray.dir;
-    let positive = ray.dir >= vec3<f32>(0.0);
-
-    // Clamp the entry point into the grid so the starting voxel is always valid,
-    // even when the ray grazes a boundary and floating point nudges it outside.
-    let p = ray.orig + t_enter * ray.dir;
-    let voxel = vec3<i32>(clamp(floor(p), vec3<f32>(0.0), vec3<f32>(grid.size) - 1.0));
-
-    let step = select(vec3<i32>(-1), vec3<i32>(1), positive);
-
-    // Distance in t to cross a full unit voxel along each axis.
-    let t_delta = abs(inv_dir);
-
-    // t at the next boundary: voxel+1 when stepping forward, voxel when stepping
-    // backward. Expressed relative to the ray origin so it stays absolute in t.
-    let next = vec3<f32>(voxel) + select(vec3<f32>(0.0), vec3<f32>(1.0), positive);
-    let t_max = (next - ray.orig) * inv_dir;
-
-    // The grid face we came in through is the slab axis whose near-plane
-    // crossing produced t_enter; its outward normal opposes the step direction.
-    let t_close = min((vec3<f32>(0.0) - ray.orig) * inv_dir, (vec3<f32>(grid.size) - ray.orig) * inv_dir);
-    let entry_axis = t_close >= vec3<f32>(t_enter);
-    let normal = select(vec3<f32>(0.0), -vec3<f32>(step), entry_axis);
-
-    return Dda(voxel, step, t_max, t_delta, t_enter, normal);
-}
-
 // Advance the DDA by one voxel along the axis whose boundary is nearest.
 fn dda_step(dda: Dda) -> Dda {
     var d = dda;
@@ -140,28 +119,45 @@ fn is_solid(voxel: vec3<i32>, grid: Grid) -> bool {
     return (occupancy[index / 32] & (1u << u32(index % 32))) != 0u;
 }
 
-// Walk the grid voxel by voxel until a solid voxel is hit or the ray leaves.
-fn dda_traverse(ray: Ray, grid: Grid) -> Hit {
+// Number of bricks along each axis, ceil(size / BRICK).
+fn brick_dims(grid: Grid) -> vec3<i32> {
+    return vec3<i32>((grid.size + (BRICK - 1u)) / BRICK);
+}
+
+// True if a brick holds at least one solid voxel (its coarse occupancy bit).
+fn brick_solid(brick: vec3<i32>, grid: Grid) -> bool {
+    let dims = brick_dims(grid);
+    let index = brick.x + brick.y * dims.x + brick.z * dims.x * dims.y;
+    return (brick_occupancy[index / 32] & (1u << u32(index % 32))) != 0u;
+}
+
+// Fine per-voxel DDA restricted to one (non-empty) brick. Returns the first
+// solid voxel hit before the ray leaves the brick or passes `max_t`. `entry_t`
+// and `entry_normal` describe the face the ray crossed to enter the brick, so a
+// solid voxel sitting on that face reports the correct normal.
+fn trace_brick(gray: Ray, grid: Grid, brick: vec3<i32>, entry_t: f32, entry_normal: vec3<f32>, max_t: f32) -> Hit {
     var hit = Hit();
 
-    // Traverse in grid space, where each voxel is a unit cube. Scaling the world
-    // ray's origin and direction by 1/voxel_size preserves the ray parameter t,
-    // so distances (hit.t) come back out directly in world units (meters).
-    let inv_size = 1.0 / grid.voxel_size;
-    let gray = Ray(ray.orig * inv_size, ray.dir * inv_size);
+    let inv_dir = 1.0 / gray.dir;
+    let positive = gray.dir >= vec3<f32>(0.0);
+    let step = select(vec3<i32>(-1), vec3<i32>(1), positive);
 
-    let entry = grid_entry(gray, grid);
-    if !entry.hit {
-        return hit;
-    }
+    // Voxel range this brick covers (clamped to the grid for boundary bricks).
+    // Clamping the entry voxel into it stops floating point on the brick face
+    // from starting us in a neighbour.
+    let vmin = brick * i32(BRICK);
+    let vmax = min(vmin + (i32(BRICK) - 1), vec3<i32>(grid.size) - 1);
+    let voxel = clamp(vec3<i32>(floor(gray.orig + entry_t * gray.dir)), vmin, vmax);
 
-    var dda = dda_init(gray, grid, max(entry.t, 0.0));
+    let next = vec3<f32>(voxel) + select(vec3<f32>(0.0), vec3<f32>(1.0), positive);
+    var dda = Dda(voxel, step, (next - gray.orig) * inv_dir, abs(inv_dir), entry_t, entry_normal);
 
-    // Each axis boundary is crossed at most `size` times, so the total number
-    // of steps is bounded by the sum of the grid dimensions.
-    let max_steps = grid.size.x + grid.size.y + grid.size.z;
-    for (var i = 0u; i < max_steps; i += 1u) {
-        if any(dda.voxel < vec3<i32>(0)) || any(dda.voxel >= vec3<i32>(grid.size)) {
+    // A ray crosses at most BRICK cells per axis inside a single brick.
+    for (var i = 0u; i < 3u * BRICK; i += 1u) {
+        if any(dda.voxel < vmin) || any(dda.voxel > vmax) {
+            break; // left the brick
+        }
+        if dda.t > max_t {
             break;
         }
         if is_solid(dda.voxel, grid) {
@@ -177,6 +173,156 @@ fn dda_traverse(ray: Ray, grid: Grid) -> Hit {
     return hit;
 }
 
+// Hierarchical DDA: walk the coarse brick grid and only descend into a fine
+// per-voxel DDA for bricks that actually contain geometry, so empty space costs
+// one step per brick instead of one per voxel. `max_t` bounds the ray in world
+// units (pass T_MAX for none). Distances are returned in world units.
+fn trace(ray: Ray, grid: Grid, max_t: f32) -> Hit {
+    var hit = Hit();
+
+    // Grid space (unit voxels); scaling origin and dir together preserves t.
+    let inv_size = 1.0 / grid.voxel_size;
+    let gray = Ray(ray.orig * inv_size, ray.dir * inv_size);
+
+    let entry = grid_entry(gray, grid);
+    if !entry.hit {
+        return hit;
+    }
+
+    let inv_dir = 1.0 / gray.dir;
+    let positive = gray.dir >= vec3<f32>(0.0);
+    let step = select(vec3<i32>(-1), vec3<i32>(1), positive);
+    let dims = brick_dims(grid);
+    let t_start = max(entry.t, 0.0);
+
+    // Starting brick and its coarse DDA state. A brick is BRICK voxels wide, so
+    // the coarse t_delta is the fine one scaled by BRICK; we reuse `dda_step`.
+    let p = gray.orig + t_start * gray.dir;
+    let brick = clamp(vec3<i32>(floor(p / f32(BRICK))), vec3<i32>(0), dims - vec3<i32>(1));
+    let next = (vec3<f32>(brick) + select(vec3<f32>(0.0), vec3<f32>(1.0), positive)) * f32(BRICK);
+
+    // Face the ray entered the grid through (for the first brick's fine trace).
+    let t_close = min((vec3<f32>(0.0) - gray.orig) * inv_dir, (vec3<f32>(grid.size) - gray.orig) * inv_dir);
+    let entry_normal = select(vec3<f32>(0.0), -vec3<f32>(step), t_close >= vec3<f32>(entry.t));
+
+    var coarse = Dda(brick, step, (next - gray.orig) * inv_dir, abs(inv_dir) * f32(BRICK), t_start, entry_normal);
+
+    let max_bricks = dims.x + dims.y + dims.z;
+    for (var i = 0; i < max_bricks; i += 1) {
+        if coarse.t > max_t {
+            break;
+        }
+        if any(coarse.voxel < vec3<i32>(0)) || any(coarse.voxel >= dims) {
+            break;
+        }
+        if brick_solid(coarse.voxel, grid) {
+            let h = trace_brick(gray, grid, coarse.voxel, coarse.t, coarse.normal, max_t);
+            if h.hit {
+                return h;
+            }
+        }
+        coarse = dda_step(coarse);
+    }
+
+    return hit;
+}
+
+// Direction from any surface toward the (infinitely far) directional light.
+// z is up, so the light sits high in the sky with a slight horizontal slant.
+const LIGHT_DIR = vec3<f32>(-0.35, 0.7, 0.5);
+// Offset the shadow-ray origin this fraction of a voxel off the surface along
+// the normal so it starts in the empty neighbour and never self-shadows.
+const SHADOW_BIAS: f32 = 0.01;
+// Angular radius of the light disc (tan of the half-angle). Larger -> softer
+// penumbra; 0 collapses back to a hard shadow.
+const LIGHT_RADIUS: f32 = 0.03;
+// Shadow rays averaged per pixel. More -> less noise, linearly more cost.
+const SHADOW_SAMPLES: u32 = 4u;
+// How far, in voxels, shadow rays search for an occluder. Bounds the cost of
+// rays that skim the terrain; occluders past this cast no shadow. Set very large
+// (e.g. 1e9) to disable and get fully global shadows again.
+const SHADOW_MAX_VOXELS: f32 = 48.0;
+// Reach of ambient occlusion, in voxels; only occluders within this range darken.
+const AO_RADIUS_VOXELS: f32 = 4.0;
+// Hemisphere rays averaged per pixel for AO.
+const AO_SAMPLES: u32 = 4u;
+
+// PCG-style hash used to seed the per-pixel RNG.
+fn hash_u32(x: u32) -> u32 {
+    var v = x * 747796405u + 2891336453u;
+    v = ((v >> ((v >> 28u) + 4u)) ^ v) * 277803737u;
+    return (v >> 22u) ^ v;
+}
+
+// Advance the RNG and return a float in [0, 1).
+fn rand01(state: ptr<function, u32>) -> f32 {
+    *state = *state * 747796405u + 2891336453u;
+    let v = ((*state >> ((*state >> 28u) + 4u)) ^ *state) * 277803737u;
+    return f32((v >> 22u) ^ v) / 4294967296.0;
+}
+
+// Fraction of the light disc visible from the surface point, in [0, 1]. Samples
+// several shadow rays jittered across the light's angular size and averages
+// their visibility, producing a soft penumbra that widens with occluder
+// distance (the sample cone diverges).
+fn soft_shadow(hit_pos: vec3<f32>, normal: vec3<f32>, grid: Grid, seed: u32) -> f32 {
+    let light = normalize(LIGHT_DIR);
+    // Orthonormal basis spanning the plane perpendicular to the light.
+    let up = select(vec3<f32>(0.0, 1.0, 0.0), vec3<f32>(1.0, 0.0, 0.0), abs(light.y) > 0.99);
+    let tangent = normalize(cross(up, light));
+    let bitangent = cross(light, tangent);
+
+    let origin = hit_pos + normal * grid.voxel_size * SHADOW_BIAS;
+    let max_t = SHADOW_MAX_VOXELS * grid.voxel_size;
+
+    var state = seed;
+    var visible = 0u;
+    for (var i = 0u; i < SHADOW_SAMPLES; i += 1u) {
+        // Uniform sample of the light disc, offsetting the shadow direction.
+        let angle = 6.2831853 * rand01(&state);
+        let radius = sqrt(rand01(&state)) * LIGHT_RADIUS;
+        let offset = (tangent * cos(angle) + bitangent * sin(angle)) * radius;
+        let dir = normalize(light + offset);
+
+        if !trace(Ray(origin, dir), grid, max_t).hit {
+            visible += 1u;
+        }
+    }
+
+    return f32(visible) / f32(SHADOW_SAMPLES);
+}
+
+// Fraction of the hemisphere above the surface that is open, in [0, 1]. Casts
+// cosine-weighted rays around the normal and counts those that reach `max_t`
+// without hitting anything; nearby geometry drives the value toward 0.
+fn ambient_occlusion(hit_pos: vec3<f32>, normal: vec3<f32>, grid: Grid, seed: u32) -> f32 {
+    // Orthonormal basis around the surface normal.
+    let up = select(vec3<f32>(0.0, 1.0, 0.0), vec3<f32>(1.0, 0.0, 0.0), abs(normal.y) > 0.99);
+    let tangent = normalize(cross(up, normal));
+    let bitangent = cross(normal, tangent);
+
+    let origin = hit_pos + normal * grid.voxel_size * SHADOW_BIAS;
+    let max_t = AO_RADIUS_VOXELS * grid.voxel_size;
+
+    var state = seed;
+    var open = 0u;
+    for (var i = 0u; i < AO_SAMPLES; i += 1u) {
+        // Cosine-weighted hemisphere sample in local space (z = normal).
+        let r1 = rand01(&state);
+        let r2 = rand01(&state);
+        let r = sqrt(r1);
+        let phi = 6.2831853 * r2;
+        let local = vec3<f32>(r * cos(phi), r * sin(phi), sqrt(1.0 - r1));
+        let dir = tangent * local.x + bitangent * local.y + normal * local.z;
+
+        if !trace(Ray(origin, dir), grid, max_t).hit {
+            open += 1u;
+        }
+    }
+
+    return f32(open) / f32(AO_SAMPLES);
+}
+
 @compute @workgroup_size(8, 8, 1)
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let dimensions = textureDimensions(out_tex);
@@ -185,14 +331,26 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
 
     let ray = primary_ray(gid.xy, cam, dimensions);
-    let hit = dda_traverse(ray, grid);
+    let hit = trace(ray, grid, T_MAX);
     if !hit.hit {
         textureStore(out_tex, vec2<i32>(gid.xy), vec4<f32>(0.0, 0.0, 0.0, 1.0));
         return;
     }
 
-    let light = normalize(vec3<f32>(0.5, 1.0, 0.3));
-    let diffuse = max(dot(hit.normal, light), 0.0) * 0.8 + 0.2;
+    let hit_pos = ray.orig + hit.t * ray.dir;
+    let seed = hash_u32(gid.x + gid.y * dimensions.x);
+
+    // Direct light: Lambert, attenuated by the fraction of the light disc visible.
+    let light = normalize(LIGHT_DIR);
+    var shade = max(dot(hit.normal, light), 0.0);
+    if shade > 0.0 {
+        shade *= soft_shadow(hit_pos, hit.normal, grid, seed);
+    }
+
+    // Ambient term darkened by how enclosed the surface is.
+    let ao = ambient_occlusion(hit_pos, hit.normal, grid, seed ^ 0x9e3779b9u);
+
+    let diffuse = shade * 0.8 + 0.2 * ao;
     let tint = vec3<f32>(0.4);
 
     var color = tint * diffuse;

@@ -1,3 +1,5 @@
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
+
 use egui::Ui;
 use etib::camera::Camera;
 use etib::core::bind_group::{BindGroupLayoutBuilder, FrameBuffered};
@@ -13,11 +15,12 @@ use winit::window::CursorGrabMode;
 
 pub mod updater;
 
-/// Voxel counts per axis.
-const GRID_SIZE: USizeVec3 = usizevec3(1024 * 2, 1024 * 2, 32);
+/// Voxel counts per axis. `z` is up: `x`/`y` are the horizontal ground, `z` the
+/// (shorter) vertical over which the terrain height varies.
+const GRID_SIZE: USizeVec3 = usizevec3(1024, 1024, 128);
 
 /// Edge length of one (cubic) voxel in world units, i.e. meters.
-const VOXEL_SIZE: f32 = 0.01;
+const VOXEL_SIZE: f32 = 0.5;
 
 /// Grid parameters uploaded to the DDA shader. The CPU owns these values so the
 /// shader can never drift out of sync. Layout matches `Grid` in `dda.wesl`: a
@@ -30,36 +33,91 @@ struct GridUniform {
     voxel_size: f32,
 }
 
-/// Build the voxel occupancy grid on the CPU from 3D Perlin noise, packed one
-/// bit per voxel into u32 words in x-major order (matching `is_solid` in the
-/// shader: `index = x + y*size + z*size*size`).
-fn generate_occupancy(ctx: &EngineContext) -> Vec<u32> {
-    // Spacing between voxels in noise space; smaller -> larger, smoother blobs.
-    const FREQUENCY: f64 = 0.18;
-    // Perlin output is roughly [-1, 1]; a positive cutoff keeps the field sparse.
-    const THRESHOLD: f64 = 0.1;
+/// Edge length of a brick, in voxels. Must match `BRICK` in `dda.wesl`.
+const BRICK: usize = 8;
 
-    let perlin = Perlin::new(ctx.time.frame_number as u32);
+/// Number of bricks along each axis, ceil(GRID_SIZE / BRICK).
+fn brick_dims() -> USizeVec3 {
+    usizevec3(
+        GRID_SIZE.x.div_ceil(BRICK),
+        GRID_SIZE.y.div_ceil(BRICK),
+        GRID_SIZE.z.div_ceil(BRICK),
+    )
+}
+
+/// Two-level voxel occupancy for the hierarchical DDA. Both levels pack one bit
+/// per cell into u32 words in x-major order, matching the shader's indexing.
+struct Occupancy {
+    /// One bit per voxel (`index = x + y*size.x + z*size.x*size.y`).
+    fine: Vec<u32>,
+    /// One bit per BRICK^3 block, set if the block holds any solid voxel.
+    coarse: Vec<u32>,
+}
+
+/// Fractal Brownian motion: sum several octaves of Perlin noise at doubling
+/// frequency and halving amplitude, returning a value in roughly [-1, 1]. This
+/// is what gives terrain broad hills with finer detail layered on top.
+fn fbm(perlin: &Perlin, x: f64, y: f64) -> f64 {
+    const OCTAVES: u32 = 5;
+    // Base horizontal feature size, in voxels (larger denominator = wider hills).
+    const BASE_FREQUENCY: f64 = 1.0 / 200.0;
+    const LACUNARITY: f64 = 2.0; // frequency multiplier per octave
+    const GAIN: f64 = 0.5; // amplitude multiplier per octave
+
+    let mut frequency = BASE_FREQUENCY;
+    let mut amplitude = 1.0;
+    let mut sum = 0.0;
+    let mut total_amplitude = 0.0;
+    for _ in 0..OCTAVES {
+        sum += amplitude * perlin.get([x * frequency, y * frequency]);
+        total_amplitude += amplitude;
+        frequency *= LACUNARITY;
+        amplitude *= GAIN;
+    }
+    sum / total_amplitude
+}
+
+/// Build the occupancy grids on the CPU as a terrain heightfield: an fBm height
+/// per (x, y) column, with every voxel below it solid and air above. `z` is up.
+/// The coarse level is derived in the same pass so the two can never disagree.
+fn generate_occupancy(ctx: &EngineContext) -> Occupancy {
+    // Shapes the height distribution: >1 flattens valleys and sharpens peaks.
+    const RELIEF_POWER: f64 = 1.7;
+
+    let since_epoch = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("clock went backwards")
+        .as_secs();
+
+    let perlin = Perlin::new(since_epoch as u32);
+
     let total = GRID_SIZE.x * GRID_SIZE.y * GRID_SIZE.z;
-    let mut words = vec![0u32; total.div_ceil(32)];
+    let mut fine = vec![0u32; total.div_ceil(32)];
 
-    for z in 0..GRID_SIZE.z {
-        for y in 0..GRID_SIZE.y {
-            for x in 0..GRID_SIZE.x {
-                let sample = perlin.get([
-                    x as f64 * FREQUENCY,
-                    y as f64 * FREQUENCY,
-                    z as f64 * FREQUENCY,
-                ]);
-                if sample > THRESHOLD {
-                    let index = x + y * GRID_SIZE.x + z * GRID_SIZE.x * GRID_SIZE.y;
-                    words[index / 32] |= 1u32 << (index % 32);
-                }
+    let bdims = brick_dims();
+    let btotal = bdims.x * bdims.y * bdims.z;
+    let mut coarse = vec![0u32; btotal.div_ceil(32)];
+
+    // Terrain occupies most of the vertical range, leaving air near the top.
+    let max_height = GRID_SIZE.z - 1;
+
+    for y in 0..GRID_SIZE.y {
+        for x in 0..GRID_SIZE.x {
+            // fBm mapped to [0, 1], then curved and scaled to a voxel height.
+            let h01 = (fbm(&perlin, x as f64, y as f64) * 0.5 + 0.5).clamp(0.0, 1.0);
+            let height = (h01.powf(RELIEF_POWER) * max_height as f64) as usize + 1;
+
+            for z in 0..height.min(GRID_SIZE.z) {
+                let index = x + y * GRID_SIZE.x + z * GRID_SIZE.x * GRID_SIZE.y;
+                fine[index / 32] |= 1u32 << (index % 32);
+
+                let bindex = (x / BRICK) + (y / BRICK) * bdims.x + (z / BRICK) * bdims.x * bdims.y;
+                coarse[bindex / 32] |= 1u32 << (bindex % 32);
             }
         }
     }
 
-    words
+    Occupancy { fine, coarse }
 }
 
 struct Hello {
@@ -92,11 +150,18 @@ impl DdaRenderer {
             .build_wgsl(&gfx.device, "package::dda")
             .unwrap();
 
+        let occupancy = generate_occupancy(ctx);
         let occupancy_buffer = etib::utils::create_buffer_init(
             &gfx.device,
             "dda_occupancy",
             wgpu::BufferUsages::STORAGE,
-            &generate_occupancy(ctx),
+            &occupancy.fine,
+        );
+        let brick_buffer = etib::utils::create_buffer_init(
+            &gfx.device,
+            "dda_brick_occupancy",
+            wgpu::BufferUsages::STORAGE,
+            &occupancy.coarse,
         );
 
         let grid_buffer = etib::utils::create_buffer_init(
@@ -117,8 +182,9 @@ impl DdaRenderer {
                 output_texture.texture.format(),
             )
             .uniform(1) // Camera
-            .storage(2, true) // Voxel occupancy
+            .storage(2, true) // Fine voxel occupancy
             .uniform(3) // Grid dimensions + voxel size
+            .storage(4, true) // Coarse brick occupancy
             .build();
 
         let bind_group = FrameBuffered::new(&gfx.device, bind_group_layout, |i| {
@@ -138,6 +204,10 @@ impl DdaRenderer {
                 wgpu::BindGroupEntry {
                     binding: 3,
                     resource: grid_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: brick_buffer.as_entire_binding(),
                 },
             ]
         });
